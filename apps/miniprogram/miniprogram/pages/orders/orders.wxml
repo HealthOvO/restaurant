@@ -1,0 +1,55 @@
+<view class="page page-tight">
+  <view class="hero hero-member">
+    <view class="hero-badge">订单</view>
+    <view class="title">这一餐点过什么，都在这里</view>
+    <view class="subtitle">进行中订单和历史订单会分开显示，状态变化会同步更新。</view>
+  </view>
+
+  <view class="mode-switch-row">
+    <view class="mode-pill {{activeFilter === 'ALL' ? 'mode-pill-active' : ''}}" data-filter="ALL" bindtap="setFilter">全部</view>
+    <view class="mode-pill {{activeFilter === 'ACTIVE' ? 'mode-pill-active' : ''}}" data-filter="ACTIVE" bindtap="setFilter">进行中</view>
+    <view class="mode-pill {{activeFilter === 'DONE' ? 'mode-pill-active' : ''}}" data-filter="DONE" bindtap="setFilter">已结束</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="card">
+    <view class="section-title">正在同步订单</view>
+    <view class="section-copy">稍等一下，系统正在更新你的订单状态。</view>
+  </view>
+
+  <view wx:if="{{errorMessage}}" class="card card-accent">
+    <view class="section-title">提示</view>
+    <view class="notice">{{errorMessage}}</view>
+    <button class="button-secondary" bindtap="refresh">重新加载</button>
+  </view>
+
+  <view wx:if="{{!loading && !visibleOrders.length}}" class="card">
+    <view class="section-title">还没有订单</view>
+    <view class="section-copy">先去点餐页选几样菜，下单后这里会显示最新状态。</view>
+    <button class="button-primary" bindtap="goMenu">去点餐</button>
+  </view>
+
+  <view wx:for="{{visibleOrders}}" wx:key="_id" class="card">
+    <view class="card-header-row">
+      <view class="card-title-wrap">
+        <view class="section-title">{{item.orderNo}}</view>
+        <view class="card-subtitle">{{item.fulfillmentMode === 'DINE_IN' ? ('堂食' + (item.tableNo ? (' · ' + item.tableNo) : '')) : '自提'}}</view>
+      </view>
+      <view class="status-pill {{item.statusClass}}">{{item.statusText}}</view>
+    </view>
+    <view class="detail-grid">
+      <view class="detail-row">
+        <view class="detail-label">下单时间</view>
+        <view class="detail-value">{{item.submittedAtLabel}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">菜品</view>
+        <view class="detail-value">{{item.itemSummary || '查看详情'}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">金额</view>
+        <view class="detail-value">¥{{item.payableAmountText}}</view>
+      </view>
+    </view>
+    <button class="button-secondary" data-order-id="{{item._id}}" bindtap="goDetail">查看详情</button>
+  </view>
+</view>

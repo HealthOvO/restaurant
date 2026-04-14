@@ -1,0 +1,30 @@
+.voucher-card:first-of-type {
+  margin-top: 22rpx;
+}
+
+.voucher-action-row {
+  margin-top: 18rpx;
+}
+
+.qr-dialog {
+  display: grid;
+  gap: 18rpx;
+}
+
+.qr-preview-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24rpx;
+  border-radius: 28rpx;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 243, 233, 0.98));
+  border: 1rpx solid #eadfce;
+}
+
+.voucher-qr-canvas {
+  width: 420rpx;
+  height: 420rpx;
+  border-radius: 24rpx;
+  background: #ffffff;
+}

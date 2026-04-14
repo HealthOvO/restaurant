@@ -1,0 +1,49 @@
+[
+  {
+    "name": "新客首单礼",
+    "type": "WELCOME",
+    "isEnabled": true,
+    "sortOrder": 0,
+    "voucherTemplate": {
+      "dishId": "drink-lemon-tea",
+      "dishName": "柠檬茶",
+      "validDays": 30
+    }
+  },
+  {
+    "name": "邀请 1 人送饮品",
+    "type": "INVITE_MILESTONE",
+    "threshold": 1,
+    "isEnabled": true,
+    "sortOrder": 1,
+    "voucherTemplate": {
+      "dishId": "drink-osmanthus-plum",
+      "dishName": "酸梅汤",
+      "validDays": 30
+    }
+  },
+  {
+    "name": "邀请 3 人送凉菜",
+    "type": "INVITE_MILESTONE",
+    "threshold": 3,
+    "isEnabled": true,
+    "sortOrder": 2,
+    "voucherTemplate": {
+      "dishId": "cold-signature",
+      "dishName": "招牌凉菜",
+      "validDays": 30
+    }
+  },
+  {
+    "name": "邀请 5 人送招牌菜",
+    "type": "INVITE_MILESTONE",
+    "threshold": 5,
+    "isEnabled": true,
+    "sortOrder": 3,
+    "voucherTemplate": {
+      "dishId": "signature-main",
+      "dishName": "招牌主菜",
+      "validDays": 30
+    }
+  }
+]

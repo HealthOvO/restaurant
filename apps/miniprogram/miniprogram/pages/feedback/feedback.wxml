@@ -1,0 +1,102 @@
+<view class="page page-tight">
+  <view class="hero hero-member">
+    <view class="hero-badge">用户反馈</view>
+    <view class="title">遇到问题直接留给老板</view>
+    <view class="subtitle">积分没到账、菜品券状态不对、页面不好用，都可以在这里直接反馈，处理进度也会回到这里。</view>
+    <view class="mini-metrics">
+      <view class="mini-metric">
+        <view class="mini-metric-label">反馈入口</view>
+        <view class="mini-metric-value">会员可提交</view>
+      </view>
+      <view class="mini-metric">
+        <view class="mini-metric-label">老板处理</view>
+        <view class="mini-metric-value">状态回显</view>
+      </view>
+      <view class="mini-metric">
+        <view class="mini-metric-label">当前记录</view>
+        <view class="mini-metric-value">{{tickets.length}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{errorMessage}}" class="card card-accent">
+    <view class="section-title">提示</view>
+    <view class="notice">{{errorMessage}}</view>
+    <button class="button-secondary" bindtap="refresh">重新加载</button>
+  </view>
+
+  <view class="card card-soft">
+    <view class="section-kicker">提交反馈</view>
+    <view class="section-title">把情况说清楚，老板更容易快速处理</view>
+    <view class="card-subtitle">如果已经验证了手机号，系统会自动带上你的会员信息；没验证也不影响提交。</view>
+
+    <view class="input-label">问题分类</view>
+    <picker mode="selector" range="{{categoryOptions}}" range-key="label" value="{{categoryIndex}}" bindchange="onCategoryChange">
+      <view class="input input-strong">{{categoryOptions[categoryIndex].label}}</view>
+    </picker>
+
+    <view class="input-label">问题标题</view>
+    <input class="input input-strong" placeholder="例如：积分没有到账" value="{{title}}" data-field="title" bindinput="onInput" />
+
+    <view class="input-label">详细描述</view>
+    <textarea
+      class="input input-strong"
+      style="height: 220rpx; padding-top: 20rpx; line-height: 1.7;"
+      maxlength="300"
+      placeholder="把时间、现象、你刚刚做了什么写清楚，老板会更快定位。"
+      value="{{content}}"
+      data-field="content"
+      bindinput="onInput"
+    />
+
+    <view class="input-label">称呼</view>
+    <input class="input" placeholder="例如：王女士" value="{{contactName}}" data-field="contactName" bindinput="onInput" />
+
+    <view class="input-label">联系方式</view>
+    <input class="input" placeholder="例如：手机号或微信号" value="{{contactInfo}}" data-field="contactInfo" bindinput="onInput" />
+
+    <button class="button-primary" loading="{{submitting}}" bindtap="submit">{{submitting ? '提交中...' : '提交反馈'}}</button>
+  </view>
+
+  <view class="card">
+    <view class="section-kicker">我的反馈</view>
+    <view class="section-title">处理进度和老板回复</view>
+    <view class="card-subtitle">最新提交的会排在前面，老板处理后会在这里更新状态。</view>
+
+    <view wx:if="{{loading}}" class="notice">正在同步反馈记录...</view>
+
+    <view wx:if="{{!loading && !tickets.length}}" class="empty-state">
+      <view class="tag">还没有反馈</view>
+      <view class="empty-title">第一次提交后就会显示在这里</view>
+      <view class="empty-copy">建议把问题现象和发生时间写清楚，老板处理起来会更快。</view>
+    </view>
+
+    <view wx:for="{{tickets}}" wx:key="_id" class="timeline-card" style="margin-top: 16rpx;">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="inline-tags">
+            <view class="tag">{{item.categoryLabel}}</view>
+            <view class="{{item.statusTagClass}}">{{item.statusLabel}}</view>
+          </view>
+          <view class="section-title" style="font-size: 28rpx; margin-top: 12rpx; margin-bottom: 8rpx;">{{item.title}}</view>
+          <view class="card-subtitle">反馈编号 {{item.feedbackCode}} · {{item.createdAtLabel}}</view>
+        </view>
+        <view class="tag">{{item.priorityLabel}}</view>
+      </view>
+      <view class="detail-grid">
+        <view class="detail-row">
+          <view class="detail-label">你的描述</view>
+          <view class="detail-value" style="text-align: left; flex: 1;">{{item.content}}</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">老板回复</view>
+          <view class="detail-value" style="text-align: left; flex: 1;">{{item.ownerReplyText}}</view>
+        </view>
+        <view wx:if="{{item.handledAtLabel}}" class="detail-row">
+          <view class="detail-label">处理时间</view>
+          <view class="detail-value">{{item.handledAtLabel}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

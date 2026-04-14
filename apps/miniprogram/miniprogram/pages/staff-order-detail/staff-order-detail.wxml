@@ -1,0 +1,104 @@
+<view class="page page-tight">
+  <view wx:if="{{loading}}" class="card">
+    <view class="section-title">正在读取订单</view>
+    <view class="section-copy">稍等一下，系统正在同步最新订单状态。</view>
+  </view>
+
+  <view wx:if="{{errorMessage}}" class="card card-accent">
+    <view class="section-title">提示</view>
+    <view class="notice">{{errorMessage}}</view>
+    <button class="button-secondary" bindtap="refresh">重新加载</button>
+  </view>
+
+  <block wx:if="{{order}}">
+    <view class="hero hero-staff">
+      <view class="hero-badge">订单处理</view>
+      <view class="title">{{order.statusText}}</view>
+      <view class="subtitle">{{order.orderNo}} · {{order.memberLabel}}</view>
+
+      <view class="mini-metrics">
+        <view class="mini-metric">
+          <view class="mini-metric-label">取餐方式</view>
+          <view class="mini-metric-value">{{order.locationLabel}}</view>
+        </view>
+        <view class="mini-metric">
+          <view class="mini-metric-label">菜品数量</view>
+          <view class="mini-metric-value">{{order.itemCount}}</view>
+        </view>
+        <view class="mini-metric">
+          <view class="mini-metric-label">金额</view>
+          <view class="mini-metric-value">¥{{order.payableAmountText}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-kicker">订单信息</view>
+      <view class="section-title">先确认这一单的基本信息</view>
+      <view class="detail-grid">
+        <view class="detail-row">
+          <view class="detail-label">下单时间</view>
+          <view class="detail-value">{{order.submittedAtLabel}}</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">当前顾客</view>
+          <view class="detail-value">{{order.memberLabel}}</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">桌号 / 联系人</view>
+          <view class="detail-value">{{order.locationLabel}}</view>
+        </view>
+        <view wx:if="{{order.contactPhone}}" class="detail-row">
+          <view class="detail-label">联系电话</view>
+          <view class="detail-value">{{order.contactPhone}}</view>
+        </view>
+        <view wx:if="{{order.remark}}" class="detail-row">
+          <view class="detail-label">顾客备注</view>
+          <view class="detail-value">{{order.remark}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-kicker">菜品明细</view>
+      <view class="section-title">这单具体要做什么</view>
+      <view wx:for="{{order.lineItems}}" wx:for-item="lineItem" wx:key="lineId" class="checkout-item">
+        <view class="checkout-item-main">
+          <view class="checkout-item-name">{{lineItem.name}}</view>
+          <view class="checkout-item-meta">{{lineItem.selectedOptionsText || '默认规格'}}</view>
+        </view>
+        <view class="checkout-item-side">
+          <view>x{{lineItem.quantity}}</view>
+          <view>¥{{lineItem.lineTotalText}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{order.availableActions.length}}" class="card card-soft">
+      <view class="section-kicker">推进状态</view>
+      <view class="section-title">按门店节奏往下走</view>
+      <view class="section-copy">可选备注会同步写进状态日志，比如取消原因、取餐提醒等。</view>
+
+      <input class="input input-strong" value="{{note}}" placeholder="选填备注，如：顾客已到店、自提已联系" bindinput="updateNote" />
+
+      <view class="action-button-grid">
+        <button wx:for="{{order.availableActions}}" wx:for-item="action" wx:key="status" class="button-primary action-button" disabled="{{updatingStatus}}" data-status="{{action.status}}" bindtap="submitAction">
+          {{updatingStatus === action.status ? '提交中...' : action.label}}
+        </button>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-kicker">状态时间线</view>
+      <view class="section-title">订单处理记录</view>
+      <view wx:for="{{logs}}" wx:for-item="log" wx:key="_id" class="timeline-item">
+        <view class="timeline-dot"></view>
+        <view class="timeline-body">
+          <view class="timeline-title">{{log.statusText}}</view>
+          <view class="timeline-copy">{{log.createdAtLabel}}{{log.operatorName ? (' · ' + log.operatorName) : ''}}</view>
+          <view wx:if="{{log.note}}" class="timeline-copy">{{log.note}}</view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

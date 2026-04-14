@@ -1,0 +1,62 @@
+<view class="page page-tight">
+  <view wx:if="{{loading}}" class="card">
+    <view class="section-title">正在读取订单</view>
+    <view class="section-copy">请稍候，正在同步最新订单状态。</view>
+  </view>
+
+  <view wx:if="{{errorMessage}}" class="card card-accent">
+    <view class="section-title">提示</view>
+    <view class="notice">{{errorMessage}}</view>
+    <button class="button-secondary" bindtap="refresh">重新加载</button>
+  </view>
+
+  <block wx:if="{{order}}">
+    <view class="hero hero-member">
+      <view class="hero-badge">订单详情</view>
+      <view class="title">{{order.statusText}}</view>
+      <view class="subtitle">{{order.orderNo}}</view>
+      <view class="mini-metrics">
+        <view class="mini-metric">
+          <view class="mini-metric-label">方式</view>
+          <view class="mini-metric-value">{{order.fulfillmentMode === 'DINE_IN' ? '堂食' : '自提'}}</view>
+        </view>
+        <view class="mini-metric">
+          <view class="mini-metric-label">数量</view>
+          <view class="mini-metric-value">{{order.itemCount}}</view>
+        </view>
+        <view class="mini-metric">
+          <view class="mini-metric-label">金额</view>
+          <view class="mini-metric-value">¥{{order.payableAmountText}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-kicker">订单内容</view>
+      <view class="section-title">这一单点了什么</view>
+      <view wx:for="{{order.lineItems}}" wx:for-item="lineItem" wx:key="lineId" class="checkout-item">
+        <view class="checkout-item-main">
+          <view class="checkout-item-name">{{lineItem.name}}</view>
+          <view class="checkout-item-meta">{{lineItem.selectedOptionsText || '默认规格'}}</view>
+        </view>
+        <view class="checkout-item-side">
+          <view>x{{lineItem.quantity}}</view>
+          <view>¥{{lineItem.lineTotalText}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card card-soft">
+      <view class="section-kicker">状态时间线</view>
+      <view class="section-title">订单是怎么往前走的</view>
+      <view wx:for="{{logs}}" wx:key="_id" class="timeline-item">
+        <view class="timeline-dot"></view>
+        <view class="timeline-body">
+          <view class="timeline-title">{{item.statusText}}</view>
+          <view class="timeline-copy">{{item.createdAtLabel}}{{item.operatorName ? (' · ' + item.operatorName) : ''}}</view>
+          <view wx:if="{{item.note}}" class="timeline-copy">{{item.note}}</view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

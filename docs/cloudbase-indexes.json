@@ -1,0 +1,97 @@
+[
+  {
+    "collection": "members",
+    "indexes": [
+      {
+        "name": "idx_store_phone_unique",
+        "fields": [
+          { "name": "storeId", "direction": 1 },
+          { "name": "phone", "direction": 1 }
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_store_openid",
+        "fields": [
+          { "name": "storeId", "direction": 1 },
+          { "name": "openId", "direction": 1 }
+        ],
+        "unique": true
+      }
+    ]
+  },
+  {
+    "collection": "invite_relations",
+    "indexes": [
+      {
+        "name": "idx_store_invitee_unique",
+        "fields": [
+          { "name": "storeId", "direction": 1 },
+          { "name": "inviteeMemberId", "direction": 1 }
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_store_inviter_status",
+        "fields": [
+          { "name": "storeId", "direction": 1 },
+          { "name": "inviterMemberId", "direction": 1 },
+          { "name": "status", "direction": 1 }
+        ]
+      }
+    ]
+  },
+  {
+    "collection": "visit_records",
+    "indexes": [
+      {
+        "name": "idx_store_member_order_unique",
+        "fields": [
+          { "name": "storeId", "direction": 1 },
+          { "name": "memberId", "direction": 1 },
+          { "name": "externalOrderNo", "direction": 1 }
+        ],
+        "unique": true
+      }
+    ]
+  },
+  {
+    "collection": "dish_vouchers",
+    "indexes": [
+      {
+        "name": "idx_store_member_status",
+        "fields": [
+          { "name": "storeId", "direction": 1 },
+          { "name": "memberId", "direction": 1 },
+          { "name": "status", "direction": 1 }
+        ]
+      }
+    ]
+  },
+  {
+    "collection": "voucher_redemptions",
+    "indexes": [
+      {
+        "name": "idx_store_voucher_unique",
+        "fields": [
+          { "name": "storeId", "direction": 1 },
+          { "name": "voucherId", "direction": 1 }
+        ],
+        "unique": true
+      }
+    ]
+  },
+  {
+    "collection": "staff_users",
+    "indexes": [
+      {
+        "name": "idx_store_username_unique",
+        "fields": [
+          { "name": "storeId", "direction": 1 },
+          { "name": "username", "direction": 1 }
+        ],
+        "unique": true
+      }
+    ]
+  }
+]

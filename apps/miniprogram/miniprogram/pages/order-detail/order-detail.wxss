@@ -1,0 +1,44 @@
+.timeline-item {
+  position: relative;
+  display: flex;
+  gap: 18rpx;
+  padding: 18rpx 0 18rpx 8rpx;
+}
+
+.timeline-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 13rpx;
+  top: 44rpx;
+  bottom: -10rpx;
+  width: 2rpx;
+  background: #ead7bf;
+}
+
+.timeline-dot {
+  position: relative;
+  z-index: 1;
+  width: 12rpx;
+  height: 12rpx;
+  margin-top: 10rpx;
+  border-radius: 50%;
+  background: #9a3529;
+}
+
+.timeline-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.timeline-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1f2330;
+}
+
+.timeline-copy {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.64;
+  color: #73695d;
+}

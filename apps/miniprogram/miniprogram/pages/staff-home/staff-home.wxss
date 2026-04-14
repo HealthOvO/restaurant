@@ -1,0 +1,7 @@
+.page {
+  padding-top: 24rpx;
+}
+
+.staff-login-card .button-primary {
+  margin-top: 20rpx;
+}

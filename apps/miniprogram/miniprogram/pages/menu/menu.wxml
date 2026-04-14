@@ -1,0 +1,120 @@
+<view class="page menu-shell">
+  <view class="hero hero-cream menu-hero">
+    <view class="hero-badge">点餐</view>
+    <view class="title">{{storeConfig ? storeConfig.storeName : '门店菜单'}}</view>
+    <view class="subtitle">{{storeConfig ? storeConfig.announcement : '堂食和自提都能直接下单。'}}</view>
+    <view class="hero-chips">
+      <view class="hero-chip">{{storeConfig && storeConfig.dineInEnabled ? '支持堂食' : '堂食关闭'}}</view>
+      <view class="hero-chip">{{storeConfig && storeConfig.pickupEnabled ? '支持自提' : '自提关闭'}}</view>
+      <view wx:if="{{activeTableNo}}" class="hero-chip">当前桌号 {{activeTableNo}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="card">
+    <view class="section-title">正在同步菜单</view>
+    <view class="section-copy">请稍候，正在更新菜品和门店信息。</view>
+  </view>
+
+  <view wx:if="{{errorMessage}}" class="card card-accent">
+    <view class="section-title">提示</view>
+    <view class="notice">{{errorMessage}}</view>
+    <button class="button-secondary" bindtap="refresh">重新加载</button>
+  </view>
+
+  <scroll-view class="menu-category-row" scroll-x="true" enable-flex="true">
+    <view wx:for="{{categories}}" wx:for-item="category" wx:key="_id" class="menu-category-pill {{category._id === activeCategoryId ? 'menu-category-pill-active' : ''}}" data-category-id="{{category._id}}" bindtap="selectCategory">
+      {{category.name}}
+    </view>
+  </scroll-view>
+
+  <view class="menu-list">
+    <view wx:for="{{visibleItems}}" wx:for-item="menuItem" wx:key="_id" class="menu-item-card">
+      <view class="menu-item-head">
+        <view class="menu-item-copy">
+          <view class="menu-item-name">{{menuItem.name}}</view>
+          <view class="menu-item-desc">{{menuItem.description || '门店推荐菜品'}}</view>
+          <view class="menu-item-tags">
+            <view wx:for="{{menuItem.tags}}" wx:for-item="tag" wx:key="*this" class="menu-item-tag">{{tag}}</view>
+            <view wx:if="{{menuItem.optionHint}}" class="menu-item-tag menu-item-tag-muted">{{menuItem.optionHint}}</view>
+          </view>
+        </view>
+        <view class="menu-item-side">
+          <view class="menu-item-price">{{menuItem.priceText}}</view>
+          <view class="menu-item-sales">{{menuItem.salesText}}</view>
+        </view>
+      </view>
+
+      <view class="menu-item-foot">
+        <view class="menu-item-status">{{menuItem.isSoldOut ? '已售罄' : menuItem.isRecommended ? '推荐菜' : '可下单'}}</view>
+        <button class="button-primary menu-add-button" data-item-id="{{menuItem._id}}" disabled="{{menuItem.isSoldOut}}" bindtap="quickAdd">
+          {{menuItem.optionGroups && menuItem.optionGroups.length ? '选规格' : '加入购物车'}}
+        </button>
+      </view>
+    </view>
+
+    <view wx:if="{{!loading && !visibleItems.length}}" class="empty-state">
+      <view class="tag">暂无菜品</view>
+      <view class="empty-title">这个分类暂时还没上架</view>
+      <view class="empty-copy">可以切换其他分类，或者稍后再来看看。</view>
+    </view>
+  </view>
+
+  <view class="cart-bar">
+    <view class="cart-bar-main">
+      <view class="cart-bar-title">{{cartItemCount ? ('已选 ' + cartItemCount + ' 件') : '购物车还是空的'}}</view>
+      <view class="cart-bar-copy">{{cartItemCount ? ('合计 ¥' + cartTotalAmountText) : '先点几样菜，再去确认订单。'}}</view>
+    </view>
+    <view class="cart-bar-actions">
+      <button wx:if="{{cartItemCount}}" class="button-secondary cart-bar-button" bindtap="goOrders">看订单</button>
+      <button class="button-primary cart-bar-button" bindtap="goCheckout">去结算</button>
+    </view>
+  </view>
+
+  <view wx:if="{{cartItemCount}}" class="card cart-inline-card">
+    <view class="section-kicker">购物车</view>
+    <view class="section-title">已选菜品</view>
+    <view wx:for="{{cartItems}}" wx:for-item="cartLine" wx:key="lineId" class="cart-inline-item">
+      <view class="cart-inline-copy">
+        <view class="cart-inline-name">{{cartLine.name}}</view>
+        <view class="cart-inline-meta">{{cartLine.selectedOptionsText || '默认规格'}}</view>
+      </view>
+      <view class="cart-inline-side">
+        <view class="cart-inline-price">¥{{cartLine.lineTotalText}}</view>
+        <view class="cart-stepper">
+          <view class="cart-stepper-button" data-line-id="{{cartLine.lineId}}" bindtap="decreaseCartItem">-</view>
+          <view class="cart-stepper-count">{{cartLine.quantity}}</view>
+          <view class="cart-stepper-button" data-line-id="{{cartLine.lineId}}" bindtap="increaseCartItem">+</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{optionSheetVisible && activeMenuItem}}" class="overlay-mask" catchtouchmove="noop" bindtap="closeOptionSheet">
+    <view class="dialog-sheet option-sheet" catchtap="noop">
+      <view class="section-title">{{activeMenuItem.name}}</view>
+      <view class="section-copy">{{activeMenuItem.description || '选好规格后加入购物车。'}}</view>
+
+      <view wx:for="{{activeMenuItem.optionGroups}}" wx:for-item="group" wx:key="_id" class="option-group">
+        <view class="option-group-title">{{group.name}}{{group.required ? '（必选）' : '（可选）'}}</view>
+        <view class="option-choice-row">
+          <view
+            wx:for="{{group.choices}}"
+            wx:for-item="choice"
+            wx:key="_id"
+            class="option-choice {{!choice.isEnabled ? 'option-choice-disabled' : ''}} {{(optionSelectionMap[group._id] || []).indexOf(choice._id) >= 0 ? 'option-choice-active' : ''}}"
+            data-group-id="{{group._id}}"
+            data-choice-id="{{choice._id}}"
+            bindtap="toggleOption"
+          >
+            {{choice.name}}{{choice.priceDelta ? (' +¥' + choice.priceDelta) : ''}}{{!choice.isEnabled ? '（暂不可选）' : ''}}
+          </view>
+        </view>
+      </view>
+
+      <view class="button-group">
+        <button class="button-primary" bindtap="confirmOptionSelection">加入购物车</button>
+        <button class="button-secondary" bindtap="closeOptionSheet">取消</button>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,79 @@
+<view class="page page-tight">
+  <view wx:if="{{!ready}}" class="card">
+    <view class="section-title">正在同步消费记录</view>
+    <view class="section-copy">稍等一下，系统正在刷新你的会员资料和到店时间线。</view>
+  </view>
+
+  <view wx:elif="{{!hasMember}}" class="card">
+    <view class="section-title">还没有会员记录</view>
+    <view class="section-copy">{{loadError || '请先回首页完成会员注册，注册成功后这里会自动显示到店记录。'}}</view>
+    <navigator class="link-button button-primary" url="/pages/index/index">返回首页</navigator>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{loadError}}" class="notice">{{loadError}}</view>
+
+    <view class="hero hero-member">
+      <view class="hero-badge">到店记录</view>
+      <view class="title">我的到店记录</view>
+      <view class="subtitle">每次店员录入消费后，都会沉淀在这里，方便你回看首次激活和后续到店情况。</view>
+      <view class="mini-metrics">
+        <view class="mini-metric">
+          <view class="mini-metric-label">总核销</view>
+          <view class="mini-metric-value">{{totalCount}}</view>
+        </view>
+        <view class="mini-metric">
+          <view class="mini-metric-label">首次激活</view>
+          <view class="mini-metric-value">{{firstVisitCount}}</view>
+        </view>
+        <view class="mini-metric">
+          <view class="mini-metric-label">最近状态</view>
+          <view class="mini-metric-value">{{visits.length ? '已到店' : '待到店'}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-kicker">消费时间线</view>
+      <view class="section-title">每次到店都会留痕</view>
+      <view class="section-copy">首次有效消费会激活邀请关系并触发积分结算，后续到店也会继续记入消费记录。</view>
+
+      <view wx:if="{{loading}}" class="notice">正在同步最新消费记录...</view>
+
+      <view wx:if="{{!loading && !visits.length}}" class="empty-state">
+        <view class="tag">暂无记录</view>
+        <view class="empty-title">还没有到店核销</view>
+        <view class="empty-copy">下次到店时出示会员号，让店员录入订单号后，这里就会自动生成第一条记录。</view>
+      </view>
+
+      <view wx:if="{{visits.length}}" class="timeline">
+        <view wx:for="{{visits}}" wx:key="_id" class="timeline-item">
+          <view class="timeline-track">
+            <view class="timeline-dot"></view>
+            <view class="timeline-line"></view>
+          </view>
+          <view class="timeline-card">
+            <view class="card-header-row">
+              <view class="card-title-wrap">
+                <view class="section-title">订单号 {{item.externalOrderNo}}</view>
+                <view class="card-subtitle">{{item.verifiedAtLabel}}</view>
+              </view>
+              <view class="status-badge {{item.visitTagClass}}">{{item.visitTypeText}}</view>
+            </view>
+
+            <view class="detail-grid">
+              <view class="detail-row">
+                <view class="detail-label">桌号</view>
+                <view class="detail-value">{{item.tableNo || '未填写'}}</view>
+              </view>
+              <view class="detail-row">
+                <view class="detail-label">记录说明</view>
+                <view class="detail-value">{{item.notes || '店员未填写备注'}}</view>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

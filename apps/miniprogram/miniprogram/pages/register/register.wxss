@@ -1,0 +1,7 @@
+.input + .input {
+  margin-top: 14rpx;
+}
+
+.phone-notice {
+  margin-top: 16rpx;
+}

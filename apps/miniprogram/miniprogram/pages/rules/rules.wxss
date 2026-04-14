@@ -1,0 +1,26 @@
+.rule-flow {
+  display: grid;
+  gap: 18rpx;
+  margin-top: 18rpx;
+}
+
+.rule-flow-item {
+  display: flex;
+  gap: 18rpx;
+  align-items: flex-start;
+}
+
+.rule-flow-copy {
+  flex: 1;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #61584d;
+}
+
+.rule-card {
+  margin-top: 18rpx;
+  padding: 24rpx;
+  border-radius: 24rpx;
+  border: 1rpx solid #eadfcf;
+  background: rgba(255, 255, 255, 0.92);
+}

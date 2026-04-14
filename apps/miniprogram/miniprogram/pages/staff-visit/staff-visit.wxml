@@ -1,0 +1,131 @@
+<view class="page page-tight">
+  <view class="hero hero-staff">
+    <view class="hero-badge">消费核销</view>
+    <view class="title">会员消费核销</view>
+    <view class="subtitle">先查会员，再录入订单号。系统会自动判断是否为首次有效消费，并结算首单礼和邀请积分。</view>
+    <view class="mini-metrics">
+      <view class="mini-metric">
+        <view class="mini-metric-label">步骤 1</view>
+        <view class="mini-metric-value">查会员</view>
+      </view>
+      <view class="mini-metric">
+        <view class="mini-metric-label">步骤 2</view>
+        <view class="mini-metric-value">录订单号</view>
+      </view>
+      <view class="mini-metric">
+        <view class="mini-metric-label">步骤 3</view>
+        <view class="mini-metric-value">自动结算</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <view class="section-title">第一步：查找会员</view>
+      <view class="section-copy">支持手机号、会员号和会员二维码，现场优先扫码会更快。</view>
+    </view>
+
+    <view class="input-label">手机号 / 会员号</view>
+    <input class="input input-strong" placeholder="输入手机号或会员号" value="{{query}}" data-field="query" bindinput="onInput" />
+    <view class="helper-text">如果会员刚注册，请先确认他已经完成微信手机号授权；出示会员码时可直接扫码识别。</view>
+    <view class="button-group-tight">
+      <button class="button-secondary" loading="{{scanning}}" disabled="{{loading || scanning}}" bindtap="scanMember">扫码识别会员码</button>
+      <button class="button-primary" loading="{{loading}}" disabled="{{loading || scanning}}" bindtap="search">查询会员</button>
+    </view>
+  </view>
+
+  <view wx:if="{{selectedMember}}" class="card card-accent">
+    <view class="section-head">
+      <view class="section-title">当前选中会员</view>
+      <view class="section-copy">确认手机号验证状态后再录入订单。</view>
+    </view>
+
+    <view class="detail-grid">
+      <view class="detail-row">
+        <view class="detail-label">会员号</view>
+        <view class="detail-value">{{selectedMember.member.memberCode}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">手机号</view>
+        <view class="detail-value">{{selectedMember.member.phone || '未绑定'}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">手机号验证</view>
+        <view class="detail-value">{{selectedMember.phoneStatusLabel}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">首次消费状态</view>
+        <view class="detail-value">{{selectedMember.firstVisitLabel}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">可用菜品券</view>
+        <view class="detail-value">{{selectedMember.readyVoucherCount}} 张</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">当前积分</view>
+        <view class="detail-value">{{selectedMember.member.pointsBalance || 0}}</view>
+      </view>
+    </view>
+
+    <view wx:if="{{!selectedMember.member.phoneVerifiedAt}}" class="notice">
+      当前会员还没有完成微信手机号验证。请让会员先回到首页完成授权，再继续核销。
+    </view>
+  </view>
+
+  <view wx:if="{{rows.length}}" class="card">
+    <view class="section-title">第二步：选择会员</view>
+    <view wx:for="{{rows}}" wx:key="member._id" class="selection-card {{selectedMemberId === item.member._id ? 'selection-card-active' : ''}}">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="section-title">{{item.member.memberCode}} / {{item.member.phone || '未绑定手机号'}}</view>
+          <view class="card-subtitle">{{item.relationLabel}}，{{item.firstVisitLabel}}</view>
+        </view>
+        <view class="status-badge {{item.member.phoneVerifiedAt ? 'status-ready' : 'status-expired'}}">
+          {{item.member.phoneVerifiedAt ? '可核销' : '待验证'}}
+        </view>
+      </view>
+      <view class="inline-tags">
+        <view class="tag">{{item.phoneStatusLabel}}</view>
+        <view class="tag">可用券 {{item.readyVoucherCount}} 张</view>
+        <view class="tag">积分 {{item.member.pointsBalance || 0}}</view>
+      </view>
+      <button class="button-secondary" data-member-id="{{item.member._id}}" bindtap="selectMember">
+        {{selectedMemberId === item.member._id ? '已选中该会员' : '选择该会员'}}
+      </button>
+    </view>
+  </view>
+
+  <view wx:if="{{hasSearched && !rows.length && !loading}}" class="empty-state">
+    <view class="tag">没有查到结果</view>
+    <view class="empty-title">换一个手机号或会员号再试</view>
+    <view class="empty-copy">如果顾客是新会员，请先让他在会员端完成注册，再回来进行消费核销。</view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <view class="section-title">第三步：录入本次消费</view>
+      <view class="section-copy">订单号用于幂等校验，同一笔订单不会重复发券。</view>
+    </view>
+
+    <view class="input-label">订单号</view>
+    <input class="input input-strong" placeholder="请输入订单号" value="{{orderNo}}" data-field="orderNo" bindinput="onInput" />
+
+    <view class="input-label">桌号（选填）</view>
+    <input class="input" placeholder="例如 A12" value="{{tableNo}}" data-field="tableNo" bindinput="onInput" />
+
+    <view class="input-label">备注（选填）</view>
+    <input class="input" placeholder="例如 补录首单、堂食优惠同享" value="{{notes}}" data-field="notes" bindinput="onInput" />
+
+    <view class="helper-text">
+      {{selectedMember && !selectedMember.member.phoneVerifiedAt ? '当前会员未验证手机号，按钮会保持禁用。' : '提交后系统会自动判断是否触发首单礼和邀请积分。'}}
+    </view>
+    <button
+      class="button-primary"
+      loading="{{loading}}"
+      disabled="{{loading || !selectedMemberId || !orderNo || (selectedMember && !selectedMember.member.phoneVerifiedAt)}}"
+      bindtap="settle"
+    >
+      确认核销
+    </button>
+  </view>
+</view>

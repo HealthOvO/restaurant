@@ -1,0 +1,94 @@
+<view class="page page-tight">
+  <view wx:if="{{!cartItems.length}}" class="card">
+    <view class="section-title">购物车还是空的</view>
+    <view class="section-copy">先去点几样菜，再回来确认订单。</view>
+    <button class="button-primary" bindtap="goMenu">去点餐</button>
+  </view>
+
+  <block wx:else>
+    <view class="hero hero-cream">
+      <view class="hero-badge">确认订单</view>
+      <view class="title">再确认一下这单</view>
+      <view class="subtitle">提交后店员会在小程序里更新订单状态。</view>
+      <view class="mini-metrics">
+        <view class="mini-metric">
+          <view class="mini-metric-label">菜品数量</view>
+          <view class="mini-metric-value">{{itemCount}}</view>
+        </view>
+      <view class="mini-metric">
+        <view class="mini-metric-label">合计</view>
+        <view class="mini-metric-value">¥{{totalAmountText}}</view>
+      </view>
+        <view class="mini-metric">
+          <view class="mini-metric-label">方式</view>
+          <view class="mini-metric-value">{{fulfillmentMode === 'DINE_IN' ? '堂食' : '自提'}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{errorMessage}}" class="notice">{{errorMessage}}</view>
+
+    <view class="card">
+      <view class="section-kicker">取餐方式</view>
+      <view class="section-title">这单怎么取</view>
+      <view class="mode-switch-row">
+        <view class="mode-pill {{!supportDineIn ? 'mode-pill-disabled' : ''}} {{fulfillmentMode === 'DINE_IN' ? 'mode-pill-active' : ''}}" data-mode="DINE_IN" bindtap="changeFulfillmentMode">{{supportDineIn ? '堂食' : '堂食已关闭'}}</view>
+        <view class="mode-pill {{!supportPickup ? 'mode-pill-disabled' : ''}} {{fulfillmentMode === 'PICKUP' ? 'mode-pill-active' : ''}}" data-mode="PICKUP" bindtap="changeFulfillmentMode">{{supportPickup ? '自提' : '自提已关闭'}}</view>
+      </view>
+      <view class="helper-text">只显示门店当前支持的取餐方式；关闭的方式无法提交订单。</view>
+
+      <view wx:if="{{fulfillmentMode === 'DINE_IN'}}">
+        <view class="input-label">桌号</view>
+        <input class="input input-strong" data-field="tableNo" value="{{tableNo}}" placeholder="例如 A12" bindinput="updateField" />
+      </view>
+
+      <view wx:if="{{fulfillmentMode === 'PICKUP'}}">
+        <view class="input-label">联系人</view>
+        <input class="input input-strong" data-field="contactName" value="{{contactName}}" placeholder="请输入取餐联系人" bindinput="updateField" />
+        <view class="input-label">联系电话</view>
+        <input class="input" data-field="contactPhone" value="{{contactPhone}}" placeholder="选填，方便店员联系" bindinput="updateField" />
+      </view>
+
+      <view class="input-label">订单备注</view>
+      <input class="input" data-field="remark" value="{{remark}}" placeholder="如：少辣、不要香菜" bindinput="updateField" />
+    </view>
+
+    <view class="card">
+      <view class="section-kicker">订单明细</view>
+      <view class="section-title">这一单包含这些</view>
+      <view wx:for="{{cartItems}}" wx:for-item="cartLine" wx:key="lineId" class="checkout-item">
+        <view class="checkout-item-main">
+          <view class="checkout-item-name">{{cartLine.name}}</view>
+          <view class="checkout-item-meta">{{cartLine.selectedOptionsText || '默认规格'}}</view>
+        </view>
+        <view class="checkout-item-side">
+          <view>x{{cartLine.quantity}}</view>
+          <view>¥{{cartLine.lineTotalText}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card card-soft">
+      <view class="section-kicker">提交后</view>
+      <view class="section-title">接下来会发生什么</view>
+      <view class="usage-list">
+        <view class="usage-item">
+          <view class="usage-title">店员确认订单</view>
+          <view class="usage-copy">店员会把订单更新成已确认、制作中、待取餐或已完成。</view>
+        </view>
+        <view class="usage-item">
+          <view class="usage-title">订单完成后可继续看会员积分</view>
+          <view class="usage-copy">如果你已经完成会员验证，后续积分和菜品券会在“我的”里更新。</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="submit-bar">
+      <view class="submit-bar-main">
+        <view class="submit-bar-label">应付</view>
+        <view class="submit-bar-price">¥{{totalAmountText}}</view>
+      </view>
+      <button class="button-primary submit-bar-button" loading="{{submitting}}" bindtap="submitOrder">提交订单</button>
+    </view>
+  </block>
+</view>

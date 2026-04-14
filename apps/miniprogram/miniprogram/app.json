@@ -1,0 +1,58 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/menu/menu",
+    "pages/orders/orders",
+    "pages/mine/mine",
+    "pages/checkout/checkout",
+    "pages/order-detail/order-detail",
+    "pages/register/register",
+    "pages/invite/invite",
+    "pages/member-card/member-card",
+    "pages/vouchers/vouchers",
+    "pages/records/records",
+    "pages/rules/rules",
+    "pages/feedback/feedback",
+    "pages/staff-home/staff-home",
+    "pages/staff-login/staff-login",
+    "pages/staff-orders/staff-orders",
+    "pages/staff-order-detail/staff-order-detail",
+    "pages/staff-visit/staff-visit",
+    "pages/staff-voucher/staff-voucher",
+    "pages/staff-member-search/staff-member-search",
+    "pages/staff-feedback/staff-feedback"
+  ],
+  "window": {
+    "navigationBarTitleText": "餐饮会员积分换菜",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundTextStyle": "light",
+    "backgroundColor": "#f6f3ee"
+  },
+  "tabBar": {
+    "color": "#7c6f61",
+    "selectedColor": "#9a3529",
+    "backgroundColor": "#fffaf4",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/menu/menu",
+        "text": "点餐"
+      },
+      {
+        "pagePath": "pages/orders/orders",
+        "text": "订单"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

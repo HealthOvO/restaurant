@@ -1,0 +1,2 @@
+CloudBase CLI 2.12.10
+Try the tcb ai command to start your AI full-stack development experience

@@ -1,0 +1,147 @@
+<view class="page page-tight">
+  <view class="hero hero-member">
+    <view class="hero-badge">活动规则</view>
+    <view class="title">活动参与规则</view>
+    <view class="subtitle">会员注册、邀请绑定、首单激活、积分兑换和菜品券使用规则都在这里。</view>
+    <view class="mini-metrics">
+      <view class="mini-metric">
+        <view class="mini-metric-label">邀请码</view>
+        <view class="mini-metric-value">{{memberCode || '待注册'}}</view>
+      </view>
+      <view class="mini-metric">
+        <view class="mini-metric-label">邀请奖励</view>
+        <view class="mini-metric-value">积分到账</view>
+      </view>
+      <view class="mini-metric">
+        <view class="mini-metric-label">使用场景</view>
+        <view class="mini-metric-value">仅限堂食</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card card-soft">
+    <view class="section-title">参加流程</view>
+    <view class="rule-flow">
+      <view class="rule-flow-item">
+        <view class="tag">01</view>
+        <view class="rule-flow-copy">完成会员注册并授权微信手机号。</view>
+      </view>
+      <view class="rule-flow-item">
+        <view class="tag">02</view>
+        <view class="rule-flow-copy">分享会员邀请码，或在首次到店前绑定朋友的邀请码。</view>
+      </view>
+      <view class="rule-flow-item">
+        <view class="tag">03</view>
+        <view class="rule-flow-copy">店员录入订单号后，首次有效消费会自动激活邀请关系。</view>
+      </view>
+      <view class="rule-flow-item">
+        <view class="tag">04</view>
+        <view class="rule-flow-copy">新客礼会直接发券，邀请奖励会先到账积分，会员再去兑换菜品券。</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">门店当前默认规则</view>
+
+    <view class="rule-card">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="section-title">邀请码与绑定</view>
+          <view class="card-subtitle">每个会员都有专属邀请码，一个被邀请人只允许绑定 1 位邀请人。</view>
+        </view>
+        <view class="tag">绑定限制</view>
+      </view>
+      <view class="detail-grid">
+        <view class="detail-row">
+          <view class="detail-label">当前邀请码</view>
+          <view class="detail-value">{{memberCode || '请先注册会员'}}</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">改绑时机</view>
+          <view class="detail-value">首次有效消费前可绑定，激活后锁定</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="rule-card">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="section-title">新客首单礼</view>
+          <view class="card-subtitle">首次到店核销后，系统会按后台配置自动发放首单礼。</view>
+        </view>
+        <view class="tag tag-success">自动到账</view>
+      </view>
+      <view class="detail-grid">
+        <view class="detail-row">
+          <view class="detail-label">触发条件</view>
+          <view class="detail-value">首次有效消费核销成功</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">发放方式</view>
+          <view class="detail-value">自动发券到会员账户</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="rule-card">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="section-title">邀请达标送积分</view>
+          <view class="card-subtitle">默认按 1 / 3 / 5 人达标，具体积分数量和是否循环发放以门店后台配置为准。</view>
+        </view>
+        <view class="tag">后台可配置</view>
+      </view>
+      <view class="detail-grid">
+        <view class="detail-row">
+          <view class="detail-label">默认档位</view>
+          <view class="detail-value">1 / 3 / 5 人</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">奖励形式</view>
+          <view class="detail-value">邀请人先得积分，再换菜品券</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="rule-card">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="section-title">积分兑换菜品</view>
+          <view class="card-subtitle">可兑换的菜品和所需积分都由门店老板在后台维护。</view>
+        </view>
+        <view class="tag tag-success">积分兑换</view>
+      </view>
+      <view class="detail-grid">
+        <view class="detail-row">
+          <view class="detail-label">兑换方式</view>
+          <view class="detail-value">会员端选择菜品并确认兑换</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">到账形式</view>
+          <view class="detail-value">兑换成功后生成对应菜品券</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="rule-card">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="section-title">券使用限制</view>
+          <view class="card-subtitle">菜品券仅限堂食核销，不可兑现，也不能恢复已使用券。</view>
+        </view>
+        <view class="tag">使用说明</view>
+      </view>
+      <view class="detail-grid">
+        <view class="detail-row">
+          <view class="detail-label">核销场景</view>
+          <view class="detail-value">仅限堂食</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">异常处理</view>
+          <view class="detail-value">如需补偿，门店改为补发新券</view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

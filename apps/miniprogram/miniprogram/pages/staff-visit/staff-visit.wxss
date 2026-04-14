@@ -1,0 +1,7 @@
+.selection-card .button-secondary {
+  margin-top: 18rpx;
+}
+
+.selection-card .button-secondary[disabled] {
+  opacity: 0.58;
+}

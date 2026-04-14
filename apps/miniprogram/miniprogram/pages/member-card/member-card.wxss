@@ -1,0 +1,33 @@
+.identity-card {
+  margin-top: 24rpx;
+}
+
+.member-qr-panel {
+  margin-top: 20rpx;
+}
+
+.member-qr-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24rpx;
+  border-radius: 28rpx;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 243, 233, 0.98));
+  border: 1rpx solid #eadfce;
+}
+
+.member-qr-canvas {
+  width: 420rpx;
+  height: 420rpx;
+  border-radius: 24rpx;
+  background: #ffffff;
+}
+
+.member-qr-helper {
+  margin-top: 14rpx;
+}
+
+.qr-notice {
+  margin-top: 14rpx;
+}

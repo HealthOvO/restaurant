@@ -1,0 +1,4 @@
+.button-group .button-secondary,
+.button-group .button-primary {
+  margin-top: 0;
+}

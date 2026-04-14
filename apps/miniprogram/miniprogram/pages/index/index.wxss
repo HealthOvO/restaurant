@@ -1,0 +1,104 @@
+.home-shell {
+  padding-top: 18rpx;
+}
+
+.dining-hero {
+  padding: 36rpx 30rpx 30rpx;
+  border-radius: 36rpx;
+}
+
+.dining-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dining-hero-actions {
+  margin-top: 22rpx;
+}
+
+.home-recommend-list {
+  display: grid;
+  gap: 18rpx;
+  margin-top: 18rpx;
+}
+
+.home-dish-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22rpx;
+  padding: 22rpx 0;
+  border-top: 1rpx solid #efe3d5;
+}
+
+.home-dish-item:first-child {
+  padding-top: 8rpx;
+  border-top: none;
+}
+
+.home-dish-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.home-dish-name {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1f2330;
+}
+
+.home-dish-desc {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.68;
+  color: #73695d;
+}
+
+.home-dish-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 12rpx;
+}
+
+.home-dish-tag {
+  padding: 8rpx 14rpx;
+  border-radius: 999rpx;
+  background: #f8ead7;
+  color: #8b5e05;
+  font-size: 20rpx;
+  font-weight: 700;
+}
+
+.home-dish-side {
+  display: grid;
+  justify-items: end;
+  gap: 8rpx;
+}
+
+.home-dish-price {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #9a3529;
+}
+
+.home-dish-sales {
+  font-size: 21rpx;
+  color: #8b7b67;
+}
+
+.category-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.category-chip {
+  padding: 12rpx 20rpx;
+  border-radius: 999rpx;
+  background: #fff8ef;
+  border: 1rpx solid #ead7bf;
+  color: #74411e;
+  font-size: 24rpx;
+  font-weight: 700;
+}

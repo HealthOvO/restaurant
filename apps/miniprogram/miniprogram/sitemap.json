@@ -1,0 +1,9 @@
+{
+  "desc": "default",
+  "rules": [
+    {
+      "action": "allow",
+      "page": "*"
+    }
+  ]
+}

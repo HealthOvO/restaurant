@@ -1,0 +1,163 @@
+<view class="page">
+  <view wx:if="{{!ready}}" class="card">
+    <view class="section-title">正在准备邀请信息</view>
+    <view class="section-copy">稍等一下，系统正在同步你的会员资料和邀请进度。</view>
+  </view>
+
+  <view wx:elif="{{!hasMember}}" class="card">
+    <view class="section-title">还没拿到会员资料</view>
+    <view class="section-copy">{{loadError || '请先回首页完成会员注册，注册后这里会自动显示邀请码和邀请进度。'}}</view>
+    <navigator class="link-button button-primary" url="/pages/index/index">返回首页</navigator>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{loadError}}" class="notice">{{loadError}}</view>
+
+    <view class="hero hero-member">
+      <view class="hero-badge">邀请中心</view>
+      <view class="title">分享好友到店，邀请达标拿积分</view>
+      <view class="subtitle">好友在首次消费前绑定你的邀请码，完成首单后就会计入进度并自动给你送积分。</view>
+      <view class="mini-metrics">
+        <view class="mini-metric">
+          <view class="mini-metric-label">已激活</view>
+          <view class="mini-metric-value">{{overview ? overview.activatedCount : 0}}</view>
+        </view>
+        <view class="mini-metric">
+          <view class="mini-metric-label">待激活</view>
+          <view class="mini-metric-value">{{overview ? overview.pendingCount : 0}}</view>
+        </view>
+        <view class="mini-metric">
+          <view class="mini-metric-label">当前状态</view>
+          <view class="mini-metric-value">{{relation ? relationStatusText : (canBindInviteCode ? '可绑定' : '可邀请')}}</view>
+        </view>
+      </view>
+      <view class="hero-chips">
+        <view class="hero-chip">邀请码 {{member.memberCode}}</view>
+        <view class="hero-chip">{{canBindInviteCode ? '首单前可绑定一次' : '绑定关系已锁定'}}</view>
+      </view>
+    </view>
+
+    <view class="card card-soft">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="section-kicker">发给朋友的内容</view>
+          <view class="section-title">先分享邀请码，再看激活进度</view>
+          <view class="card-subtitle">推荐先用“立即分享”，如果朋友已经到店，也可以让他手动填写邀请码。</view>
+        </view>
+        <view class="tag">邀请码 {{member.memberCode}}</view>
+      </view>
+
+      <view class="button-group-tight">
+        <button class="button-primary" open-type="share">立即分享</button>
+        <button class="button-secondary" bindtap="copyInviteCode">复制邀请码</button>
+      </view>
+
+      <view class="journey-list">
+        <view class="journey-item">
+          <view class="journey-index">01</view>
+          <view class="journey-body">
+            <view class="journey-title">发给朋友</view>
+            <view class="journey-copy">分享小程序页面，或者直接把邀请码复制给朋友。</view>
+          </view>
+        </view>
+        <view class="journey-item">
+          <view class="journey-index">02</view>
+          <view class="journey-body">
+            <view class="journey-title">朋友完成注册</view>
+            <view class="journey-copy">朋友需先在会员端完成微信手机号验证，才会成为正式会员。</view>
+          </view>
+        </view>
+        <view class="journey-item">
+          <view class="journey-index">03</view>
+          <view class="journey-body">
+            <view class="journey-title">首单后自动激活</view>
+            <view class="journey-copy">朋友到店完成首次有效消费后，系统会自动把人数计入你的邀请积分进度。</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card card-compact">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="section-kicker">当前状态</view>
+          <view class="section-title">{{nextMilestoneTitle}}</view>
+          <view class="card-subtitle">{{nextMilestoneCopy}}</view>
+        </view>
+        <view class="tag">{{relation ? relationStatusText : (canBindInviteCode ? '可绑定' : '可邀请')}}</view>
+      </view>
+
+      <view class="support-strip">
+        <view class="support-pill">已激活 {{overview ? overview.activatedCount : 0}} 人</view>
+        <view class="support-pill">待激活 {{overview ? overview.pendingCount : 0}} 人</view>
+        <view class="support-pill">{{canBindInviteCode ? '你自己首单前可绑一次邀请码' : '你的邀请关系已锁定'}}</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-kicker">手动绑定</view>
+      <view class="section-title">朋友已经把邀请码发给你？</view>
+      <view wx:if="{{relation}}" class="notice">
+        你已绑定邀请关系，当前状态：{{relationStatusText}}。
+      </view>
+      <view wx:elif="{{canBindInviteCode}}">
+        <view class="section-copy">如果朋友已经把邀请码发给你，也可以直接在这里填写。首单前只允许绑定一次。</view>
+        <input
+          class="input input-strong"
+          placeholder="请输入朋友的邀请码"
+          value="{{inviteCodeInput}}"
+          bindinput="onInviteCodeInput"
+        />
+        <button class="button-primary" disabled="{{bindingInviteCode || !inviteCodeInput}}" loading="{{bindingInviteCode}}" bindtap="bindInviteCode">绑定邀请码</button>
+      </view>
+      <view wx:else class="section-copy">当前账号不需要再手动绑定邀请码。已完成首单或已有邀请关系后，入口会自动锁定。</view>
+    </view>
+
+    <view wx:if="{{overview}}" class="card">
+      <view class="section-kicker">积分进度</view>
+      <view class="section-title">达标送积分</view>
+      <view wx:for="{{overview.milestones}}" wx:key="ruleId" class="list-item">
+        <view class="section-title">{{item.title}}</view>
+        <view class="card-subtitle">
+          {{item.rewardMode === 'REPEATABLE' ? ('每满 ' + item.threshold + ' 人送 ' + item.pointsReward + ' 积分') : (item.threshold + ' 人达标，送 ' + item.pointsReward + ' 积分')}}
+        </view>
+        <view class="inline-tags">
+          <view class="tag {{item.pendingRewardCount > 0 ? 'tag-success' : ''}}">
+            {{item.pendingRewardCount > 0 ? ('待到账 ' + (item.pendingRewardCount * item.pointsReward) + ' 积分') : (item.rewardedCount > 0 ? ('已到账 ' + item.rewardedCount + ' 次') : (item.isReached ? '已达标' : '未达标'))}}
+          </view>
+          <view wx:if="{{item.rewardMode === 'REPEATABLE'}}" class="tag">
+            下一次积分目标：{{item.nextRewardThreshold}} 人
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{overview}}" class="card card-compact">
+      <view class="section-kicker">邀请提醒</view>
+      <view class="section-title">把重点放在“让朋友完成首单”</view>
+      <view class="tip-stack">
+        <view class="tip-row">
+          <view class="tip-badge">绑定</view>
+          <view class="tip-body">
+            <view class="tip-title">首单前只能绑定一次邀请码</view>
+            <view class="tip-copy">自己已经产生首单，或者已经绑定过邀请关系后，就不能再改绑。</view>
+          </view>
+        </view>
+        <view class="tip-row">
+          <view class="tip-badge">激活</view>
+          <view class="tip-body">
+            <view class="tip-title">朋友首单后才会算进你的有效人数</view>
+            <view class="tip-copy">同一个被邀请人后续再消费不会重复累计，所以首单激活最关键。</view>
+          </view>
+        </view>
+        <view class="tip-row">
+          <view class="tip-badge">积分</view>
+          <view class="tip-body">
+            <view class="tip-title">邀请奖励先记积分，再兑换成菜品券</view>
+            <view class="tip-copy">积分到账后，到“我的菜品券”里兑换菜品，再出示二维码给店员核销。</view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

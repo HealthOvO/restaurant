@@ -1,0 +1,3 @@
+.timeline-card .detail-value {
+  max-width: 420rpx;
+}

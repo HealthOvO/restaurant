@@ -1,0 +1,31 @@
+<view class="page">
+  <view class="hero hero-member">
+    <view class="hero-badge">微信验证</view>
+    <view class="title">先完成正式入会</view>
+    <view class="subtitle">绑定微信手机号后，邀请积分、菜品券和首单激活才会按正式会员身份结算。</view>
+    <view class="hero-chips">
+      <view class="hero-chip">微信实名手机号</view>
+      <view class="hero-chip">验证后锁定身份</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-kicker">第一步</view>
+    <view class="section-title">补充会员昵称</view>
+    <input class="input" placeholder="请输入昵称" value="{{nickname}}" data-field="nickname" bindinput="onInput" />
+  </view>
+
+  <view class="card card-soft">
+    <view class="section-kicker">第二步</view>
+    <view class="section-title">完成手机号验证</view>
+    <view class="section-copy">当前状态：{{hasVerifiedPhone ? phoneDisplay : '未完成微信验证'}}</view>
+    <view wx:if="{{hasLegacyPhone}}" class="notice phone-notice">
+      检测到历史测试号码 {{legacyPhoneDisplay}}，该号码不能作为正式会员身份使用。
+    </view>
+    <view wx:if="{{hasVerifiedPhone}}" class="helper-text">手机号已锁定为微信认证号码，如需更换请由老板后台处理。</view>
+    <button wx:if="{{!hasVerifiedPhone}}" class="button-primary" loading="{{submitting}}" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber">
+      微信授权手机号并完成注册
+    </button>
+    <button wx:else class="button-primary" loading="{{submitting}}" bindtap="submitProfile">保存昵称</button>
+  </view>
+</view>

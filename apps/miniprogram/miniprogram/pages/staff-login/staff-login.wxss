@@ -1,0 +1,13 @@
+.page {
+  padding-top: 30rpx;
+}
+
+.redirect-tip {
+  margin-top: 14rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 20rpx;
+  background: rgba(17, 36, 82, 0.06);
+  color: #17356d;
+  font-size: 22rpx;
+  line-height: 1.6;
+}

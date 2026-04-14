@@ -1,0 +1,39 @@
+{
+  "name": "restaurant-growth-rewards",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "cloudfunctions"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "check:todo": "node ./scripts/check-no-todo.mjs",
+    "build:shared": "npm run build --workspace @restaurant/shared",
+    "build:admin": "npm run build --workspace @restaurant/admin-web",
+    "build:cloudfunctions": "npm run build --workspace @restaurant/cloudfunctions",
+    "build:release": "npm run build:shared && npm run build:cloudfunctions && npm run build:admin",
+    "prepare:miniprogram": "npm run build:shared && npm run sync:shared --workspace @restaurant/miniprogram",
+    "deploy:functions": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy-cloudfunctions.ps1",
+    "deploy:admin": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy-admin-web.ps1",
+    "review": "npm run check:todo && npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^24.0.15",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.7.0",
+    "esbuild": "^0.25.8",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.6",
+    "vitest": "^3.2.4",
+    "miniprogram-api-typings": "^4.1.0"
+  }
+}

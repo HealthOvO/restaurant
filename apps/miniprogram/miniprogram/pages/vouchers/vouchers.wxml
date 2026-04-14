@@ -1,0 +1,268 @@
+<view class="page page-tight">
+  <view wx:if="{{!ready}}" class="card">
+    <view class="section-title">正在同步菜品券</view>
+    <view class="section-copy">稍等一下，系统正在刷新你的会员资料和菜品券状态。</view>
+  </view>
+
+  <view wx:elif="{{!hasMember}}" class="card">
+    <view class="section-title">还没有会员资料</view>
+    <view class="section-copy">{{loadError || '请先回首页完成会员注册，注册后这里会显示你的菜品券。'}}</view>
+    <navigator class="link-button button-primary" url="/pages/index/index">返回首页</navigator>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{loadError}}" class="notice">{{loadError}}</view>
+
+    <view class="hero hero-member">
+      <view class="hero-badge">积分与菜品券</view>
+      <view class="title">积分换菜，券到店核销</view>
+      <view class="subtitle">邀请达标先得积分，积分可以兑换菜品券，到店后再出示二维码核销。</view>
+      <view class="mini-metrics">
+        <view class="mini-metric">
+          <view class="mini-metric-label">当前积分</view>
+          <view class="mini-metric-value">{{pointsBalance}}</view>
+        </view>
+        <view class="mini-metric">
+          <view class="mini-metric-label">待使用券</view>
+          <view class="mini-metric-value">{{readyCount}}</view>
+        </view>
+        <view class="mini-metric">
+          <view class="mini-metric-label">已核销</view>
+          <view class="mini-metric-value">{{usedCount}}</view>
+        </view>
+      </view>
+      <view class="hero-chips">
+        <view class="hero-chip">先积分兑换</view>
+        <view class="hero-chip">再扫码核销</view>
+      </view>
+    </view>
+
+    <view class="card card-soft card-compact">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="section-kicker">怎么兑换</view>
+          <view class="section-title">先用积分换券，再到店核销</view>
+          <view class="card-subtitle">邀请积分到账后，先在这里兑换菜品券，兑换成功的券会出现在下方列表。</view>
+        </view>
+        <view class="tag {{pointsBalance > 0 ? 'tag-success' : ''}}">{{pointsBalance > 0 ? ('当前 ' + pointsBalance + ' 积分') : '暂无积分'}}</view>
+      </view>
+
+      <view class="guide-grid">
+        <view class="guide-card">
+          <view class="guide-card-head">
+            <view class="guide-card-index">01</view>
+            <view class="guide-card-title">先选兑换菜品</view>
+          </view>
+          <view class="guide-card-copy">积分足够时，可以先兑换自己想用的菜品券，兑换后积分会立即扣减。</view>
+        </view>
+        <view class="guide-card">
+          <view class="guide-card-head">
+            <view class="guide-card-index">02</view>
+            <view class="guide-card-title">到店展示二维码</view>
+          </view>
+          <view class="guide-card-copy">店员在小程序“菜品券核销”页点击扫码后，就能直接识别并完成核销。</view>
+        </view>
+        <view class="guide-card">
+          <view class="guide-card-head">
+            <view class="guide-card-index">03</view>
+            <view class="guide-card-title">扫码失败时复制券号兜底</view>
+          </view>
+          <view class="guide-card-copy">现场网络不稳时，也可以把券号复制给店员手动输入，不影响核销。</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-kicker">积分兑换</view>
+      <view class="section-title">可兑换菜品</view>
+      <view class="section-copy">老板在后台配置的兑换菜品会显示在这里。</view>
+
+      <view wx:if="{{!exchangeItems.length}}" class="empty-state">
+        <view class="tag">暂无兑换菜品</view>
+        <view class="empty-title">老板还没上架积分兑换</view>
+        <view class="empty-copy">可以先去邀请中心积累积分，老板上架后这里会自动显示。</view>
+      </view>
+
+      <view wx:for="{{exchangeItems}}" wx:key="_id" class="voucher-card">
+        <view class="card-header-row">
+          <view class="card-title-wrap">
+            <view class="section-title">{{item.voucherTemplate.dishName}}</view>
+            <view class="card-subtitle">{{item.name}}</view>
+          </view>
+          <view class="status-badge {{pointsBalance >= item.pointsCost ? 'status-ready' : 'status-expired'}}">{{item.pointsCostText}}</view>
+        </view>
+
+        <view class="detail-grid">
+          <view class="detail-row">
+            <view class="detail-label">有效期</view>
+            <view class="detail-value">{{item.validDaysText}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">兑换后形式</view>
+            <view class="detail-value">到账 1 张菜品券</view>
+          </view>
+        </view>
+
+        <view class="button-group-tight voucher-action-row">
+          <button
+            class="button-primary"
+            data-exchange-item-id="{{item._id}}"
+            disabled="{{redeemingItemId || pointsBalance < item.pointsCost}}"
+            loading="{{redeemingItemId === item._id}}"
+            bindtap="redeemExchangeItem"
+          >
+            {{pointsBalance >= item.pointsCost ? '立即兑换' : '积分不足'}}
+          </button>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-kicker">到账记录</view>
+      <view class="section-title">券列表</view>
+      <view class="section-copy">每张券都有独立券号，支持手动输入和扫码核销。</view>
+
+      <view wx:if="{{loading}}" class="notice">正在同步最新菜品券...</view>
+
+      <view wx:if="{{!loading && !vouchers.length}}" class="empty-state">
+        <view class="tag">暂无菜品券</view>
+        <view class="empty-title">先兑换积分券或完成首单</view>
+        <view class="empty-copy">首次有效消费会发放新客礼，邀请达标会先送积分，兑换后才会到账对应的菜品券。</view>
+        <navigator class="link-button button-secondary" url="/pages/invite/invite">去查看邀请进度</navigator>
+      </view>
+
+      <view wx:for="{{vouchers}}" wx:key="_id" class="voucher-card {{item.statusClass}}">
+        <view class="card-header-row">
+          <view class="card-title-wrap">
+            <view class="section-title">{{item.dishName}}</view>
+            <view class="card-subtitle">{{item.sourceText}}</view>
+          </view>
+          <view class="status-badge {{item.statusClass}}">{{item.statusText}}</view>
+        </view>
+
+        <view class="code-panel">
+          <view class="code-label">核销券号</view>
+          <view class="code-value code-value-small">{{item._id}}</view>
+          <view class="code-caption">店员核销时可直接扫码下面的二维码，也可以手动输入这个券号。</view>
+        </view>
+
+        <view class="detail-grid">
+          <view class="detail-row">
+            <view class="detail-label">有效期至</view>
+            <view class="detail-value">{{item.expiresAtLabel}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">使用限制</view>
+            <view class="detail-value">仅限堂食核销</view>
+          </view>
+          <view wx:if="{{item.usedAtLabel}}" class="detail-row">
+            <view class="detail-label">核销时间</view>
+            <view class="detail-value">{{item.usedAtLabel}}</view>
+          </view>
+        </view>
+
+        <view class="button-group-tight voucher-action-row">
+          <button
+            wx:if="{{item.status === 'READY'}}"
+            class="button-primary"
+            data-voucher-id="{{item._id}}"
+            bindtap="showVoucherQr"
+          >
+            展示二维码
+          </button>
+          <button class="button-secondary" data-voucher-id="{{item._id}}" bindtap="copyVoucherId">复制券号</button>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{pointTransactions.length}}" class="card card-compact">
+      <view class="section-kicker">积分记录</view>
+      <view class="section-title">最近积分变动</view>
+      <view wx:for="{{pointTransactions}}" wx:key="_id" class="list-item">
+        <view class="card-header-row">
+          <view class="card-title-wrap">
+            <view class="section-title">{{item.typeText}}</view>
+            <view class="card-subtitle">{{item.note || '系统记录'}}</view>
+          </view>
+          <view class="status-badge {{item.changeAmount > 0 ? 'status-ready' : 'status-used'}}">{{item.changeText}}</view>
+        </view>
+        <view class="detail-grid">
+          <view class="detail-row">
+            <view class="detail-label">记录时间</view>
+            <view class="detail-value">{{item.createdAtLabel}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">变动后余额</view>
+            <view class="detail-value">{{item.balanceAfter}}</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card card-compact">
+      <view class="section-kicker">核销提醒</view>
+      <view class="section-title">这些情况要提前知道</view>
+      <view class="tip-stack">
+        <view class="tip-row">
+          <view class="tip-badge">有效期</view>
+          <view class="tip-body">
+            <view class="tip-title">过期后不会恢复为可用</view>
+            <view class="tip-copy">如果门店需要补偿，应该补发一张新券，而不是把旧券改回可用。</view>
+          </view>
+        </view>
+        <view class="tip-row">
+          <view class="tip-badge">核销后</view>
+          <view class="tip-body">
+            <view class="tip-title">已核销的券不能重复使用</view>
+            <view class="tip-copy">系统会保留核销记录，店员再次扫码或输入同一券号都会被拦截。</view>
+          </view>
+        </view>
+        <view class="tip-row">
+          <view class="tip-badge">兑换</view>
+          <view class="tip-body">
+            <view class="tip-title">积分会先兑换成券，再由店员核销</view>
+            <view class="tip-copy">会员端和店员端不会直接扣积分，现场依然只认菜品券二维码或券号。</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{qrPreviewVisible && qrPreviewVoucher}}" class="overlay-mask" catchtouchmove="noop" bindtap="hideVoucherQr">
+      <view class="dialog-sheet qr-dialog" catchtap="noop">
+        <view class="section-title">向店员出示这张券</view>
+        <view class="section-copy">店员在“菜品券核销”页点击扫码后，会自动识别并直接核销。</view>
+
+        <view class="qr-preview-shell">
+          <canvas
+            canvas-id="{{qrCanvasId}}"
+            class="voucher-qr-canvas"
+            disable-scroll="true"
+            style="width: 420rpx; height: 420rpx;"
+            width="{{qrCanvasSize}}"
+            height="{{qrCanvasSize}}"
+          ></canvas>
+        </view>
+
+        <view class="detail-grid">
+          <view class="detail-row">
+            <view class="detail-label">菜品</view>
+            <view class="detail-value">{{qrPreviewVoucher.dishName}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">券号</view>
+            <view class="detail-value">{{qrPreviewVoucher._id}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">有效期至</view>
+            <view class="detail-value">{{qrPreviewVoucher.expiresAtLabel}}</view>
+          </view>
+        </view>
+
+        <view class="button-group-tight">
+          <button class="button-secondary" data-voucher-id="{{qrPreviewVoucher._id}}" bindtap="copyVoucherId">复制券号</button>
+          <button class="button-primary" bindtap="hideVoucherQr">收起二维码</button>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

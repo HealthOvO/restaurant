@@ -1,0 +1,3 @@
+.selection-card + .selection-card {
+  margin-top: 16rpx;
+}
