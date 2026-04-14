@@ -9,3 +9,6 @@ coverage/
 miniprogram_npm/
 temp/
 cloudbaserc.json
+release/
+apps/miniprogram/project.private.config.json
+.tmp-*.txt

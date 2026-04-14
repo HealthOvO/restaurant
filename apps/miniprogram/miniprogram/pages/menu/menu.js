@@ -59,6 +59,45 @@ function getDefaultSelectionMap(menuItem) {
   return selectionMap;
 }
 
+function buildOptionChoiceClassName(choice, selectedChoiceIds) {
+  const classNames = ["option-choice"];
+  if (!choice.isEnabled) {
+    classNames.push("option-choice-disabled");
+  }
+  if ((selectedChoiceIds || []).includes(choice._id)) {
+    classNames.push("option-choice-active");
+  }
+  return classNames.join(" ");
+}
+
+function decorateOptionGroups(optionGroups, selectionMap) {
+  return (optionGroups || []).map((group) => {
+    const selectedChoiceIds = selectionMap[group._id] || [];
+    return {
+      ...group,
+      titleText: `${group.name}${group.required ? "（必选）" : "（可选）"}`,
+      choices: (group.choices || []).map((choice) => ({
+        ...choice,
+        className: buildOptionChoiceClassName(choice, selectedChoiceIds),
+        priceDeltaText: choice.priceDelta ? ` +¥${choice.priceDelta}` : "",
+        statusText: choice.isEnabled ? "" : "（暂不可选）"
+      }))
+    };
+  });
+}
+
+function buildActiveMenuItemViewModel(menuItem, selectionMap) {
+  if (!menuItem) {
+    return null;
+  }
+
+  return {
+    ...menuItem,
+    descriptionText: menuItem.description || "选好规格后加入购物车。",
+    optionGroups: decorateOptionGroups(menuItem.optionGroups, selectionMap)
+  };
+}
+
 function buildSelectedOptions(menuItem, selectionMap) {
   const selectedOptions = [];
   (menuItem.optionGroups || []).forEach((group) => {
@@ -206,10 +245,11 @@ Page({
     this.syncVisibleItems(categoryId);
   },
   openOptionsForItem(menuItem) {
+    const optionSelectionMap = getDefaultSelectionMap(menuItem);
     this.setData({
       optionSheetVisible: true,
-      activeMenuItem: menuItem,
-      optionSelectionMap: getDefaultSelectionMap(menuItem)
+      activeMenuItem: buildActiveMenuItemViewModel(menuItem, optionSelectionMap),
+      optionSelectionMap
     });
   },
   quickAdd(event) {
@@ -265,11 +305,13 @@ Page({
       nextSelection = [choiceId];
     }
 
+    const nextOptionSelectionMap = {
+      ...this.data.optionSelectionMap,
+      [groupId]: nextSelection
+    };
     this.setData({
-      optionSelectionMap: {
-        ...this.data.optionSelectionMap,
-        [groupId]: nextSelection
-      }
+      activeMenuItem: buildActiveMenuItemViewModel(menuItem, nextOptionSelectionMap),
+      optionSelectionMap: nextOptionSelectionMap
     });
   },
   closeOptionSheet() {

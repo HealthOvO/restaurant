@@ -92,21 +92,21 @@
   <view wx:if="{{optionSheetVisible && activeMenuItem}}" class="overlay-mask" catchtouchmove="noop" bindtap="closeOptionSheet">
     <view class="dialog-sheet option-sheet" catchtap="noop">
       <view class="section-title">{{activeMenuItem.name}}</view>
-      <view class="section-copy">{{activeMenuItem.description || '选好规格后加入购物车。'}}</view>
+      <view class="section-copy">{{activeMenuItem.descriptionText}}</view>
 
       <view wx:for="{{activeMenuItem.optionGroups}}" wx:for-item="group" wx:key="_id" class="option-group">
-        <view class="option-group-title">{{group.name}}{{group.required ? '（必选）' : '（可选）'}}</view>
+        <view class="option-group-title">{{group.titleText}}</view>
         <view class="option-choice-row">
           <view
             wx:for="{{group.choices}}"
             wx:for-item="choice"
             wx:key="_id"
-            class="option-choice {{!choice.isEnabled ? 'option-choice-disabled' : ''}} {{(optionSelectionMap[group._id] || []).indexOf(choice._id) >= 0 ? 'option-choice-active' : ''}}"
+            class="{{choice.className}}"
             data-group-id="{{group._id}}"
             data-choice-id="{{choice._id}}"
             bindtap="toggleOption"
           >
-            {{choice.name}}{{choice.priceDelta ? (' +¥' + choice.priceDelta) : ''}}{{!choice.isEnabled ? '（暂不可选）' : ''}}
+            {{choice.name}}{{choice.priceDeltaText}}{{choice.statusText}}
           </view>
         </view>
       </view>
