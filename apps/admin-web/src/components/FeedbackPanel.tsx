@@ -158,8 +158,8 @@ export function FeedbackPanel({ feedbacks, updatingFeedbackId = null, onUpdate }
     return (
       <div className="empty-state">
         <div className="tag tag-navy">暂无反馈</div>
-        <h3 className="section-title">还没有用户反馈</h3>
-        <p className="subtle">会员和店员提交的问题，会在这里统一汇总和处理。</p>
+        <h3 className="section-title">最近还没有问题回流</h3>
+        <p className="subtle">会员和店员提的问题会统一出现在这里。</p>
       </div>
     );
   }
@@ -170,30 +170,30 @@ export function FeedbackPanel({ feedbacks, updatingFeedbackId = null, onUpdate }
         <div className="summary-card">
           <div className="summary-kicker">待处理</div>
           <div className="summary-value">{openCount}</div>
-          <div className="summary-footnote">还没开始跟进的反馈。</div>
+          <div className="summary-footnote">未开始处理</div>
         </div>
         <div className="summary-card">
           <div className="summary-kicker">处理中</div>
           <div className="summary-value">{processingCount}</div>
-          <div className="summary-footnote">老板已经介入处理。</div>
+          <div className="summary-footnote">处理中</div>
         </div>
         <div className="summary-card">
           <div className="summary-kicker">已解决</div>
           <div className="summary-value">{resolvedCount}</div>
-          <div className="summary-footnote">已经回复并处理完成。</div>
+          <div className="summary-footnote">已处理完成</div>
         </div>
         <div className="summary-card">
           <div className="summary-kicker">紧急反馈</div>
           <div className="summary-value">{urgentCount}</div>
-          <div className="summary-footnote">优先级已提到紧急。</div>
+          <div className="summary-footnote">优先处理</div>
         </div>
       </div>
 
       <div className="row-card stack">
         <div className="card-title-block">
           <div className="section-eyebrow">筛选反馈</div>
-          <h3 className="section-title">按状态、来源和分类查看</h3>
-          <p className="subtle">可以搜索反馈编号、标题、描述、联系方式、会员号或店员账号。</p>
+          <h3 className="section-title">反馈筛选</h3>
+          <p className="subtle">支持编号、标题、内容和联系方式。</p>
         </div>
 
         <div className="field-grid feedback-filter-grid">
@@ -260,10 +260,10 @@ export function FeedbackPanel({ feedbacks, updatingFeedbackId = null, onUpdate }
             当前显示 {filteredFeedbacks.length} / {feedbacks.length}
           </div>
           <div className="toolbar-pill">
-            {filteredUrgentCount > 0 ? `当前结果里有 ${filteredUrgentCount} 条紧急反馈` : "当前结果里没有紧急反馈"}
+            {filteredUrgentCount > 0 ? `紧急 ${filteredUrgentCount} 条` : "无紧急反馈"}
           </div>
           <button className="button button-secondary" disabled={!hasActiveFilters} type="button" onClick={resetFilters}>
-            清空筛选
+            重置筛选
           </button>
         </div>
       </div>
@@ -272,7 +272,7 @@ export function FeedbackPanel({ feedbacks, updatingFeedbackId = null, onUpdate }
         <div className="empty-state">
           <div className="tag">没有匹配结果</div>
           <h3 className="section-title">当前筛选下没有反馈</h3>
-          <p className="subtle">可以清空筛选条件后再看一遍，或者换个关键词搜索。</p>
+          <p className="subtle">先重置筛选，再看最近上报的问题。</p>
         </div>
       ) : (
         <div className="table-like feedback-card-list">
@@ -293,6 +293,7 @@ export function FeedbackPanel({ feedbacks, updatingFeedbackId = null, onUpdate }
                       <div className="tag tag-navy">{ticket.feedbackCode}</div>
                       <div className={getStatusTagClass(statusValue)}>{STATUS_LABELS[statusValue]}</div>
                       <div className="tag">{getSourceLabel(ticket)}</div>
+                      {isDirty ? <div className="tag">待保存</div> : null}
                     </div>
                     <h3 className="section-title">{ticket.title}</h3>
                     <p className="subtle">
@@ -377,7 +378,7 @@ export function FeedbackPanel({ feedbacks, updatingFeedbackId = null, onUpdate }
                   <textarea
                     id={`feedback-reply-${ticket._id}`}
                     className="textarea"
-                    placeholder="告诉对方你准备怎么处理，或者已经处理到了哪一步。"
+                    placeholder="回复处理进度"
                     value={replyValue}
                     onChange={(event) =>
                       setReplyDrafts((current) => ({
@@ -402,7 +403,7 @@ export function FeedbackPanel({ feedbacks, updatingFeedbackId = null, onUpdate }
                     }
                     type="button"
                   >
-                    {updatingFeedbackId === ticket._id ? "保存中..." : "保存处理结果"}
+                    {updatingFeedbackId === ticket._id ? "保存中..." : "保存处理"}
                   </button>
                 </div>
               </div>

@@ -3,6 +3,11 @@ import jwt from "jsonwebtoken";
 import { DomainError, type AccessScope, type AuthSessionClaims, type Role } from "@restaurant/shared";
 
 const SESSION_EXPIRY = "8h";
+const SUPPORTED_ROLES: Role[] = ["OWNER", "STAFF"];
+
+function normalizeManagedStoreIds(storeId: string, managedStoreIds?: string[]): string[] {
+  return Array.from(new Set([storeId, ...(managedStoreIds ?? [])].map((item) => item.trim()).filter(Boolean)));
+}
 
 function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET?.trim();
@@ -21,6 +26,37 @@ export async function verifyPassword(rawPassword: string, passwordHash: string):
   return compare(rawPassword, passwordHash);
 }
 
+function normalizeSessionClaims(claims: {
+  staffUserId: string;
+  username: string;
+  role: Role;
+  storeId: string;
+  accessScope?: AccessScope;
+  managedStoreIds?: string[];
+}): AuthSessionClaims {
+  const staffUserId = typeof claims.staffUserId === "string" ? claims.staffUserId.trim() : "";
+  const username = typeof claims.username === "string" ? claims.username.trim() : "";
+  const storeId = typeof claims.storeId === "string" ? claims.storeId.trim() : "";
+
+  if (!staffUserId || !username || !storeId || !SUPPORTED_ROLES.includes(claims.role)) {
+    throw new DomainError("UNAUTHORIZED", "登录已失效，请重新登录");
+  }
+
+  const normalizedAccessScope: AccessScope =
+    claims.role === "OWNER" && claims.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
+  const normalizedManagedStoreIds =
+    normalizedAccessScope === "ALL_STORES" ? normalizeManagedStoreIds(storeId, claims.managedStoreIds) : [storeId];
+
+  return {
+    staffUserId,
+    username,
+    role: claims.role,
+    storeId,
+    accessScope: normalizedAccessScope,
+    managedStoreIds: normalizedManagedStoreIds
+  };
+}
+
 export function issueSessionToken(claims: {
   staffUserId: string;
   username: string;
@@ -29,18 +65,10 @@ export function issueSessionToken(claims: {
   accessScope?: AccessScope;
   managedStoreIds?: string[];
 }): string {
-  const normalizedManagedStoreIds = Array.from(
-    new Set([claims.storeId, ...(claims.managedStoreIds ?? [])].map((item) => item.trim()).filter(Boolean))
-  );
-  const normalizedAccessScope: AccessScope =
-    claims.role === "OWNER" && claims.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
+  const normalizedClaims = normalizeSessionClaims(claims);
 
   return jwt.sign(
-    {
-      ...claims,
-      accessScope: normalizedAccessScope,
-      managedStoreIds: normalizedManagedStoreIds
-    },
+    normalizedClaims,
     getSessionSecret(),
     {
       algorithm: "HS256",
@@ -51,8 +79,12 @@ export function issueSessionToken(claims: {
 
 export function requireSessionToken(token: string): AuthSessionClaims {
   try {
-    return jwt.verify(token, getSessionSecret()) as AuthSessionClaims;
+    return normalizeSessionClaims(jwt.verify(token, getSessionSecret()) as AuthSessionClaims);
   } catch (error) {
+    if (error instanceof DomainError) {
+      throw error;
+    }
+
     throw new DomainError("UNAUTHORIZED", "登录已过期，请重新登录", {
       cause: error instanceof Error ? error.message : String(error)
     });

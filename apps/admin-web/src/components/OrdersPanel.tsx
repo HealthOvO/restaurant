@@ -137,22 +137,22 @@ export function OrdersPanel({
         <div className="metric-card compact-metric-card">
           <div className="tag">当前页订单</div>
           <div className="metric-value metric-value-compact">{rows.length}</div>
-          <div className="metric-footnote">当前筛选结果里的订单数。</div>
+          <div className="metric-footnote">当前结果</div>
         </div>
         <div className="metric-card compact-metric-card">
           <div className="tag tag-navy">待确认</div>
           <div className="metric-value metric-value-compact">{pendingCount}</div>
-          <div className="metric-footnote">优先确认，避免顾客久等。</div>
+          <div className="metric-footnote">优先处理</div>
         </div>
         <div className="metric-card compact-metric-card">
           <div className="tag tag-success">待取餐</div>
           <div className="metric-value metric-value-compact">{readyCount}</div>
-          <div className="metric-footnote">制作完成后尽快提醒取餐。</div>
+          <div className="metric-footnote">尽快出餐</div>
         </div>
         <div className="metric-card compact-metric-card">
           <div className="tag">堂食 / 自提</div>
           <div className="metric-value metric-value-compact">{`${dineInCount}/${pickupCount}`}</div>
-          <div className="metric-footnote">看当前页的履约结构。</div>
+          <div className="metric-footnote">当前结构</div>
         </div>
       </div>
 
@@ -161,8 +161,8 @@ export function OrdersPanel({
           <div className="row-card stack">
             <div className="card-title-block">
               <div className="section-eyebrow">订单筛选</div>
-              <h3 className="section-title">按状态或关键词查看</h3>
-              <p className="subtle">支持订单号、会员号、联系人、手机号和桌号搜索。</p>
+              <h3 className="section-title">订单检索</h3>
+              <p className="subtle">支持订单号、会员号、联系人和桌号。</p>
             </div>
 
             <div className="field-grid">
@@ -197,24 +197,23 @@ export function OrdersPanel({
 
             <div className="button-row">
               <button className="button button-primary" disabled={loading} type="button" onClick={() => void onSearch(searchDraft.trim(), statusDraft, 1)}>
-                {loading ? "加载中..." : "刷新订单"}
+                {loading ? "加载中..." : "查询订单"}
               </button>
               <button className="button button-secondary" disabled={loading} type="button" onClick={() => void onSearch("", "ALL", 1)}>
-                清空筛选
+                重置筛选
               </button>
             </div>
 
             <div className="member-toolbar-strip">
               <div className="toolbar-pill">
-                {pagination.total > 0
-                  ? `当前显示 ${pagination.rangeStart}-${pagination.rangeEnd} / ${pagination.total}`
-                  : "当前没有订单"}
+                {pagination.total > 0 ? `显示 ${pagination.rangeStart}-${pagination.rangeEnd} / ${pagination.total}` : "暂无订单"}
               </div>
               <div className="toolbar-pill">{statusDraft === "ALL" ? "状态：全部" : `状态：${STATUS_LABELS[statusDraft]}`}</div>
+              <div className="toolbar-pill">{searchDraft.trim() ? `关键词：${searchDraft.trim()}` : "关键词：全部"}</div>
             </div>
           </div>
 
-          <div className="table-like orders-list">
+          <div className="table-like orders-list orders-scroll-list">
             {rows.length > 0 ? (
               rows.map((order) => (
                 <button
@@ -260,8 +259,8 @@ export function OrdersPanel({
             ) : (
               <div className="empty-state">
                 <div className="tag">没有匹配订单</div>
-                <h3 className="section-title">当前筛选下没有结果</h3>
-                <p className="subtle">可以清空筛选条件，或者换个关键词再查一遍。</p>
+                <h3 className="section-title">当前筛选下没有订单</h3>
+                <p className="subtle">先重置筛选，再看最近订单。</p>
               </div>
             )}
           </div>
@@ -299,9 +298,9 @@ export function OrdersPanel({
           ) : null}
         </div>
 
-        <div className="section-stack">
+        <div className="section-stack orders-detail-stack">
           {selectedOrder ? (
-            <div className="row-card stack">
+            <div className="row-card stack orders-detail-panel">
               <div className="card-header">
                 <div className="card-title-block">
                   <div className="section-eyebrow">订单详情</div>
@@ -314,7 +313,7 @@ export function OrdersPanel({
                 </div>
               </div>
 
-              {detailLoading ? <div className="notice">正在读取订单详情...</div> : null}
+              {detailLoading ? <div className="notice">订单详情加载中</div> : null}
 
               <div className="data-points">
                 <div className="data-point">
@@ -352,16 +351,16 @@ export function OrdersPanel({
                 ))}
               </div>
 
-              <label className="field-label" htmlFor="order-action-note">
-                处理备注
-                <textarea
-                  id="order-action-note"
-                  className="textarea"
-                  placeholder="例如 已通知后厨加急、顾客稍后到店取餐"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                />
-              </label>
+                <label className="field-label" htmlFor="order-action-note">
+                  处理备注
+                  <textarea
+                    id="order-action-note"
+                    className="textarea"
+                    placeholder="例如 已通知后厨"
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                  />
+                </label>
 
               <div className="button-row">
                 {availableActions.length > 0 ? (
@@ -383,24 +382,24 @@ export function OrdersPanel({
                     </button>
                   ))
                 ) : (
-                  <div className="tag tag-navy">当前订单已经走完流程</div>
+                  <div className="tag tag-navy">当前状态无需处理</div>
                 )}
               </div>
             </div>
           ) : (
             <div className="empty-state">
-              <div className="tag">先选一笔订单</div>
-              <h3 className="section-title">右侧显示订单详情和处理动作</h3>
-              <p className="subtle">点左侧任意一笔订单，就能看到菜品明细、时间线和可执行动作。</p>
+              <div className="tag">先选订单</div>
+              <h3 className="section-title">右侧会显示详情和处理动作</h3>
+              <p className="subtle">先从左侧点开一笔订单。</p>
             </div>
           )}
 
           {selectedOrder ? (
-            <div className="row-card stack">
+            <div className="row-card stack orders-log-panel">
               <div className="card-title-block">
                 <div className="section-eyebrow">状态时间线</div>
-                <h3 className="section-title">订单处理留痕</h3>
-                <p className="subtle">老板和店员的每一步处理都会写入日志。</p>
+                <h3 className="section-title">处理记录</h3>
+                <p className="subtle">每次改状态都会留痕，方便回看。</p>
               </div>
 
               {orderLogs.length > 0 ? (
@@ -421,7 +420,7 @@ export function OrdersPanel({
               ) : (
                 <div className="empty-state order-logs-empty">
                   <div className="tag">暂无日志</div>
-                  <p className="subtle">这笔订单还没有写入状态流转记录。</p>
+                  <p className="subtle">这笔订单还没有记录。</p>
                 </div>
               )}
             </div>

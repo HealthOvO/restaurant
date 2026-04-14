@@ -1,5 +1,4 @@
 import {
-  DEFAULT_STORE_ID,
   DomainError,
   loginInputSchema,
   staffMemberLookupInputSchema,
@@ -8,7 +7,6 @@ import {
   type StaffUser
 } from "@restaurant/shared";
 import { hashPassword, issueSessionToken, requireSessionToken, verifyPassword } from "./auth";
-import { createId } from "./ids";
 import { RestaurantRepository } from "./repository";
 import { syncExpiredVoucherStatuses } from "./voucher-status";
 
@@ -16,8 +14,13 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function normalizeOptionalText(value?: string): string | undefined {
+  const normalized = `${value ?? ""}`.trim();
+  return normalized || undefined;
+}
+
 function normalizeManagedStoreIds(storeId: string, managedStoreIds?: string[]): string[] {
-  return Array.from(new Set([storeId, ...(managedStoreIds ?? [])].map((item) => item.trim()).filter(Boolean)));
+  return Array.from(new Set([storeId, ...(managedStoreIds ?? [])].map((item) => normalizeOptionalText(item)).filter(Boolean) as string[]));
 }
 
 function resolveStaffAccess(staff: Pick<StaffUser, "role" | "storeId" | "accessScope" | "managedStoreIds">) {
@@ -25,8 +28,34 @@ function resolveStaffAccess(staff: Pick<StaffUser, "role" | "storeId" | "accessS
     staff.role === "OWNER" && staff.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
   return {
     accessScope,
-    managedStoreIds: normalizeManagedStoreIds(staff.storeId, staff.managedStoreIds)
+    managedStoreIds:
+      accessScope === "ALL_STORES" ? normalizeManagedStoreIds(staff.storeId, staff.managedStoreIds) : [staff.storeId]
   };
+}
+
+function assertStaffRole(
+  staff: Pick<StaffUser, "role">,
+  allowedRoles: ReadonlyArray<StaffUser["role"]>,
+  message: string
+): void {
+  if (!allowedRoles.includes(staff.role)) {
+    throw new DomainError("FORBIDDEN", message);
+  }
+}
+
+function incrementCounter(counter: Map<string, number>, key: string): void {
+  counter.set(key, (counter.get(key) ?? 0) + 1);
+}
+
+function retainLatestIsoTimestamp(index: Map<string, string>, key: string, value?: string): void {
+  if (!value) {
+    return;
+  }
+
+  const current = index.get(key);
+  if (!current || value.localeCompare(current) > 0) {
+    index.set(key, value);
+  }
 }
 
 export async function ensureStaffMiniOpenIdCanBind(
@@ -42,32 +71,6 @@ export async function ensureStaffMiniOpenIdCanBind(
   if (existing && existing._id !== staff._id) {
     throw new DomainError("FORBIDDEN", "当前微信已绑定其他员工账号，请使用原账号登录");
   }
-}
-
-export async function seedOwnerIfEmpty(repository: RestaurantRepository): Promise<void> {
-  if (repository.storeId !== DEFAULT_STORE_ID) {
-    return;
-  }
-
-  const staffUsers = await repository.listStaffUsers();
-  if (staffUsers.length > 0) {
-    return;
-  }
-
-  const now = nowIso();
-  await repository.saveStaffUser({
-    _id: createId("staff"),
-    storeId: repository.storeId,
-    username: "owner",
-    passwordHash: await hashPassword("owner123456"),
-    displayName: "老板账号",
-    role: "OWNER",
-    isEnabled: true,
-    accessScope: "STORE_ONLY",
-    managedStoreIds: [repository.storeId],
-    createdAt: now,
-    updatedAt: now
-  });
 }
 
 export async function requireActiveStaffSession(repository: RestaurantRepository, token: string) {
@@ -108,21 +111,22 @@ export async function login(repository: RestaurantRepository, input: unknown): P
     managedStoreIds: string[];
   };
 }> {
-  await seedOwnerIfEmpty(repository);
   const parsed = loginInputSchema.parse(input);
-  const staff = await repository.getStaffByUsername(parsed.username);
+  const username = normalizeOptionalText(parsed.username);
+  const miniOpenId = normalizeOptionalText(parsed.miniOpenId);
+  const staff = username ? await repository.getStaffByUsername(username) : null;
 
   if (!staff || !(await verifyPassword(parsed.password, staff.passwordHash)) || !staff.isEnabled) {
     throw new DomainError("INVALID_CREDENTIALS", "账号或密码错误");
   }
 
-  if (parsed.miniOpenId && !staff.miniOpenId) {
-    await ensureStaffMiniOpenIdCanBind(repository, staff, parsed.miniOpenId);
-    staff.miniOpenId = parsed.miniOpenId;
+  if (miniOpenId && !staff.miniOpenId) {
+    await ensureStaffMiniOpenIdCanBind(repository, staff, miniOpenId);
+    staff.miniOpenId = miniOpenId;
     staff.updatedAt = nowIso();
     await repository.saveStaffUser(staff);
-  } else if (parsed.miniOpenId) {
-    await ensureStaffMiniOpenIdCanBind(repository, staff, parsed.miniOpenId);
+  } else if (miniOpenId) {
+    await ensureStaffMiniOpenIdCanBind(repository, staff, miniOpenId);
   }
 
   const { accessScope, managedStoreIds } = resolveStaffAccess(staff);
@@ -198,9 +202,7 @@ function compareMembers(
 export async function searchMembersForStaff(repository: RestaurantRepository, input: unknown) {
   const parsed = staffMemberLookupInputSchema.parse(input);
   const { staff } = await requireActiveStaffSession(repository, parsed.sessionToken);
-  if (staff.role !== "OWNER" && staff.role !== "STAFF") {
-    throw new DomainError("FORBIDDEN", "当前账号没有会员查询权限");
-  }
+  assertStaffRole(staff, ["OWNER", "STAFF"], "当前账号没有会员查询权限");
 
   const now = nowIso();
   const members = (await repository.searchMembers(parsed.query)).sort(compareMembers).slice(0, parsed.limit);
@@ -218,21 +220,27 @@ export async function searchMembersForStaff(repository: RestaurantRepository, in
     repository.listVisitsByMemberIds(memberIds),
     repository.listVouchersByMemberIds(memberIds)
   ]);
-  const vouchers = await syncExpiredVoucherStatuses(repository, rawVouchers, now);
+  const vouchers = rawVouchers.length > 0 ? await syncExpiredVoucherStatuses(repository, rawVouchers, now) : [];
 
   const relationStatusByInviteeId = new Map(relations.map((relation) => [relation.inviteeMemberId, relation.status]));
-  const visitGroups = visits.reduce<Record<string, typeof visits>>((groups, visit) => {
-    (groups[visit.memberId] ??= []).push(visit);
-    return groups;
-  }, {});
-  const voucherGroups = vouchers.reduce<Record<string, typeof vouchers>>((groups, voucher) => {
-    (groups[voucher.memberId] ??= []).push(voucher);
-    return groups;
-  }, {});
+  const latestVisitAtByMemberId = new Map<string, string>();
+  const totalVisitCountByMemberId = new Map<string, number>();
+  const readyVoucherCountByMemberId = new Map<string, number>();
+  const totalVoucherCountByMemberId = new Map<string, number>();
+
+  for (const visit of visits) {
+    incrementCounter(totalVisitCountByMemberId, visit.memberId);
+    retainLatestIsoTimestamp(latestVisitAtByMemberId, visit.memberId, visit.verifiedAt);
+  }
+
+  for (const voucher of vouchers) {
+    incrementCounter(totalVoucherCountByMemberId, voucher.memberId);
+    if (voucher.status === "READY") {
+      incrementCounter(readyVoucherCountByMemberId, voucher.memberId);
+    }
+  }
 
   const rows: StaffMemberLookupRow[] = members.map((member) => {
-    const memberVisits = (visitGroups[member._id] ?? []).slice().sort((left, right) => right.verifiedAt.localeCompare(left.verifiedAt));
-    const memberVouchers = voucherGroups[member._id] ?? [];
     return {
       member: {
         _id: member._id,
@@ -245,10 +253,10 @@ export async function searchMembersForStaff(repository: RestaurantRepository, in
         firstVisitAt: member.firstVisitAt
       },
       relationStatus: relationStatusByInviteeId.get(member._id) ?? null,
-      latestVisitAt: memberVisits[0]?.verifiedAt,
-      readyVoucherCount: memberVouchers.filter((voucher) => voucher.status === "READY").length,
-      totalVoucherCount: memberVouchers.length,
-      totalVisitCount: memberVisits.length
+      latestVisitAt: latestVisitAtByMemberId.get(member._id),
+      readyVoucherCount: readyVoucherCountByMemberId.get(member._id) ?? 0,
+      totalVoucherCount: totalVoucherCountByMemberId.get(member._id) ?? 0,
+      totalVisitCount: totalVisitCountByMemberId.get(member._id) ?? 0
     };
   });
 

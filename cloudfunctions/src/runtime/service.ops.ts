@@ -2,6 +2,8 @@ import { type OpsTask } from "@restaurant/shared";
 import { createId } from "./ids";
 import { RestaurantRepository } from "./repository";
 
+const MANUAL_REVIEW_CODES = new Set(["MEMBER_NOT_FOUND", "MEMBER_PHONE_REQUIRED", "ORDER_ALREADY_USED"]);
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -25,10 +27,9 @@ export function classifyVisitSettlementFailure(error: unknown): {
 } {
   const code = getErrorCode(error);
   const reason = error instanceof Error ? error.message : "会员结算暂未完成";
-  const manualReviewCodes = new Set(["MEMBER_NOT_FOUND", "MEMBER_PHONE_REQUIRED", "ORDER_ALREADY_USED"]);
 
   return {
-    state: code && manualReviewCodes.has(code) ? "MANUAL_REVIEW" : "RETRYABLE",
+    state: code && MANUAL_REVIEW_CODES.has(code) ? "MANUAL_REVIEW" : "RETRYABLE",
     code,
     reason
   };
@@ -75,10 +76,13 @@ export async function upsertOrderVisitSettlementTask(
     retryCount: Math.max(0, Number(existing?.retryCount || 0) + Number(params.retryCountDelta || 0)),
     lastTriggeredAt: timestamp,
     lastRetriedAt: params.lastRetriedAt ?? existing?.lastRetriedAt,
+    resolvedAt: undefined,
+    resolvedByStaffId: undefined,
+    resolution: undefined,
+    resolutionNote: undefined,
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp
   };
 
   return repository.saveOpsTask(task);
 }
-

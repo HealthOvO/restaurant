@@ -1,7 +1,7 @@
 <view class="page page-tight">
   <view wx:if="{{loading}}" class="card">
-    <view class="section-title">正在读取订单</view>
-    <view class="section-copy">稍等一下，系统正在同步最新订单状态。</view>
+    <view class="section-title">加载中</view>
+    <view class="section-copy">正在同步订单。</view>
   </view>
 
   <view wx:if="{{errorMessage}}" class="card card-accent">
@@ -12,7 +12,7 @@
 
   <block wx:if="{{order}}">
     <view class="hero hero-staff">
-      <view class="hero-badge">订单处理</view>
+      <view class="hero-badge">订单</view>
       <view class="title">{{order.statusText}}</view>
       <view class="subtitle">{{order.orderNo}} · {{order.memberLabel}}</view>
 
@@ -34,7 +34,7 @@
 
     <view class="card">
       <view class="section-kicker">订单信息</view>
-      <view class="section-title">先确认这一单的基本信息</view>
+      <view class="section-title">订单信息</view>
       <view class="detail-grid">
         <view class="detail-row">
           <view class="detail-label">下单时间</view>
@@ -61,7 +61,7 @@
 
     <view class="card">
       <view class="section-kicker">菜品明细</view>
-      <view class="section-title">这单具体要做什么</view>
+      <view class="section-title">菜品明细</view>
       <view wx:for="{{order.lineItems}}" wx:for-item="lineItem" wx:key="lineId" class="checkout-item">
         <view class="checkout-item-main">
           <view class="checkout-item-name">{{lineItem.name}}</view>
@@ -76,10 +76,10 @@
 
     <view wx:if="{{order.availableActions.length}}" class="card card-soft">
       <view class="section-kicker">推进状态</view>
-      <view class="section-title">按门店节奏往下走</view>
-      <view class="section-copy">可选备注会同步写进状态日志，比如取消原因、取餐提醒等。</view>
+      <view class="section-title">更新状态</view>
+      <view class="section-copy">备注会一起写入状态记录。</view>
 
-      <input class="input input-strong" value="{{note}}" placeholder="选填备注，如：顾客已到店、自提已联系" bindinput="updateNote" />
+      <input class="input input-strong" value="{{note}}" placeholder="选填备注" bindinput="updateNote" />
 
       <view class="action-button-grid">
         <button wx:for="{{order.availableActions}}" wx:for-item="action" wx:key="status" class="button-primary action-button" disabled="{{updatingStatus}}" data-status="{{action.status}}" bindtap="submitAction">
@@ -90,7 +90,7 @@
 
     <view class="card">
       <view class="section-kicker">状态时间线</view>
-      <view class="section-title">订单处理记录</view>
+      <view class="section-title">处理记录</view>
       <view wx:for="{{logs}}" wx:for-item="log" wx:key="_id" class="timeline-item">
         <view class="timeline-dot"></view>
         <view class="timeline-body">

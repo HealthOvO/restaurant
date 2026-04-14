@@ -110,6 +110,26 @@ function compareOpsTasks(left: OpsTask, right: OpsTask) {
   );
 }
 
+function compareStaffUsers(left: StaffUser, right: StaffUser) {
+  const roleWeight = {
+    OWNER: 2,
+    STAFF: 1
+  } as const;
+
+  return (
+    roleWeight[right.role] - roleWeight[left.role] ||
+    Number(right.isEnabled) - Number(left.isEnabled) ||
+    left.username.localeCompare(right.username)
+  );
+}
+
+function sanitizeStaffUser(staffUser: StaffUser) {
+  return {
+    ...staffUser,
+    passwordHash: undefined
+  };
+}
+
 async function writeAudit(
   repository: RestaurantRepository,
   payload: Omit<AuditLog, "_id" | "createdAt" | "updatedAt" | "storeId">
@@ -281,6 +301,15 @@ export async function queryMembers(repository: RestaurantRepository, input: unkn
     : pagination.total === 0
       ? []
       : members.slice((pagination.page - 1) * pagination.pageSize, pagination.page * pagination.pageSize);
+
+  if (pageMembers.length === 0) {
+    return {
+      ok: true,
+      rows: [],
+      pagination
+    };
+  }
+
   const memberIds = pageMembers.map((member) => member._id);
   const [relations, visits, rawVouchers] = await Promise.all([
     repository.listInviteRelationsByInviteeIds(memberIds),
@@ -527,6 +556,7 @@ export async function adjustBinding(repository: RestaurantRepository, input: unk
     targetId: relation._id,
     summary: `人工调整 ${invitee.memberCode} 的邀请关系`,
     payload: {
+      previousInviterMemberId,
       inviterMemberId: inviter._id,
       inviteeMemberId: invitee._id,
       reason: parsed.reason
@@ -582,6 +612,7 @@ export async function adjustMemberPoints(repository: RestaurantRepository, input
     targetId: member._id,
     summary: `人工调整会员 ${member.memberCode} 的积分`,
     payload: {
+      balanceBefore: member.pointsBalance - parsed.delta,
       delta: parsed.delta,
       balanceAfter: nextBalance,
       reason: parsed.reason
@@ -630,14 +661,15 @@ export async function manageStaff(repository: RestaurantRepository, input: unkno
       summary:
         staff._id === existing._id
           ? `修改账号 ${existing.username} 的登录密码`
-          : `重置员工账号 ${existing.username} 的登录密码`
+          : `重置员工账号 ${existing.username} 的登录密码`,
+      payload: {
+        updatedBySelf: staff._id === existing._id,
+        username: existing.username
+      }
     });
     return {
       ok: true,
-      staff: {
-        ...existing,
-        passwordHash: undefined
-      }
+      staff: sanitizeStaffUser(existing)
     };
   }
 
@@ -648,10 +680,7 @@ export async function manageStaff(repository: RestaurantRepository, input: unkno
   if (parsed.action === "LIST") {
     return {
       ok: true,
-      staffUsers: (await repository.listStaffUsers()).map((staffUser) => ({
-        ...staffUser,
-        passwordHash: undefined
-      }))
+      staffUsers: (await repository.listStaffUsers()).sort(compareStaffUsers).map(sanitizeStaffUser)
     };
   }
 
@@ -663,6 +692,10 @@ export async function manageStaff(repository: RestaurantRepository, input: unkno
     if (parsed.user.role !== "STAFF") {
       throw new DomainError("FORBIDDEN", "老板账号不支持在后台新增，请保留初始化老板主账号");
     }
+    const initialPassword = parsed.user.password?.trim();
+    if (!initialPassword) {
+      throw new DomainError("INVALID_INPUT", "缺少员工初始密码");
+    }
     const existing = await repository.getStaffByUsername(parsed.user.username);
     if (existing) {
       throw new DomainError("STAFF_USERNAME_EXISTS", "该用户名已存在");
@@ -673,7 +706,7 @@ export async function manageStaff(repository: RestaurantRepository, input: unkno
       _id: createId("staff"),
       storeId: repository.storeId,
       username: parsed.user.username,
-      passwordHash: await hashPassword(parsed.user.password ?? "123456"),
+      passwordHash: await hashPassword(initialPassword),
       displayName: parsed.user.displayName,
       role: parsed.user.role,
       isEnabled: parsed.user.isEnabled ?? true,
@@ -688,14 +721,16 @@ export async function manageStaff(repository: RestaurantRepository, input: unkno
       action: "CREATE_STAFF",
       targetCollection: "staff_users",
       targetId: user._id,
-      summary: `创建员工账号 ${user.username}`
+      summary: `创建员工账号 ${user.username}`,
+      payload: {
+        username: user.username,
+        role: user.role,
+        isEnabled: user.isEnabled
+      }
     });
     return {
       ok: true,
-      staff: {
-        ...user,
-        passwordHash: undefined
-      }
+      staff: sanitizeStaffUser(user)
     };
   }
 
@@ -724,14 +759,16 @@ export async function manageStaff(repository: RestaurantRepository, input: unkno
       action: "UPDATE_STAFF",
       targetCollection: "staff_users",
       targetId: existing._id,
-      summary: `更新员工账号 ${existing.username}`
+      summary: `更新员工账号 ${existing.username}`,
+      payload: {
+        username: existing.username,
+        role: existing.role,
+        isEnabled: existing.isEnabled
+      }
     });
     return {
       ok: true,
-      staff: {
-        ...existing,
-        passwordHash: undefined
-      }
+      staff: sanitizeStaffUser(existing)
     };
   }
 
@@ -940,6 +977,9 @@ export async function resolveOpsTask(repository: RestaurantRepository, input: un
   const task = await repository.getOpsTaskById(parsed.taskId);
   if (!task) {
     throw new DomainError("OPS_TASK_NOT_FOUND", "待处理事项不存在");
+  }
+  if (task.status !== "OPEN") {
+    throw new DomainError("OPS_TASK_CLOSED", "这条待处理事项已经关闭");
   }
 
   const now = nowIso();

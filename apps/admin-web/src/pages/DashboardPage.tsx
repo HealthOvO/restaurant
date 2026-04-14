@@ -125,15 +125,15 @@ const EMPTY_STORE_CONFIG: StoreConfig = {
 };
 
 const TABS: Array<{ key: TabKey; label: string; summary: string }> = [
-  { key: "overview", label: "数据概览", summary: "会员、激活、待核销和今日核销一屏查看。" },
-  { key: "ops", label: "异常处理", summary: "订单完成后没结算成功的事项，在这里统一重试或关闭。" },
-  { key: "menu", label: "点餐菜单", summary: "门店信息、分类、菜品和规格统一维护。" },
-  { key: "orders", label: "订单工作台", summary: "老板查看订单、筛选状态、追踪处理进度。" },
-  { key: "members", label: "会员管理", summary: "分页筛会员，必要时人工改绑和调整积分。" },
-  { key: "rules", label: "奖励规则", summary: "配置首单礼、邀请积分和积分兑换菜品。" },
-  { key: "staff", label: "员工账号", summary: "网页后台账号和店员账号分开使用。" },
-  { key: "feedback", label: "用户反馈", summary: "会员和店员的问题在这里统一查看和处理。" },
-  { key: "audit", label: "审计日志", summary: "查看关键操作留痕。" }
+  { key: "overview", label: "数据概览", summary: "今天经营" },
+  { key: "ops", label: "异常处理", summary: "失败任务和异常单" },
+  { key: "menu", label: "点餐菜单", summary: "分类、菜品、规格" },
+  { key: "orders", label: "订单工作台", summary: "查单和改状态" },
+  { key: "members", label: "会员管理", summary: "查会员、调积分" },
+  { key: "rules", label: "奖励规则", summary: "积分和兑换" },
+  { key: "staff", label: "员工账号", summary: "管理后台和店员账号" },
+  { key: "feedback", label: "用户反馈", summary: "会员和店员反馈" },
+  { key: "audit", label: "审计日志", summary: "关键操作记录" }
 ];
 
 export function DashboardPage({ session, onLogout }: { session: AdminSession; onLogout: () => void }) {
@@ -162,6 +162,8 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [loadingOrderDetail, setLoadingOrderDetail] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [hasAttemptedOrdersBootstrap, setHasAttemptedOrdersBootstrap] = useState(false);
+  const [hasAttemptedMembersBootstrap, setHasAttemptedMembersBootstrap] = useState(false);
   const [loadingOpsTasks, setLoadingOpsTasks] = useState(false);
   const [opsStatusFilter, setOpsStatusFilter] = useState<OpsTask["status"]>("OPEN");
   const [updatingOrderStatus, setUpdatingOrderStatus] = useState<OrderWorkbenchActionStatus | null>(null);
@@ -231,6 +233,8 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
     setLoadingOrders(false);
     setLoadingOrderDetail(false);
     setLoadingMembers(false);
+    setHasAttemptedOrdersBootstrap(false);
+    setHasAttemptedMembersBootstrap(false);
     setLoadingOpsTasks(false);
     setOpsStatusFilter("OPEN");
     setUpdatingOrderStatus(null);
@@ -267,12 +271,14 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       return;
     }
 
-    if (activeTab === "orders" && !hasSearchedOrders && !loadingOrders) {
+    if (activeTab === "orders" && !hasAttemptedOrdersBootstrap && !loadingOrders) {
+      setHasAttemptedOrdersBootstrap(true);
       void handleOrderSearch("", "ALL", 1, { silent: true });
       return;
     }
 
-    if (activeTab === "members" && !hasSearchedMembers && !loadingMembers) {
+    if (activeTab === "members" && !hasAttemptedMembersBootstrap && !loadingMembers) {
+      setHasAttemptedMembersBootstrap(true);
       void handleSearch("", 1, { silent: true });
       return;
     }
@@ -286,7 +292,15 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
     } else if (activeTab === "audit") {
       void loadAuditLogs();
     }
-  }, [activeTab, hasSearchedMembers, loadingMembers, hasSearchedOrders, loadingOrders]);
+  }, [
+    activeTab,
+    hasAttemptedMembersBootstrap,
+    hasAttemptedOrdersBootstrap,
+    hasSearchedMembers,
+    loadingMembers,
+    hasSearchedOrders,
+    loadingOrders
+  ]);
 
   function handleSessionFailure(error: unknown): boolean {
     const code = getErrorCode(error);
@@ -434,7 +448,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       setMenuCategories(response.categories);
       setMenuItems(response.items);
       markTabLoaded("menu");
-      setNotice("点餐菜单已保存。");
+      setNotice("菜单已保存");
       await loadAuditLogs(true);
     } catch (error) {
       if (!isLatestRequest(request)) {
@@ -643,10 +657,10 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       if (!options?.silent) {
         setNotice(
           normalizedQuery || status !== "ALL"
-            ? `订单已更新，当前显示第 ${response.pagination.page} / ${response.pagination.totalPages} 页。`
+            ? `订单列表 ${response.pagination.page} / ${response.pagination.totalPages}`
             : response.pagination.total > 0
-              ? `已刷新订单列表，当前显示第 ${response.pagination.page} / ${response.pagination.totalPages} 页。`
-              : "当前还没有订单数据。"
+              ? `已刷新订单，第 ${response.pagination.page} / ${response.pagination.totalPages} 页`
+              : "暂无订单"
         );
       }
     } catch (error) {
@@ -685,16 +699,16 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       const settlementText =
         payload.nextStatus === "COMPLETED" && response.visitSettlement
           ? response.visitSettlement.state === "SETTLED"
-            ? " 会员首单奖励已同步结算。"
+            ? " 奖励已结算。"
             : response.visitSettlement.state === "MANUAL_REVIEW"
-              ? ` 会员奖励未结算，需人工处理：${response.visitSettlement.reason || "请检查会员资料或订单号。"}`
-              : ` 会员奖励暂未结算，可稍后重试：${response.visitSettlement.reason || "请稍后再点一次完成或由老板复核。"}`
+              ? ` 奖励待处理：${response.visitSettlement.reason || "请复核会员或订单。"}`
+              : ` 奖励未结算：${response.visitSettlement.reason || "可稍后再试。"}`
           : "";
 
       setNotice(
         response.isIdempotent
-          ? "这笔订单已经是当前状态。"
-          : `订单状态已更新为${payload.nextStatus === "CANCELLED" ? "已取消" : "最新进度"}。${settlementText}`.trim()
+          ? "状态未变"
+          : `订单已${payload.nextStatus === "CANCELLED" ? "取消" : "更新"}。${settlementText}`.trim()
       );
 
       await loadOrderDetail(payload.orderId);
@@ -741,10 +755,10 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       if (!options?.silent) {
         setNotice(
           normalizedQuery
-            ? `已筛选“${normalizedQuery}”，当前显示第 ${response.pagination.page} / ${response.pagination.totalPages} 页。`
+            ? `已筛选“${normalizedQuery}”`
             : response.pagination.total > 0
-              ? `已刷新会员列表，当前显示第 ${response.pagination.page} / ${response.pagination.totalPages} 页。`
-              : "当前还没有会员数据。"
+              ? `会员列表 ${response.pagination.page} / ${response.pagination.totalPages}`
+              : "暂无会员"
         );
       }
     } catch (error) {
@@ -773,7 +787,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       if (!isLatestRequest(request)) {
         return;
       }
-      setNotice("邀请关系已调整并记录审计日志。");
+      setNotice("邀请关系已调整");
       await loadAuditLogs(true);
       if (!isLatestRequest(request)) {
         return;
@@ -805,7 +819,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       if (!isLatestRequest(request)) {
         return;
       }
-      setNotice("会员积分已更新并记录审计日志。");
+      setNotice("积分已调整");
       await loadAuditLogs(true);
       if (!isLatestRequest(request)) {
         return;
@@ -840,9 +854,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       setRulesState(response.rules);
       setExchangeItems(response.exchangeItems);
       markTabLoaded("rules");
-      setNotice(
-        `奖励规则已保存：规则新增 ${response.summary.createdCount} 条，兑换菜品新增 ${response.summary.exchangeCreatedCount} 条。`
-      );
+      setNotice("规则已保存");
       await loadAuditLogs(true);
     } catch (error) {
       if (!isLatestRequest(request)) {
@@ -873,7 +885,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       if (!isLatestRequest(request)) {
         return;
       }
-      setNotice("店员账号已创建。");
+      setNotice("账号已创建");
       await Promise.all([loadStaffUsers(true), loadAuditLogs(true)]);
     } catch (error) {
       if (!isLatestRequest(request)) {
@@ -905,7 +917,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       if (!isLatestRequest(request)) {
         return;
       }
-      setNotice("员工状态已更新。");
+      setNotice("账号状态已更新");
       await Promise.all([loadStaffUsers(true), loadAuditLogs(true)]);
     } catch (error) {
       if (!isLatestRequest(request)) {
@@ -937,7 +949,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       if (!isLatestRequest(request)) {
         return;
       }
-      setNotice(payload._id === session.staff._id ? "登录密码已更新。" : "员工密码已重置。");
+      setNotice(payload._id === session.staff._id ? "密码已更新" : "密码已重置");
       await Promise.all([loadStaffUsers(true), loadAuditLogs(true)]);
     } catch (error) {
       if (!isLatestRequest(request)) {
@@ -968,7 +980,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       if (!isLatestRequest(request)) {
         return;
       }
-      setNotice("反馈处理结果已保存。");
+      setNotice("反馈已保存");
       await Promise.all([loadFeedbacks(true), loadAuditLogs(true)]);
     } catch (error) {
       if (!isLatestRequest(request)) {
@@ -997,10 +1009,10 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
 
       const settlementText =
         response.settlement.state === "SETTLED"
-          ? "后台重试后已完成会员结算。"
+          ? "已补结算"
           : response.settlement.state === "MANUAL_REVIEW"
-            ? `仍需人工处理：${response.settlement.reason || "请检查会员资料或订单号。"}`
-            : `本次仍未结算成功：${response.settlement.reason || "请稍后再试。"}`
+            ? `仍需人工处理：${response.settlement.reason || "请复核会员或订单。"}`
+            : `重试未成功：${response.settlement.reason || "请稍后再试。"}`
       setNotice(settlementText);
       await Promise.all([loadOpsTasks(true, opsStatusFilter), loadOverview(true), loadAuditLogs(true)]);
     } catch (error) {
@@ -1031,7 +1043,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       if (!isLatestRequest(request)) {
         return;
       }
-      setNotice(payload.action === "IGNORE" ? "事项已忽略。" : "事项已标记为处理完成。");
+      setNotice(payload.action === "IGNORE" ? "已忽略" : "已处理");
       await Promise.all([loadOpsTasks(true, opsStatusFilter), loadOverview(true), loadAuditLogs(true)]);
     } catch (error) {
       if (!isLatestRequest(request)) {
@@ -1049,8 +1061,9 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
   }
 
   const activeTabConfig = TABS.find((item) => item.key === activeTab) ?? TABS[0];
-  const enabledStaffCount = tabLoaded.staff ? staffUsers.filter((item) => item.isEnabled).length : null;
-  const boundStaffCount = tabLoaded.staff ? staffUsers.filter((item) => Boolean(item.miniOpenId)).length : null;
+  const enabledStaffCount = tabLoaded.staff ? staffUsers.filter((item) => item.isEnabled).length : 0;
+  const boundStaffCount = tabLoaded.staff ? staffUsers.filter((item) => Boolean(item.miniOpenId)).length : 0;
+  const enabledRuleCount = tabLoaded.rules ? rules.filter((item) => item.isEnabled).length : 0;
   const repeatableRuleCount = tabLoaded.rules
     ? rules.filter((item) => item.type === "INVITE_MILESTONE" && item.isEnabled && item.rewardMode === "REPEATABLE").length
     : null;
@@ -1072,62 +1085,62 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
 
   const operationFocus = [
     {
-      title: "今日核销节奏",
+      title: "今日核销",
       value: `${stats.todayVisitCount} 笔`,
       detail:
         stats.todayVisitCount > 0
-          ? "今天已有核销，继续盯首单激活、积分和菜品券到账。"
-          : "今天还没有核销，先走一遍门店体验流程。"
+          ? "继续盯首单、积分和券。"
+          : "今天还没开单。"
     },
     {
-      title: "拉新激活",
+      title: "邀请激活",
       value: `${stats.activatedInviteCount} 人`,
       detail:
         stats.activatedInviteCount > 0
-          ? "已有邀请链路跑通，主流程正在生效。"
-          : "还没有激活邀请，优先验证首位被邀请人的首单。"
+          ? "邀请链路正常。"
+          : "先验证首位被邀请人。"
     },
     {
-      title: "待用菜品券",
+      title: "待核销券",
       value: `${stats.readyVoucherCount} 张`,
       detail:
         stats.readyVoucherCount > 0
-          ? "门店已有待核销券，留意店员端核销是否顺畅。"
-          : "当前没有待核销券，回看活动和首单礼是否已开启。"
+          ? "留意店员端核销。"
+          : "看下活动是否开启。"
     },
     {
-      title: "待处理事项",
+      title: "异常事项",
       value: `${stats.openOpsTaskCount} 条`,
       detail:
         stats.openOpsTaskCount > 0
-          ? "有订单完成后未正常结算的事项，建议老板尽快处理。"
-          : "当前没有待处理事项，主流程运行正常。"
+          ? "建议尽快处理。"
+          : "当前正常。"
     }
   ];
 
   const readinessChecklist = [
     {
-      label: "新客首单礼",
+      label: "首单礼",
       value: rulesStatusText,
       tone: welcomeRuleEnabled ? "tag-success" : "tag-navy"
     },
     {
-      label: "循环积分规则",
+      label: "循环积分",
       value: repeatableStatusText,
       tone: repeatableRuleCount && repeatableRuleCount > 0 ? "tag-success" : "tag-navy"
     },
     {
-      label: "上架兑换菜品",
+      label: "兑换菜品",
       value: tabLoading.rules ? "加载中" : tabLoaded.rules ? `${enabledExchangeCount} 条` : "待查看",
       tone: enabledExchangeCount && enabledExchangeCount > 0 ? "tag-success" : "tag-navy"
     },
     {
-      label: "可用员工账号",
+      label: "员工账号",
       value: staffEnabledText,
       tone: enabledStaffCount && enabledStaffCount > 0 ? "tag-success" : "tag-navy"
     },
     {
-      label: "已绑定微信员工",
+      label: "微信绑定",
       value: staffBoundText,
       tone: boundStaffCount && boundStaffCount > 0 ? "tag-success" : "tag-navy"
     }
@@ -1138,17 +1151,17 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
     {
       label: "会员总数",
       value: stats.memberCount,
-      copy: "已注册并可参与积分与兑换。"
+      copy: "已注册会员"
     },
     {
       label: "待处理事项",
       value: stats.openOpsTaskCount,
-      copy: "订单和会员结算异常会在这里挂起。"
+      copy: "待处理异常"
     },
     {
       label: "可用员工",
       value: tabLoaded.staff ? `${enabledStaffCount}/${staffUsers.length}` : "--",
-      copy: "可登录后台或绑定店员端。"
+      copy: "当前可登录"
     }
   ];
   const sidebarSnapshot = [
@@ -1165,11 +1178,52 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       value: tabLoaded.staff ? `${enabledStaffCount}/${staffUsers.length}` : "--"
     }
   ];
+  const tabBadges: Record<TabKey, { text: string; tone: "default" | "success" | "navy" }> = {
+    overview: {
+      text: `${stats.todayVisitCount} 笔核销`,
+      tone: stats.todayVisitCount > 0 ? "success" : "navy"
+    },
+    ops: {
+      text: tabLoaded.ops ? `${stats.openOpsTaskCount} 条待处理` : "待加载",
+      tone: stats.openOpsTaskCount > 0 ? "default" : "success"
+    },
+    menu: {
+      text: tabLoaded.menu ? `${menuItems.filter((item) => item.isEnabled && !item.isSoldOut).length} 道可售` : "待加载",
+      tone: tabLoaded.menu ? "success" : "navy"
+    },
+    orders: {
+      text: tabLoaded.orders ? `${orders.filter((item) => item.status === "PENDING_CONFIRM").length} 单待确认` : "待加载",
+      tone: orders.some((item) => item.status === "PENDING_CONFIRM") ? "default" : tabLoaded.orders ? "success" : "navy"
+    },
+    members: {
+      text: hasSearchedMembers ? `${memberPagination.total} 位会员` : "待检索",
+      tone: hasSearchedMembers && memberPagination.total > 0 ? "success" : "navy"
+    },
+    rules: {
+      text: tabLoaded.rules ? `${enabledRuleCount} 条启用` : "待加载",
+      tone: enabledRuleCount > 0 ? "success" : "navy"
+    },
+    staff: {
+      text: tabLoaded.staff ? `${enabledStaffCount}/${staffUsers.length} 个可用` : "待加载",
+      tone: enabledStaffCount > 0 ? "success" : "navy"
+    },
+    feedback: {
+      text: tabLoaded.feedback ? `${feedbacks.filter((item) => item.status !== "RESOLVED").length} 条待跟进` : "待加载",
+      tone: feedbacks.some((item) => item.status !== "RESOLVED") ? "default" : tabLoaded.feedback ? "success" : "navy"
+    },
+    audit: {
+      text: tabLoaded.audit ? `${logs.length} 条记录` : "待加载",
+      tone: tabLoaded.audit ? "success" : "navy"
+    }
+  };
+  const heroTitle = activeTab === "overview" ? `${storeLabel} 今日经营` : `${activeTabConfig.label}工作区`;
+  const heroSummary =
+    activeTab === "overview" ? "先看核销、异常和开店准备，再去下面对应工作区处理。" : activeTabConfig.summary;
 
   function renderDeferredPanel(tab: TabKey, title: string, copy: string) {
     return (
       <div className="empty-state deferred-panel">
-        <div className="tag tag-navy">{tabLoading[tab] ? "正在读取" : "等待加载"}</div>
+        <div className="tag tag-navy">{tabLoading[tab] ? "加载中" : "待加载"}</div>
         <h3 className="section-title">{title}</h3>
         <p className="subtle">{copy}</p>
       </div>
@@ -1181,18 +1235,18 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       <div className="dashboard-grid">
         <aside className="panel sidebar stack">
           <div className="sidebar-top">
-            <div className="brand-mark">老板总台</div>
+            <div className="brand-mark">门店后台</div>
             <div className="stack">
-              <h1 className="brand-title">老板后台</h1>
-              <p className="subtle">拉新、积分、核销，集中在一张经营工作台上。</p>
+              <h1 className="brand-title">店长后台</h1>
+              <p className="subtle">经营、订单、会员都在这。</p>
             </div>
             <div className="sidebar-meta stack">
-              <div className="section-eyebrow">当前账号</div>
+              <div className="section-eyebrow">账号</div>
               <div className="section-title">
                 {session.staff.displayName} / {session.staff.username}
               </div>
               <div className="inline-tags">
-                <div className="tag tag-navy">网页登录</div>
+                <div className="tag tag-navy">Web</div>
                 <div className="tag">{canSwitchStores ? "总店视角" : "门店视角"}</div>
               </div>
               {canSwitchStores ? (
@@ -1233,18 +1287,13 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
                 className={`button nav-button ${activeTab === tab.key ? "active" : ""}`}
                 onClick={() => setActiveTab(tab.key)}
               >
-                {tab.label}
+                <span className="nav-button-main">
+                  <span>{tab.label}</span>
+                  <span className={`nav-button-badge nav-button-badge-${tabBadges[tab.key].tone}`}>{tabBadges[tab.key].text}</span>
+                </span>
+                <span className="nav-button-summary">{tab.summary}</span>
               </button>
             ))}
-          </div>
-
-          <div className="sidebar-tip">
-            <div className="section-eyebrow">本日优先级</div>
-            <p className="subtle">
-              {canSwitchStores
-                ? "先切到目标门店，再看今日核销、邀请激活和员工状态。"
-                : "先看今日核销，再看邀请激活，最后确认积分、菜品券和员工状态。"}
-            </p>
           </div>
 
           <div className="sidebar-actions">
@@ -1261,20 +1310,28 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
                 <div className="hero-kicker-row">
                   <div className="section-eyebrow">{activeTabConfig.label}</div>
                   <div className="hero-sync-badge">
-                    {tabLoading[activeTab] ? "正在加载" : tabLoaded[activeTab] ? "CloudBase 在线" : "等待加载"}
+                    {tabLoading[activeTab] ? "加载中" : tabLoaded[activeTab] ? "在线" : "待加载"}
                   </div>
                 </div>
-                <h2 className="headline">{activeTabConfig.label}</h2>
-                <p className="subtle hero-summary">{activeTabConfig.summary}</p>
-                <div className="hero-chip-row">
-                  <div className="hero-chip">{canSwitchStores ? `已接入 ${accessibleStoreIds.length} 家门店` : `门店 ${storeLabel}`}</div>
-                  <div className="hero-chip">编号 {currentStoreId}</div>
-                  <div className="hero-chip">积分结算</div>
-                  <div className="hero-chip">订单留痕</div>
+                <h2 className="headline">{heroTitle}</h2>
+                <p className="subtle hero-summary">{heroSummary}</p>
+                <div className="hero-brief-grid">
+                  <div className="hero-brief-card">
+                    <div className="hero-brief-label">当前门店</div>
+                    <div className="hero-brief-value">{storeLabel}</div>
+                  </div>
+                  <div className="hero-brief-card">
+                    <div className="hero-brief-label">查看范围</div>
+                    <div className="hero-brief-value">{canSwitchStores ? `共 ${accessibleStoreIds.length} 家门店` : "当前门店"}</div>
+                  </div>
+                  <div className="hero-brief-card">
+                    <div className="hero-brief-label">当前账号</div>
+                    <div className="hero-brief-value">{session.staff.displayName}</div>
+                  </div>
                 </div>
               </div>
               <div className="hero-side">
-                <div className="hero-side-label">经营快照</div>
+                <div className="hero-side-label">当前看板</div>
                 <div className="hero-stat-grid">
                   {heroStats.map((item) => (
                     <div className="hero-stat-card" key={item.label}>
@@ -1302,24 +1359,24 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
               {errorMessage}
             </div>
           ) : null}
-          {tabLoading[activeTab] ? <div className="notice">正在加载当前页数据，请稍候。</div> : null}
+          {tabLoading[activeTab] ? <div className="notice">当前页加载中</div> : null}
 
           {activeTab === "overview" ? (
             <div className="section-stack">
               <div className="metric-grid">
-                <MetricCard label="会员总数" value={stats.memberCount} footnote="当前门店已注册会员。" />
-                <MetricCard label="有效邀请数" value={stats.activatedInviteCount} footnote="已完成首单激活的拉新人数。" />
-                <MetricCard label="待使用菜品券" value={stats.readyVoucherCount} footnote="还可继续核销的券。" />
-                <MetricCard label="今日核销" value={stats.todayVisitCount} footnote="今天录入的核销量。" />
-                <MetricCard label="待处理事项" value={stats.openOpsTaskCount} footnote="订单完成后未顺利结算的任务。" />
+                <MetricCard label="会员总数" value={stats.memberCount} footnote="已注册会员" />
+                <MetricCard label="有效邀请数" value={stats.activatedInviteCount} footnote="已激活邀请" />
+                <MetricCard label="待使用菜品券" value={stats.readyVoucherCount} footnote="可继续核销" />
+                <MetricCard label="今日核销" value={stats.todayVisitCount} footnote="今日已录入" />
+                <MetricCard label="待处理事项" value={stats.openOpsTaskCount} footnote="待处理异常" />
               </div>
 
               <div className="split">
                 <div className="row-card stack">
                   <div className="card-title-block">
-                    <div className="tag tag-navy">先看这 3 项</div>
+                    <div className="tag tag-navy">今天</div>
                     <h3 className="section-title">今天重点</h3>
-                    <p className="subtle">核销、激活、待核销券。</p>
+                    <p className="subtle">先看这几项。</p>
                   </div>
 
                   <div className="insight-list">
@@ -1333,13 +1390,25 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
                       </div>
                     ))}
                   </div>
+
+                  <div className="button-row dashboard-quick-actions">
+                    <button className="button button-secondary" type="button" onClick={() => setActiveTab("ops")}>
+                      去异常处理
+                    </button>
+                    <button className="button button-secondary" type="button" onClick={() => setActiveTab("orders")}>
+                      去订单工作台
+                    </button>
+                    <button className="button button-secondary" type="button" onClick={() => setActiveTab("members")}>
+                      去会员管理
+                    </button>
+                  </div>
                 </div>
 
                 <div className="row-card stack">
                   <div className="card-title-block">
-                    <div className="tag">营业前检查</div>
+                    <div className="tag">开店前</div>
                     <h3 className="section-title">规则与账号</h3>
-                    <p className="subtle">开店前看这 4 项就够了。</p>
+                    <p className="subtle">开店前先过一遍。</p>
                   </div>
 
                   <div className="status-list">
@@ -1358,7 +1427,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
           {activeTab === "menu" && tabLoaded.menu ? (
             <MenuPanel categories={menuCategories} items={menuItems} onSave={handleSaveMenu} saving={savingMenu} storeConfig={storeConfig} />
           ) : activeTab === "menu" ? (
-            renderDeferredPanel("menu", "菜单配置读取中", "第一次进入会拉取门店信息、分类、菜品和规格配置。")
+            renderDeferredPanel("menu", "菜单加载中", "正在读取菜单配置。")
           ) : null}
 
           {activeTab === "ops" && tabLoaded.ops ? (
@@ -1373,10 +1442,10 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
               tasks={opsTasks}
             />
           ) : activeTab === "ops" ? (
-            renderDeferredPanel("ops", "待处理事项读取中", "订单完成后没顺利结算的事项，会在这里统一汇总。")
+            renderDeferredPanel("ops", "异常加载中", "正在读取异常事项。")
           ) : null}
 
-          {activeTab === "orders" && tabLoaded.orders ? (
+          {activeTab === "orders" && (tabLoaded.orders || hasAttemptedOrdersBootstrap) ? (
             <OrdersPanel
               detailLoading={loadingOrderDetail}
               loading={loadingOrders}
@@ -1392,7 +1461,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
               updatingStatus={updatingOrderStatus}
             />
           ) : activeTab === "orders" ? (
-            renderDeferredPanel("orders", "订单工作台读取中", "稍候会展示订单列表、详情和状态处理入口。")
+            renderDeferredPanel("orders", "订单加载中", "正在读取订单列表。")
           ) : null}
 
           {activeTab === "members" ? (
@@ -1418,7 +1487,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
               onSave={handleSaveRules}
             />
           ) : activeTab === "rules" ? (
-            renderDeferredPanel("rules", "奖励规则读取中", "第一次进入会拉取当前活动配置，稍候即可编辑。")
+            renderDeferredPanel("rules", "规则加载中", "正在读取活动配置。")
           ) : null}
 
           {activeTab === "staff" && tabLoaded.staff ? (
@@ -1433,19 +1502,19 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
               onUpdatePassword={handleUpdatePassword}
             />
           ) : activeTab === "staff" ? (
-            renderDeferredPanel("staff", "员工账号读取中", "稍候会展示网页后台账号和店员账号列表。")
+            renderDeferredPanel("staff", "账号加载中", "正在读取账号列表。")
           ) : null}
 
           {activeTab === "feedback" && tabLoaded.feedback ? (
             <FeedbackPanel feedbacks={feedbacks} onUpdate={handleUpdateFeedback} updatingFeedbackId={updatingFeedbackId} />
           ) : activeTab === "feedback" ? (
-            renderDeferredPanel("feedback", "用户反馈读取中", "会员和店员提交的问题会在这里汇总。")
+            renderDeferredPanel("feedback", "反馈加载中", "正在读取反馈。")
           ) : null}
 
           {activeTab === "audit" && tabLoaded.audit ? (
             <AuditPanel logs={logs} />
           ) : activeTab === "audit" ? (
-            renderDeferredPanel("audit", "审计日志读取中", "关键变更和核销记录会在这里按时间汇总。")
+            renderDeferredPanel("audit", "日志加载中", "正在读取操作记录。")
           ) : null}
         </main>
       </div>

@@ -83,25 +83,25 @@ export function OpsTasksPanel({
         <div className="summary-card">
           <div className="summary-kicker">当前列表</div>
           <div className="summary-value">{tasks.length}</div>
-          <div className="summary-footnote">当前筛选条件下的待处理事项数量。</div>
+          <div className="summary-footnote">当前结果</div>
         </div>
         <div className="summary-card">
           <div className="summary-kicker">需人工复核</div>
           <div className="summary-value">{urgentCount}</div>
-          <div className="summary-footnote">会员资料或订单号存在冲突，建议优先处理。</div>
+          <div className="summary-footnote">优先处理</div>
         </div>
         <div className="summary-card">
           <div className="summary-kicker">可直接重试</div>
           <div className="summary-value">{retryableCount}</div>
-          <div className="summary-footnote">这类异常通常适合在后台直接点一次重试。</div>
+          <div className="summary-footnote">可直接重试</div>
         </div>
       </div>
 
       <div className="row-card stack">
         <div className="card-title-block">
           <div className="section-eyebrow">处理方式</div>
-          <h3 className="section-title">先看待处理，再决定重试还是人工关闭</h3>
-          <p className="subtle">订单完成后会员结算失败，会自动在这里生成事项。处理结果会保留审计记录。</p>
+          <h3 className="section-title">异常处理</h3>
+          <p className="subtle">先看待处理，再决定重试或关闭。</p>
         </div>
 
         <div className="field-grid">
@@ -132,9 +132,7 @@ export function OpsTasksPanel({
           <div className="tag tag-success">{STATUS_LABELS[status]}</div>
           <h3 className="section-title">当前没有事项</h3>
           <p className="subtle">
-            {status === "OPEN"
-              ? "订单完成后的会员结算一切正常时，这里会保持为空。"
-              : "可以切回待处理，看有没有新生成的异常事项。"}
+            {status === "OPEN" ? "当前没有异常。" : "可以切回待处理再看。"}
           </p>
         </div>
       ) : (
@@ -190,7 +188,7 @@ export function OpsTasksPanel({
                   <textarea
                     id={`ops-task-note-${task._id}`}
                     className="textarea"
-                    placeholder="可选，写下这次重试或人工处理的说明。"
+                    placeholder="可选"
                     value={noteValue}
                     onChange={(event) =>
                       setNoteDrafts((current) => ({
@@ -243,7 +241,7 @@ export function OpsTasksPanel({
                     </>
                   ) : (
                     <div className="toolbar-pill">
-                      {task.resolutionNote || "这条事项已经关闭。"}
+                      {task.resolutionNote || "已关闭"}
                     </div>
                   )}
                 </div>
@@ -255,4 +253,3 @@ export function OpsTasksPanel({
     </div>
   );
 }
-

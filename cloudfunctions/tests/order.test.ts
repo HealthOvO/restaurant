@@ -3,6 +3,7 @@ import { issueSessionToken } from "../src/runtime/auth";
 import {
   createMemberOrder,
   listStaffOrders,
+  listMemberOrders,
   queryAdminOrders,
   saveAdminMenu,
   updateStaffOrderStatus
@@ -359,6 +360,57 @@ describe("order service safety", () => {
     expect(repository.searchOrders).not.toHaveBeenCalled();
     expect(result.orders).toHaveLength(1);
     expect(result.orders[0]?._id).toBe("order-1");
+  });
+
+  it("sorts a member's orders from newest to oldest before returning", async () => {
+    const repository = {
+      listOrdersByMemberOpenId: vi.fn().mockResolvedValue([
+        {
+          _id: "order-older",
+          storeId: "default-store",
+          orderNo: "OD202604140001",
+          memberId: "member-1",
+          memberOpenId: "openid-member-1",
+          memberCode: "M00000001",
+          status: "READY",
+          fulfillmentMode: "DINE_IN",
+          sourceChannel: "MINIPROGRAM",
+          itemCount: 1,
+          subtotalAmount: 32,
+          payableAmount: 32,
+          currency: "CNY",
+          lineItems: [],
+          submittedAt: "2026-04-14T10:00:00.000Z",
+          createdAt: "2026-04-14T10:00:00.000Z",
+          updatedAt: "2026-04-14T10:00:00.000Z",
+          statusChangedAt: "2026-04-14T10:00:00.000Z"
+        },
+        {
+          _id: "order-newer",
+          storeId: "default-store",
+          orderNo: "OD202604140002",
+          memberId: "member-1",
+          memberOpenId: "openid-member-1",
+          memberCode: "M00000001",
+          status: "PENDING_CONFIRM",
+          fulfillmentMode: "DINE_IN",
+          sourceChannel: "MINIPROGRAM",
+          itemCount: 1,
+          subtotalAmount: 32,
+          payableAmount: 32,
+          currency: "CNY",
+          lineItems: [],
+          submittedAt: "2026-04-14T11:00:00.000Z",
+          createdAt: "2026-04-14T11:00:00.000Z",
+          updatedAt: "2026-04-14T11:00:00.000Z",
+          statusChangedAt: "2026-04-14T11:00:00.000Z"
+        }
+      ])
+    };
+
+    const result = await listMemberOrders(repository as never, "openid-member-1");
+
+    expect(result.orders.map((order) => order._id)).toEqual(["order-newer", "order-older"]);
   });
 
   it("marks settlement failures caused by member data as manual review", async () => {

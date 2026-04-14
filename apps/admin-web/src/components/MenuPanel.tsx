@@ -505,8 +505,8 @@ export function MenuPanel({ storeConfig, categories, items, saving = false, onSa
             <div className="tag">门店配置</div>
             <div className="tag">规格可编辑</div>
           </div>
-          <h3 className="section-title">点餐菜单工作台</h3>
-          <p className="subtle">门店信息、分类、菜品和规格在这一页改完，保存后顾客端和店员端都会同步。</p>
+          <h3 className="section-title">菜单配置</h3>
+          <p className="subtle">改完保存，小程序会同步。</p>
         </div>
         <div className="button-row">
           <div className={`tag ${hasUnsavedChanges ? "tag" : "tag tag-success"}`}>{hasUnsavedChanges ? "有未保存修改" : "已同步"}</div>
@@ -526,22 +526,22 @@ export function MenuPanel({ storeConfig, categories, items, saving = false, onSa
         <div className="metric-card compact-metric-card">
           <div className="tag tag-navy">分类数</div>
           <div className="metric-value metric-value-compact">{orderedCategories.length}</div>
-          <div className="metric-footnote">顾客端会按分类展示。</div>
+          <div className="metric-footnote">菜单分类</div>
         </div>
         <div className="metric-card compact-metric-card">
           <div className="tag tag-success">可售菜品</div>
           <div className="metric-value metric-value-compact">{enabledItemCount}</div>
-          <div className="metric-footnote">已上架且未售罄。</div>
+          <div className="metric-footnote">上架且未售罄</div>
         </div>
         <div className="metric-card compact-metric-card">
           <div className="tag">推荐菜</div>
           <div className="metric-value metric-value-compact">{recommendedCount}</div>
-          <div className="metric-footnote">首页可优先露出。</div>
+          <div className="metric-footnote">优先展示</div>
         </div>
         <div className="metric-card compact-metric-card">
           <div className="tag">售罄</div>
           <div className="metric-value metric-value-compact">{soldOutCount}</div>
-          <div className="metric-footnote">恢复后顾客端即可再次下单。</div>
+          <div className="metric-footnote">恢复后可售</div>
         </div>
       </div>
 
@@ -550,8 +550,8 @@ export function MenuPanel({ storeConfig, categories, items, saving = false, onSa
           <div className="row-card stack">
             <div className="card-title-block">
               <div className="section-eyebrow">门店展示</div>
-              <h3 className="section-title">基础信息与点餐开关</h3>
-              <p className="subtle">这里控制顾客端首页标题、公告、营业信息和堂食 / 自提开关。</p>
+              <h3 className="section-title">基础信息</h3>
+              <p className="subtle">门店名称、公告、营业信息都在这里。</p>
             </div>
 
             <div className="field-grid">
@@ -945,14 +945,14 @@ export function MenuPanel({ storeConfig, categories, items, saving = false, onSa
                 <div className="empty-state">
                   <div className="tag">当前分类为空</div>
                   <h3 className="section-title">这个分类还没有菜品</h3>
-                  <p className="subtle">先新增一道菜，再配置价格、标签和规格。</p>
+                  <p className="subtle">先新增一道菜。</p>
                 </div>
               )
             ) : (
               <div className="empty-state">
                 <div className="tag">还没有分类</div>
                 <h3 className="section-title">先创建菜单分类</h3>
-                <p className="subtle">至少要有一个分类，顾客端才能正常展示菜单。</p>
+                <p className="subtle">至少保留一个分类。</p>
               </div>
             )}
           </div>
@@ -963,7 +963,7 @@ export function MenuPanel({ storeConfig, categories, items, saving = false, onSa
                 <div className="card-title-block">
                   <div className="section-eyebrow">菜品编辑</div>
                   <h3 className="section-title">编辑 {selectedItem.name || "当前菜品"}</h3>
-                  <p className="subtle">价格、标签、售卖状态和规格都在这里维护。</p>
+                  <p className="subtle">价格、标签、状态、规格。</p>
                 </div>
                 <div className="inline-tags">
                   <div className={`tag ${selectedItem.isEnabled ? "tag-success" : "tag-navy"}`}>
@@ -1094,8 +1094,8 @@ export function MenuPanel({ storeConfig, categories, items, saving = false, onSa
                 <div className="card-header">
                   <div className="card-title-block">
                     <div className="section-eyebrow">菜品规格</div>
-                    <h3 className="section-title">加料、分量和口味</h3>
-                    <p className="subtle">顾客端下单时会直接按这里的规格生成选项。</p>
+                    <h3 className="section-title">加料、分量、口味</h3>
+                    <p className="subtle">顾客下单按这里展示。</p>
                   </div>
                   <button
                     className="button button-secondary"
@@ -1255,7 +1255,7 @@ export function MenuPanel({ storeConfig, categories, items, saving = false, onSa
                 ) : (
                   <div className="empty-state menu-options-empty">
                     <div className="tag">当前没有规格</div>
-                    <p className="subtle">如果这道菜有分量、口味或加料，就新增一个规格组。</p>
+                    <p className="subtle">有需要再新增规格组。</p>
                   </div>
                 )}
               </div>

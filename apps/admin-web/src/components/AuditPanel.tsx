@@ -128,8 +128,8 @@ export function AuditPanel({ logs }: AuditPanelProps) {
     return (
       <div className="empty-state">
         <div className="tag tag-navy">暂无日志</div>
-        <h3 className="section-title">审计日志还没有记录</h3>
-        <p className="subtle">规则调整、账号变更和关键核销都会留痕。</p>
+        <h3 className="section-title">最近还没有操作记录</h3>
+        <p className="subtle">保存规则、改账号、处理反馈后都会在这里留痕。</p>
       </div>
     );
   }
@@ -140,22 +140,22 @@ export function AuditPanel({ logs }: AuditPanelProps) {
         <div className="summary-card">
           <div className="summary-kicker">日志总数</div>
           <div className="summary-value">{logs.length}</div>
-          <div className="summary-footnote">当前列表展示最近 100 条。</div>
+          <div className="summary-footnote">最近 100 条</div>
         </div>
         <div className="summary-card">
           <div className="summary-kicker">今日新增</div>
           <div className="summary-value">{todayCount}</div>
-          <div className="summary-footnote">今天产生的关键操作。</div>
+          <div className="summary-footnote">今天新增</div>
         </div>
         <div className="summary-card">
           <div className="summary-kicker">老板操作</div>
           <div className="summary-value">{ownerCount}</div>
-          <div className="summary-footnote">由老板账号发起的变更。</div>
+          <div className="summary-footnote">老板发起</div>
         </div>
         <div className="summary-card">
           <div className="summary-kicker">最近一条</div>
           <div className="summary-value summary-value-text">{formatDateTime(latestCreatedAt)}</div>
-          <div className="summary-footnote">最后一次留痕时间。</div>
+          <div className="summary-footnote">最新记录</div>
         </div>
       </div>
 
@@ -163,8 +163,8 @@ export function AuditPanel({ logs }: AuditPanelProps) {
         <div className="row-card stack">
           <div className="card-title-block">
             <div className="section-eyebrow">筛选日志</div>
-            <h3 className="section-title">按操作人、目标集合或关键词查看</h3>
-            <p className="subtle">支持搜索操作摘要、记录 ID、操作人 ID 和变更详情。</p>
+            <h3 className="section-title">日志筛选</h3>
+            <p className="subtle">支持摘要、记录 ID 和操作人。</p>
           </div>
 
           <div className="field-grid audit-filter-grid">
@@ -219,7 +219,7 @@ export function AuditPanel({ logs }: AuditPanelProps) {
               当前显示 {filteredLogs.length} / {logs.length}
             </div>
             <button className="button button-secondary" disabled={!hasActiveFilters} type="button" onClick={resetFilters}>
-              清空筛选
+              重置筛选
             </button>
           </div>
         </div>
@@ -227,8 +227,8 @@ export function AuditPanel({ logs }: AuditPanelProps) {
         {filteredLogs.length === 0 ? (
           <div className="empty-state">
             <div className="tag">没有匹配日志</div>
-            <h3 className="section-title">当前筛选下没有结果</h3>
-            <p className="subtle">可以清空条件后再看，或者换个记录 ID / 关键词搜索。</p>
+            <h3 className="section-title">当前筛选下没有日志</h3>
+            <p className="subtle">先重置筛选，再看最近记录。</p>
           </div>
         ) : null}
 

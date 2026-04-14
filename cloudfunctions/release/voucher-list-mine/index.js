@@ -9046,6 +9046,9 @@ async function syncExpiredVoucherStatuses(repository, vouchers, now) {
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
+function normalizeNumber(value) {
+  return Number(value) || 0;
+}
 async function listMyVouchers(repository, memberId) {
   const member = await repository.getMemberById(memberId);
   if (!member) {
@@ -9059,7 +9062,7 @@ async function listMyVouchers(repository, memberId) {
   const vouchers = await syncExpiredVoucherStatuses(repository, rawVouchers, nowIso());
   return {
     ok: true,
-    pointsBalance: member.pointsBalance,
+    pointsBalance: normalizeNumber(member.pointsBalance),
     exchangeItems: exchangeItems.filter((item) => item.isEnabled),
     pointTransactions: pointTransactions.sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, 20),
     vouchers: vouchers.sort((left, right) => right.createdAt.localeCompare(left.createdAt))

@@ -9067,6 +9067,10 @@ var BASE64_CODE = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456
 
 // src/runtime/auth.ts
 var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
+var SUPPORTED_ROLES = ["OWNER", "STAFF"];
+function normalizeManagedStoreIds(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+}
 function getSessionSecret() {
   const secret = process.env.SESSION_SECRET?.trim();
   if (!secret) {
@@ -9074,10 +9078,31 @@ function getSessionSecret() {
   }
   return secret;
 }
+function normalizeSessionClaims(claims) {
+  const staffUserId = typeof claims.staffUserId === "string" ? claims.staffUserId.trim() : "";
+  const username = typeof claims.username === "string" ? claims.username.trim() : "";
+  const storeId = typeof claims.storeId === "string" ? claims.storeId.trim() : "";
+  if (!staffUserId || !username || !storeId || !SUPPORTED_ROLES.includes(claims.role)) {
+    throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+  }
+  const normalizedAccessScope = claims.role === "OWNER" && claims.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
+  const normalizedManagedStoreIds = normalizedAccessScope === "ALL_STORES" ? normalizeManagedStoreIds(storeId, claims.managedStoreIds) : [storeId];
+  return {
+    staffUserId,
+    username,
+    role: claims.role,
+    storeId,
+    accessScope: normalizedAccessScope,
+    managedStoreIds: normalizedManagedStoreIds
+  };
+}
 function requireSessionToken(token) {
   try {
-    return import_jsonwebtoken.default.verify(token, getSessionSecret());
+    return normalizeSessionClaims(import_jsonwebtoken.default.verify(token, getSessionSecret()));
   } catch (error) {
+    if (error instanceof DomainError) {
+      throw error;
+    }
     throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55", {
       cause: error instanceof Error ? error.message : String(error)
     });
@@ -9091,14 +9116,18 @@ function createId(prefix) {
 }
 
 // src/runtime/service.staff.ts
-function normalizeManagedStoreIds(storeId, managedStoreIds) {
-  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+function normalizeOptionalText(value) {
+  const normalized = `${value ?? ""}`.trim();
+  return normalized || void 0;
+}
+function normalizeManagedStoreIds2(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => normalizeOptionalText(item)).filter(Boolean)));
 }
 function resolveStaffAccess(staff) {
   const accessScope = staff.role === "OWNER" && staff.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
   return {
     accessScope,
-    managedStoreIds: normalizeManagedStoreIds(staff.storeId, staff.managedStoreIds)
+    managedStoreIds: accessScope === "ALL_STORES" ? normalizeManagedStoreIds2(staff.storeId, staff.managedStoreIds) : [staff.storeId]
   };
 }
 async function requireActiveStaffSession(repository, token) {
@@ -9206,10 +9235,51 @@ function normalizeInviteRewardCounts(currentCounts, fallbackCounts) {
   }
   return nextCounts;
 }
+function normalizeNumber(value) {
+  return Number(value) || 0;
+}
 function isLikelyDuplicateError(error) {
   const message = `${error?.message ?? ""}`.toLowerCase();
   const code = `${error?.code ?? ""}`.toLowerCase();
   return message.includes("duplicate") || message.includes("already exists") || message.includes("e11000") || code.includes("duplicate");
+}
+function assertMemberPhoneVerified(member, message) {
+  if (!member.phone || !member.phoneVerifiedAt) {
+    throw new DomainError("MEMBER_PHONE_REQUIRED", message);
+  }
+}
+function buildIdempotentVisitSettlement(params) {
+  return {
+    isIdempotent: true,
+    visitRecord: params.visitRecord,
+    markMemberFirstVisit: false,
+    activateInviteRelation: false,
+    welcomeVoucher: void 0,
+    milestonePointAwards: [],
+    milestonePointTransactions: [],
+    activatedInviteCountAfterVisit: params.activatedInviteCountAfterVisit ?? 0,
+    inviterPointsBalanceAfter: params.inviterPointsBalanceAfter ?? 0
+  };
+}
+async function buildInviteSettlementSnapshot(repository, inviteeMemberId, fallbackRelation, fallbackInviter) {
+  const relation = fallbackRelation ?? await repository.getInviteRelationByInviteeId(inviteeMemberId);
+  if (!relation?.inviterMemberId) {
+    return {
+      activatedInviteCountAfterVisit: 0,
+      inviterPointsBalanceAfter: 0
+    };
+  }
+  const [relations, inviter] = await Promise.all([
+    repository.listInviteRelations(),
+    repository.getMemberById(relation.inviterMemberId)
+  ]);
+  const effectiveInviter = inviter ?? fallbackInviter ?? null;
+  return {
+    activatedInviteCountAfterVisit: relations.filter(
+      (item) => item.inviterMemberId === relation.inviterMemberId && isInviteRelationActivated(item)
+    ).length,
+    inviterPointsBalanceAfter: normalizeNumber(effectiveInviter?.pointsBalance)
+  };
 }
 async function settleFirstVisit(repository, input) {
   const parsed = settleVisitInputSchema.parse(input);
@@ -9240,19 +9310,14 @@ async function settleFirstVisit(repository, input) {
     (item) => item.inviterMemberId === relation.inviterMemberId && isInviteRelationActivated(item)
   ).length : 0;
   if (existingVisit) {
+    const snapshot = await buildInviteSettlementSnapshot(repository, parsed.memberId, relation, inviter);
     return {
       ok: true,
-      settlement: {
-        isIdempotent: true,
+      settlement: buildIdempotentVisitSettlement({
         visitRecord: existingVisit,
-        markMemberFirstVisit: false,
-        activateInviteRelation: false,
-        welcomeVoucher: void 0,
-        milestonePointAwards: [],
-        milestonePointTransactions: [],
-        activatedInviteCountAfterVisit: inviterActivatedCountBeforeVisit,
-        inviterPointsBalanceAfter: inviter?.pointsBalance ?? 0
-      }
+        activatedInviteCountAfterVisit: snapshot.activatedInviteCountAfterVisit,
+        inviterPointsBalanceAfter: snapshot.inviterPointsBalanceAfter
+      })
     };
   }
   const now = nowIso();
@@ -9263,9 +9328,7 @@ async function settleFirstVisit(repository, input) {
       if (!currentMember) {
         throw new DomainError("MEMBER_NOT_FOUND", "\u4F1A\u5458\u4E0D\u5B58\u5728");
       }
-      if (!currentMember.phone || !currentMember.phoneVerifiedAt) {
-        throw new DomainError("MEMBER_PHONE_REQUIRED", "\u4F1A\u5458\u5C1A\u672A\u5B8C\u6210\u5FAE\u4FE1\u624B\u673A\u53F7\u9A8C\u8BC1");
-      }
+      assertMemberPhoneVerified(currentMember, "\u4F1A\u5458\u5C1A\u672A\u5B8C\u6210\u5FAE\u4FE1\u624B\u673A\u53F7\u9A8C\u8BC1");
       const isFirstValidVisit = !currentMember.hasCompletedFirstVisit;
       const visitRecord = {
         _id: visitRecordId,
@@ -9318,14 +9381,14 @@ async function settleFirstVisit(repository, input) {
           await transaction.saveInviteRelation(currentRelation);
           activatedInviteCountAfterVisit = Math.max(
             0,
-            Number(currentInviter.activatedInviteCount ?? inviterActivatedCountBeforeVisit) || 0
+            normalizeNumber(currentInviter.activatedInviteCount ?? inviterActivatedCountBeforeVisit)
           ) + 1;
           const currentRewardCounts = normalizeInviteRewardCounts(
             currentInviter.inviteRewardIssuedCounts,
             inviterRewardCountsByRuleId
           );
           const rulesToReward = deriveMilestoneRulesToReward(rules, activatedInviteCountAfterVisit, currentRewardCounts);
-          let runningBalance = Number(currentInviter.pointsBalance) || 0;
+          let runningBalance = normalizeNumber(currentInviter.pointsBalance);
           const nextRewardCounts = { ...currentRewardCounts };
           milestonePointAwards = rulesToReward.map((rule) => {
             const ruleId = rule._id;
@@ -9400,19 +9463,14 @@ async function settleFirstVisit(repository, input) {
         if (duplicatedVisit.memberId !== parsed.memberId) {
           throw new DomainError("ORDER_ALREADY_USED", "\u8BE5\u8BA2\u5355\u53F7\u5DF2\u7528\u4E8E\u5176\u4ED6\u4F1A\u5458\u6838\u9500\uFF0C\u4E0D\u80FD\u91CD\u590D\u4F5C\u4E3A\u9996\u5355\u6FC0\u6D3B");
         }
+        const snapshot = await buildInviteSettlementSnapshot(repository, parsed.memberId, relation, inviter);
         return {
           ok: true,
-          settlement: {
-            isIdempotent: true,
+          settlement: buildIdempotentVisitSettlement({
             visitRecord: duplicatedVisit,
-            markMemberFirstVisit: false,
-            activateInviteRelation: false,
-            welcomeVoucher: void 0,
-            milestonePointAwards: [],
-            milestonePointTransactions: [],
-            activatedInviteCountAfterVisit: inviterActivatedCountBeforeVisit,
-            inviterPointsBalanceAfter: inviter?.pointsBalance ?? 0
-          }
+            activatedInviteCountAfterVisit: snapshot.activatedInviteCountAfterVisit,
+            inviterPointsBalanceAfter: snapshot.inviterPointsBalanceAfter
+          })
         };
       }
     }
@@ -9421,6 +9479,7 @@ async function settleFirstVisit(repository, input) {
 }
 
 // src/runtime/service.ops.ts
+var MANUAL_REVIEW_CODES = /* @__PURE__ */ new Set(["MEMBER_NOT_FOUND", "MEMBER_PHONE_REQUIRED", "ORDER_ALREADY_USED"]);
 function nowIso2() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
@@ -9436,9 +9495,8 @@ function buildOrderVisitSettlementTaskDedupeKey(orderId) {
 function classifyVisitSettlementFailure(error) {
   const code = getErrorCode(error);
   const reason = error instanceof Error ? error.message : "\u4F1A\u5458\u7ED3\u7B97\u6682\u672A\u5B8C\u6210";
-  const manualReviewCodes = /* @__PURE__ */ new Set(["MEMBER_NOT_FOUND", "MEMBER_PHONE_REQUIRED", "ORDER_ALREADY_USED"]);
   return {
-    state: code && manualReviewCodes.has(code) ? "MANUAL_REVIEW" : "RETRYABLE",
+    state: code && MANUAL_REVIEW_CODES.has(code) ? "MANUAL_REVIEW" : "RETRYABLE",
     code,
     reason
   };
@@ -9466,6 +9524,10 @@ async function upsertOrderVisitSettlementTask(repository, params) {
     retryCount: Math.max(0, Number(existing?.retryCount || 0) + Number(params.retryCountDelta || 0)),
     lastTriggeredAt: timestamp,
     lastRetriedAt: params.lastRetriedAt ?? existing?.lastRetriedAt,
+    resolvedAt: void 0,
+    resolvedByStaffId: void 0,
+    resolution: void 0,
+    resolutionNote: void 0,
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp
   };

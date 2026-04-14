@@ -442,6 +442,54 @@ function assertStoreConfigValid(config: StoreConfig): void {
   }
 }
 
+function normalizeOptionalText(value?: string): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function compareOrderLogs(
+  left: {
+    createdAt: string;
+    updatedAt: string;
+    _id: string;
+  },
+  right: {
+    createdAt: string;
+    updatedAt: string;
+    _id: string;
+  }
+) {
+  if (right.createdAt !== left.createdAt) {
+    return right.createdAt.localeCompare(left.createdAt);
+  }
+  if (right.updatedAt !== left.updatedAt) {
+    return right.updatedAt.localeCompare(left.updatedAt);
+  }
+
+  return right._id.localeCompare(left._id);
+}
+
+async function loadOrderPreviewContext(
+  repository: RestaurantRepository,
+  params: {
+    items: Parameters<typeof previewOrder>[0]["items"];
+    fulfillmentMode: Parameters<typeof previewOrder>[0]["fulfillmentMode"];
+  }
+) {
+  const { storeConfig, items } = await ensureOrderingSeeds(repository);
+  const preview = previewOrder({
+    items: params.items,
+    menuItems: items,
+    storeConfig,
+    fulfillmentMode: params.fulfillmentMode
+  });
+
+  return {
+    storeConfig,
+    preview
+  };
+}
+
 export async function getMenuCatalog(repository: RestaurantRepository, input: unknown = {}) {
   menuCatalogInputSchema.parse(input);
   const { storeConfig, categories, items } = await ensureOrderingSeeds(repository);
@@ -458,13 +506,7 @@ export async function getMenuCatalog(repository: RestaurantRepository, input: un
 
 export async function previewMemberOrder(repository: RestaurantRepository, input: unknown) {
   const parsed = orderPreviewInputSchema.parse(input);
-  const { storeConfig, items } = await ensureOrderingSeeds(repository);
-  const preview = previewOrder({
-    items: parsed.items,
-    menuItems: items,
-    storeConfig,
-    fulfillmentMode: parsed.fulfillmentMode
-  });
+  const { preview, storeConfig } = await loadOrderPreviewContext(repository, parsed);
 
   return {
     ok: true,
@@ -475,22 +517,20 @@ export async function previewMemberOrder(repository: RestaurantRepository, input
 
 export async function createMemberOrder(repository: RestaurantRepository, callerOpenId: string, input: unknown) {
   const parsed = orderCreateInputSchema.parse(input);
-  const { storeConfig, items } = await ensureOrderingSeeds(repository);
+  const sanitizedRequestId = sanitizeRequestId(parsed.requestId) || undefined;
+  const normalizedRemark = normalizeOptionalText(parsed.remark);
+  const { preview } = await loadOrderPreviewContext(repository, parsed);
   const member = await ensureMemberShell(repository, callerOpenId);
   assertOrderSubmissionReady({
     fulfillmentMode: parsed.fulfillmentMode,
     tableNo: parsed.tableNo,
     contactName: parsed.contactName
   });
-  const preview = previewOrder({
-    items: parsed.items,
-    menuItems: items,
-    storeConfig,
-    fulfillmentMode: parsed.fulfillmentMode
-  });
-  const normalizedTableNo = parsed.fulfillmentMode === "DINE_IN" ? parsed.tableNo?.trim() : undefined;
-  const normalizedContactName = parsed.fulfillmentMode === "PICKUP" ? parsed.contactName?.trim() : undefined;
-  const normalizedContactPhone = parsed.fulfillmentMode === "PICKUP" ? parsed.contactPhone?.trim() : undefined;
+  const normalizedTableNo = parsed.fulfillmentMode === "DINE_IN" ? normalizeOptionalText(parsed.tableNo) : undefined;
+  const normalizedContactName =
+    parsed.fulfillmentMode === "PICKUP" ? normalizeOptionalText(parsed.contactName) : undefined;
+  const normalizedContactPhone =
+    parsed.fulfillmentMode === "PICKUP" ? normalizeOptionalText(parsed.contactPhone) : undefined;
 
   const orderId = buildRequestScopedId("order", parsed.requestId);
   const now = nowIso();
@@ -513,7 +553,7 @@ export async function createMemberOrder(repository: RestaurantRepository, caller
       _id: orderId,
       storeId: repository.storeId,
       orderNo,
-      requestId: sanitizeRequestId(parsed.requestId) || undefined,
+      requestId: sanitizedRequestId,
       memberId: member._id,
       memberOpenId: callerOpenId,
       memberCode: member.memberCode,
@@ -524,7 +564,7 @@ export async function createMemberOrder(repository: RestaurantRepository, caller
       tableNo: normalizedTableNo,
       contactName: normalizedContactName,
       contactPhone: normalizedContactPhone,
-      remark: parsed.remark?.trim(),
+      remark: normalizedRemark,
       itemCount: preview.itemCount,
       subtotalAmount: preview.subtotalAmount,
       payableAmount: preview.payableAmount,
@@ -545,7 +585,7 @@ export async function createMemberOrder(repository: RestaurantRepository, caller
       operatorType: "MEMBER",
       operatorId: callerOpenId,
       operatorName: member.nickname || member.memberCode,
-      note: parsed.remark?.trim(),
+      note: normalizedRemark,
       createdAt: now,
       updatedAt: now
     };
@@ -586,7 +626,7 @@ export async function listMemberOrders(repository: RestaurantRepository, callerO
   const orders = await repository.listOrdersByMemberOpenId(callerOpenId);
   return {
     ok: true,
-    orders
+    orders: [...orders].sort(compareOrders)
   };
 }
 
@@ -601,7 +641,7 @@ export async function getMemberOrderDetail(repository: RestaurantRepository, cal
   return {
     ok: true,
     order,
-    logs
+    logs: [...logs].sort(compareOrderLogs)
   };
 }
 

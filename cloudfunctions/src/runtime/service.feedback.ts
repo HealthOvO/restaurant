@@ -22,6 +22,10 @@ function normalizeOptionalText(value?: string): string | undefined {
   return normalized || undefined;
 }
 
+function resolveOwnerReply(nextOwnerReply: string | undefined, currentOwnerReply?: string): string | undefined {
+  return nextOwnerReply ?? currentOwnerReply;
+}
+
 function sortFeedbackTickets(tickets: FeedbackTicket[]): FeedbackTicket[] {
   return tickets.slice().sort((left, right) => {
     if (right.updatedAt !== left.updatedAt) {
@@ -200,14 +204,15 @@ export async function updateAdminFeedback(repository: RestaurantRepository, inpu
   }
 
   const nextOwnerReply = normalizeOptionalText(parsed.ownerReply);
-  if (parsed.status === "RESOLVED" && !nextOwnerReply && !ticket.ownerReply) {
+  const ownerReply = resolveOwnerReply(nextOwnerReply, ticket.ownerReply);
+  if (parsed.status === "RESOLVED" && !ownerReply) {
     throw new DomainError("FEEDBACK_REPLY_REQUIRED", "处理为已解决前，请先填写给用户的回复");
   }
 
   const now = nowIso();
   ticket.status = parsed.status;
   ticket.priority = parsed.priority;
-  ticket.ownerReply = nextOwnerReply;
+  ticket.ownerReply = ownerReply;
   ticket.handledByStaffId = staff._id;
   ticket.handledAt = now;
   ticket.updatedAt = now;

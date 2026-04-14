@@ -493,7 +493,7 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
             </div>
             <h3 className="section-title">{rule.name || "未命名规则"}</h3>
             <p className="subtle tiny">
-              当前顺序 {index + 1} / {total}
+              顺序 {index + 1} / {total}
             </p>
           </div>
           <EditorCardActions
@@ -537,7 +537,7 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
           </label>
         </div>
 
-        <div className="toolbar-pill">新会员完成首次有效消费后，系统自动发放这张菜品券。</div>
+        <div className="toolbar-pill">首单后自动发券</div>
 
         <label className="field-label">
           菜品名称
@@ -573,7 +573,7 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
             </div>
             <h3 className="section-title">{rule.name || "未命名规则"}</h3>
             <p className="subtle tiny">
-              当前顺序 {index + 1} / {total}
+              顺序 {index + 1} / {total}
             </p>
           </div>
           <EditorCardActions
@@ -642,8 +642,8 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
 
         <div className="toolbar-pill">
           {rule.rewardMode === "REPEATABLE"
-            ? `每满 ${rule.threshold ?? 1} 位有效邀请，就继续给邀请人发 ${rule.pointsReward ?? 1} 积分。`
-            : `达到 ${rule.threshold ?? 1} 位有效邀请后，只发一次 ${rule.pointsReward ?? 1} 积分。`}
+            ? `每满 ${rule.threshold ?? 1} 人送 ${rule.pointsReward ?? 1} 积分`
+            : `满 ${rule.threshold ?? 1} 人送 ${rule.pointsReward ?? 1} 积分`}
         </div>
       </div>
     );
@@ -660,7 +660,7 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
             </div>
             <h3 className="section-title">{item.name || "未命名兑换项"}</h3>
             <p className="subtle tiny">
-              当前顺序 {index + 1} / {total}
+              顺序 {index + 1} / {total}
             </p>
           </div>
           <EditorCardActions
@@ -715,7 +715,7 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
           </label>
         </div>
 
-        <div className="toolbar-pill">会员积分足够时，会自动兑换成菜品券，后续仍由店员扫码核销。</div>
+        <div className="toolbar-pill">兑换后自动发券</div>
 
         <label className="field-label">
           菜品名称
@@ -747,28 +747,28 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
         </div>
       ) : null}
 
-      {hasUnsavedChanges ? <div className="notice">当前有未保存变更，点击右上角“保存全部配置”后才会正式生效。</div> : null}
+      {hasUnsavedChanges ? <div className="notice">有未保存内容</div> : null}
 
       <div className="summary-grid">
         <div className="summary-card">
           <div className="summary-kicker">规则总数</div>
           <div className="summary-value">{normalizedRules.length}</div>
-          <div className="summary-footnote">首单礼和邀请积分合计条数。</div>
+          <div className="summary-footnote">首单礼 + 邀请积分</div>
         </div>
         <div className="summary-card">
           <div className="summary-kicker">已启用规则</div>
           <div className="summary-value">{enabledRuleCount}</div>
-          <div className="summary-footnote">保存后实际参与结算的规则。</div>
+          <div className="summary-footnote">当前生效</div>
         </div>
         <div className="summary-card">
           <div className="summary-kicker">循环积分</div>
           <div className="summary-value">{repeatableCount}</div>
-          <div className="summary-footnote">每满 N 人可重复送积分的规则数量。</div>
+          <div className="summary-footnote">重复发放</div>
         </div>
         <div className="summary-card">
           <div className="summary-kicker">上架兑换项</div>
           <div className="summary-value">{enabledExchangeCount}</div>
-          <div className="summary-footnote">会员当前可见的积分兑换菜品。</div>
+          <div className="summary-footnote">会员可兑换</div>
         </div>
       </div>
 
@@ -777,8 +777,8 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
           <div className="panel-toolbar">
             <div className="stack">
               <div className="section-eyebrow">新客首单礼</div>
-              <h3 className="section-title">首次有效消费后发券</h3>
-              <p className="subtle">通常只保留 1 条启用规则，避免首单礼重复叠加。</p>
+              <h3 className="section-title">首单发券</h3>
+              <p className="subtle">通常保留 1 条即可。</p>
             </div>
             <div className="button-row">
               <button className="button button-secondary" type="button" onClick={() => addRule("WELCOME")}>
@@ -792,7 +792,7 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
           {welcomeRules.length === 0 ? (
             <div className="empty-state rules-empty-state">
               <div className="tag tag-navy">尚未配置首单礼</div>
-              <p className="subtle">如果门店希望新会员首单后立即送菜品券，这里至少新增 1 条首单礼规则。</p>
+              <p className="subtle">先新增 1 条首单礼。</p>
             </div>
           ) : (
             <div className="rules-grid">{welcomeRules.map((rule, index) => renderWelcomeRule(rule, index, welcomeRules.length))}</div>
@@ -803,8 +803,8 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
           <div className="panel-toolbar">
             <div className="stack">
               <div className="section-eyebrow">邀请积分</div>
-              <h3 className="section-title">邀请达标后自动送积分</h3>
-              <p className="subtle">支持达标送一次，也支持“每满 N 人循环送积分”的长期玩法。</p>
+              <h3 className="section-title">邀请送积分</h3>
+              <p className="subtle">支持单次和循环。</p>
             </div>
             <div className="button-row">
               <button className="button button-secondary" type="button" onClick={() => addRule("INVITE_MILESTONE")}>
@@ -818,7 +818,7 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
           {inviteRules.length === 0 ? (
             <div className="empty-state rules-empty-state">
               <div className="tag tag-navy">尚未配置邀请积分</div>
-              <p className="subtle">建议至少配 1 条邀请规则，让拉新人数和积分到账形成闭环。</p>
+              <p className="subtle">先新增 1 条邀请规则。</p>
             </div>
           ) : (
             <div className="rules-grid">{inviteRules.map((rule, index) => renderInviteRule(rule, index, inviteRules.length))}</div>
@@ -829,8 +829,8 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
           <div className="panel-toolbar">
             <div className="stack">
               <div className="section-eyebrow">积分兑换</div>
-              <h3 className="section-title">会员积分换菜品</h3>
-              <p className="subtle">兑换成功后自动生成菜品券，店员核销方式不变。</p>
+              <h3 className="section-title">积分换菜品</h3>
+              <p className="subtle">兑换后自动发券。</p>
             </div>
             <div className="button-row">
               <button className="button button-secondary" type="button" onClick={addExchangeItem}>
@@ -844,7 +844,7 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
           {normalizedExchangeItems.length === 0 ? (
             <div className="empty-state rules-empty-state">
               <div className="tag tag-navy">尚未配置兑换菜品</div>
-              <p className="subtle">会员有了积分也需要可兑换的菜品，否则积分无法形成完整闭环。</p>
+              <p className="subtle">先新增可兑换菜品。</p>
             </div>
           ) : (
             <div className="rules-grid">

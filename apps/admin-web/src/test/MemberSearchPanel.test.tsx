@@ -53,7 +53,7 @@ describe("MemberSearchPanel", () => {
     fireEvent.change(screen.getByPlaceholderText("例如：顾客提供了正确邀请人信息"), {
       target: { value: "顾客提供了正确邀请人信息" }
     });
-    fireEvent.click(screen.getByText("提交调整"));
+    fireEvent.click(screen.getByText("保存关系修正"));
 
     expect(onAdjust).toHaveBeenCalledWith("invitee-1", "inviter-1", "顾客提供了正确邀请人信息");
   });

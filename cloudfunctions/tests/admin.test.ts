@@ -28,6 +28,91 @@ const staffSessionToken = issueSessionToken({
 });
 
 describe("admin staff guardrails", () => {
+  it("requires an explicit initial password when creating a staff account", async () => {
+    const repository = {
+      storeId: "default-store",
+      getStaffById: vi.fn().mockResolvedValue({
+        _id: "staff-owner-1",
+        storeId: "default-store",
+        username: "owner",
+        passwordHash: "hash",
+        displayName: "老板",
+        role: "OWNER",
+        isEnabled: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-02T08:00:00.000Z"
+      }),
+      getStaffByUsername: vi.fn().mockResolvedValue(null)
+    };
+
+    await expect(
+      manageStaff(repository as never, {
+        sessionToken,
+        action: "CREATE",
+        user: {
+          username: "waiter03",
+          password: "      ",
+          displayName: "服务员小周",
+          role: "STAFF",
+          isEnabled: true
+        }
+      })
+    ).rejects.toMatchObject({
+      message: "缺少员工初始密码"
+    });
+  });
+
+  it("creates a staff account only when an initial password is provided", async () => {
+    const repository = {
+      storeId: "default-store",
+      getStaffById: vi.fn().mockResolvedValue({
+        _id: "staff-owner-1",
+        storeId: "default-store",
+        username: "owner",
+        passwordHash: "hash",
+        displayName: "老板",
+        role: "OWNER",
+        isEnabled: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-02T08:00:00.000Z"
+      }),
+      getStaffByUsername: vi.fn().mockResolvedValue(null),
+      saveStaffUser: vi.fn().mockResolvedValue(undefined),
+      addAuditLog: vi.fn().mockResolvedValue(undefined)
+    };
+
+    await expect(
+      manageStaff(repository as never, {
+        sessionToken,
+        action: "CREATE",
+        user: {
+          username: "waiter03",
+          password: "initial-pass-01",
+          displayName: "服务员小周",
+          role: "STAFF",
+          isEnabled: true
+        }
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      staff: {
+        username: "waiter03",
+        role: "STAFF",
+        isEnabled: true
+      }
+    });
+
+    expect(repository.saveStaffUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        username: "waiter03",
+        displayName: "服务员小周",
+        role: "STAFF",
+        isEnabled: true,
+        passwordHash: expect.any(String)
+      })
+    );
+  });
+
   it("rejects creating another owner account from the backend", async () => {
     const repository = {
       storeId: "default-store",
@@ -497,6 +582,55 @@ describe("admin staff guardrails", () => {
     });
   });
 
+  it("rejects resolving an ops task that is already closed", async () => {
+    const repository = {
+      storeId: "default-store",
+      getStaffById: vi.fn().mockResolvedValue({
+        _id: "staff-owner-1",
+        storeId: "default-store",
+        username: "owner",
+        passwordHash: "hash",
+        displayName: "老板",
+        role: "OWNER",
+        isEnabled: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-02T08:00:00.000Z"
+      }),
+      getOpsTaskById: vi.fn().mockResolvedValue({
+        _id: "ops-task-closed",
+        storeId: "default-store",
+        taskType: "ORDER_VISIT_SETTLEMENT",
+        status: "RESOLVED",
+        priority: "NORMAL",
+        title: "订单完成后会员结算未完成",
+        description: "已处理",
+        dedupeKey: "order-visit-settlement:order-closed",
+        sourceFunction: "staff.order.update",
+        orderId: "order-closed",
+        orderNo: "OD202604140099",
+        retryCount: 1,
+        lastTriggeredAt: "2026-04-14T09:00:00.000Z",
+        createdAt: "2026-04-14T09:00:00.000Z",
+        updatedAt: "2026-04-14T09:20:00.000Z"
+      }),
+      saveOpsTask: vi.fn(),
+      addAuditLog: vi.fn()
+    };
+
+    await expect(
+      resolveOpsTask(repository as never, {
+        sessionToken,
+        taskId: "ops-task-closed",
+        action: "RESOLVE",
+        note: "重复提交"
+      })
+    ).rejects.toMatchObject({
+      code: "OPS_TASK_CLOSED"
+    });
+
+    expect(repository.saveOpsTask).not.toHaveBeenCalled();
+  });
+
   it("normalizes expired vouchers when owner queries members", async () => {
     const repository = {
       storeId: "default-store",
@@ -729,6 +863,50 @@ describe("admin staff guardrails", () => {
     });
 
     expect(repository.searchMembers).not.toHaveBeenCalled();
+  });
+
+  it("returns empty rows without loading related collections when the current page has no members", async () => {
+    const repository = {
+      storeId: "default-store",
+      getStaffById: vi.fn().mockResolvedValue({
+        _id: "staff-owner-1",
+        storeId: "default-store",
+        username: "owner",
+        passwordHash: "hash",
+        displayName: "老板",
+        role: "OWNER",
+        isEnabled: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-02T08:00:00.000Z"
+      }),
+      listMembersPage: vi.fn().mockResolvedValue({
+        rows: [],
+        total: 0
+      }),
+      listInviteRelationsByInviteeIds: vi.fn(),
+      listVisitsByMemberIds: vi.fn(),
+      listVouchersByMemberIds: vi.fn()
+    };
+
+    const result = await queryMembers(repository as never, {
+      sessionToken,
+      query: "",
+      page: 1,
+      pageSize: 10
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      rows: [],
+      pagination: {
+        total: 0,
+        page: 1,
+        pageSize: 10
+      }
+    });
+    expect(repository.listInviteRelationsByInviteeIds).not.toHaveBeenCalled();
+    expect(repository.listVisitsByMemberIds).not.toHaveBeenCalled();
+    expect(repository.listVouchersByMemberIds).not.toHaveBeenCalled();
   });
 
   it("rejects manual invite adjustments that point a member to themselves", async () => {
@@ -972,6 +1150,66 @@ describe("admin staff guardrails", () => {
       })
     ).rejects.toThrow();
     expect(repository.getStaffById).not.toHaveBeenCalled();
+  });
+
+  it("returns staff users in a stable owner-first order without password hashes", async () => {
+    const repository = {
+      storeId: "default-store",
+      getStaffById: vi.fn().mockResolvedValue({
+        _id: "staff-owner-1",
+        storeId: "default-store",
+        username: "owner",
+        passwordHash: "hash",
+        displayName: "老板",
+        role: "OWNER",
+        isEnabled: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-02T08:00:00.000Z"
+      }),
+      listStaffUsers: vi.fn().mockResolvedValue([
+        {
+          _id: "staff-2",
+          storeId: "default-store",
+          username: "waiter02",
+          passwordHash: "hash-staff-2",
+          displayName: "店员二",
+          role: "STAFF",
+          isEnabled: false,
+          createdAt: "2026-04-02T08:00:00.000Z",
+          updatedAt: "2026-04-02T08:00:00.000Z"
+        },
+        {
+          _id: "staff-owner-1",
+          storeId: "default-store",
+          username: "owner",
+          passwordHash: "hash-owner",
+          displayName: "老板",
+          role: "OWNER",
+          isEnabled: true,
+          createdAt: "2026-04-02T08:00:00.000Z",
+          updatedAt: "2026-04-02T08:00:00.000Z"
+        },
+        {
+          _id: "staff-1",
+          storeId: "default-store",
+          username: "waiter01",
+          passwordHash: "hash-staff-1",
+          displayName: "店员一",
+          role: "STAFF",
+          isEnabled: true,
+          createdAt: "2026-04-02T08:00:00.000Z",
+          updatedAt: "2026-04-02T08:00:00.000Z"
+        }
+      ])
+    };
+
+    const result = await manageStaff(repository as never, {
+      sessionToken,
+      action: "LIST"
+    });
+
+    expect(result.staffUsers.map((staffUser) => staffUser.username)).toEqual(["owner", "waiter01", "waiter02"]);
+    expect(result.staffUsers.every((staffUser) => staffUser.passwordHash === undefined)).toBe(true);
   });
 
   it("rejects enabling multiple welcome rules in one save", async () => {

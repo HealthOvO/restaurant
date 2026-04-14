@@ -1,31 +1,31 @@
 <view class="page">
   <view class="hero hero-member">
-    <view class="hero-badge">微信验证</view>
-    <view class="title">先完成正式入会</view>
-    <view class="subtitle">绑定微信手机号后，邀请积分、菜品券和首单激活才会按正式会员身份结算。</view>
+    <view class="hero-badge">注册</view>
+    <view class="title">会员注册</view>
+    <view class="subtitle">微信手机号验证后可正常累计积分。</view>
     <view class="hero-chips">
-      <view class="hero-chip">微信实名手机号</view>
-      <view class="hero-chip">验证后锁定身份</view>
+      <view class="hero-chip">微信手机号</view>
+      <view class="hero-chip">会员身份</view>
     </view>
   </view>
 
   <view class="card">
-    <view class="section-kicker">第一步</view>
-    <view class="section-title">补充会员昵称</view>
+    <view class="section-kicker">昵称</view>
+    <view class="section-title">填写昵称</view>
     <input class="input" placeholder="请输入昵称" value="{{nickname}}" data-field="nickname" bindinput="onInput" />
   </view>
 
   <view class="card card-soft">
-    <view class="section-kicker">第二步</view>
-    <view class="section-title">完成手机号验证</view>
-    <view class="section-copy">当前状态：{{hasVerifiedPhone ? phoneDisplay : '未完成微信验证'}}</view>
+    <view class="section-kicker">手机号</view>
+    <view class="section-title">微信验证</view>
+    <view class="section-copy">当前：{{hasVerifiedPhone ? phoneDisplay : '未验证'}}</view>
     <view wx:if="{{hasLegacyPhone}}" class="notice phone-notice">
-      检测到历史测试号码 {{legacyPhoneDisplay}}，该号码不能作为正式会员身份使用。
+      检测到历史测试号码 {{legacyPhoneDisplay}}，请改用微信手机号完成验证。
     </view>
-    <view wx:if="{{hasVerifiedPhone}}" class="helper-text">手机号已锁定为微信认证号码，如需更换请由老板后台处理。</view>
+    <view wx:if="{{hasVerifiedPhone}}" class="helper-text">如需更换手机号，请联系老板处理。</view>
     <button wx:if="{{!hasVerifiedPhone}}" class="button-primary" loading="{{submitting}}" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber">
-      微信授权手机号并完成注册
+      验证手机号并注册
     </button>
-    <button wx:else class="button-primary" loading="{{submitting}}" bindtap="submitProfile">保存昵称</button>
+    <button wx:else class="button-primary" loading="{{submitting}}" bindtap="submitProfile">保存</button>
   </view>
 </view>

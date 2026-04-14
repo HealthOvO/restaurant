@@ -9009,6 +9009,10 @@ var BASE64_CODE = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456
 
 // src/runtime/auth.ts
 var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
+var SUPPORTED_ROLES = ["OWNER", "STAFF"];
+function normalizeManagedStoreIds(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+}
 function getSessionSecret() {
   const secret = process.env.SESSION_SECRET?.trim();
   if (!secret) {
@@ -9016,10 +9020,31 @@ function getSessionSecret() {
   }
   return secret;
 }
+function normalizeSessionClaims(claims) {
+  const staffUserId = typeof claims.staffUserId === "string" ? claims.staffUserId.trim() : "";
+  const username = typeof claims.username === "string" ? claims.username.trim() : "";
+  const storeId = typeof claims.storeId === "string" ? claims.storeId.trim() : "";
+  if (!staffUserId || !username || !storeId || !SUPPORTED_ROLES.includes(claims.role)) {
+    throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+  }
+  const normalizedAccessScope = claims.role === "OWNER" && claims.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
+  const normalizedManagedStoreIds = normalizedAccessScope === "ALL_STORES" ? normalizeManagedStoreIds(storeId, claims.managedStoreIds) : [storeId];
+  return {
+    staffUserId,
+    username,
+    role: claims.role,
+    storeId,
+    accessScope: normalizedAccessScope,
+    managedStoreIds: normalizedManagedStoreIds
+  };
+}
 function requireSessionToken(token) {
   try {
-    return import_jsonwebtoken.default.verify(token, getSessionSecret());
+    return normalizeSessionClaims(import_jsonwebtoken.default.verify(token, getSessionSecret()));
   } catch (error) {
+    if (error instanceof DomainError) {
+      throw error;
+    }
     throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55", {
       cause: error instanceof Error ? error.message : String(error)
     });
@@ -9047,15 +9072,36 @@ async function syncExpiredVoucherStatuses(repository, vouchers, now) {
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
-function normalizeManagedStoreIds(storeId, managedStoreIds) {
-  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+function normalizeOptionalText(value) {
+  const normalized = `${value ?? ""}`.trim();
+  return normalized || void 0;
+}
+function normalizeManagedStoreIds2(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => normalizeOptionalText(item)).filter(Boolean)));
 }
 function resolveStaffAccess(staff) {
   const accessScope = staff.role === "OWNER" && staff.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
   return {
     accessScope,
-    managedStoreIds: normalizeManagedStoreIds(staff.storeId, staff.managedStoreIds)
+    managedStoreIds: accessScope === "ALL_STORES" ? normalizeManagedStoreIds2(staff.storeId, staff.managedStoreIds) : [staff.storeId]
   };
+}
+function assertStaffRole(staff, allowedRoles, message) {
+  if (!allowedRoles.includes(staff.role)) {
+    throw new DomainError("FORBIDDEN", message);
+  }
+}
+function incrementCounter(counter, key) {
+  counter.set(key, (counter.get(key) ?? 0) + 1);
+}
+function retainLatestIsoTimestamp(index, key, value) {
+  if (!value) {
+    return;
+  }
+  const current = index.get(key);
+  if (!current || value.localeCompare(current) > 0) {
+    index.set(key, value);
+  }
 }
 async function requireActiveStaffSession(repository, token) {
   const session = requireSessionToken(token);
@@ -9093,9 +9139,7 @@ function compareMembers(left, right) {
 async function searchMembersForStaff(repository, input) {
   const parsed = staffMemberLookupInputSchema.parse(input);
   const { staff } = await requireActiveStaffSession(repository, parsed.sessionToken);
-  if (staff.role !== "OWNER" && staff.role !== "STAFF") {
-    throw new DomainError("FORBIDDEN", "\u5F53\u524D\u8D26\u53F7\u6CA1\u6709\u4F1A\u5458\u67E5\u8BE2\u6743\u9650");
-  }
+  assertStaffRole(staff, ["OWNER", "STAFF"], "\u5F53\u524D\u8D26\u53F7\u6CA1\u6709\u4F1A\u5458\u67E5\u8BE2\u6743\u9650");
   const now = nowIso();
   const members = (await repository.searchMembers(parsed.query)).sort(compareMembers).slice(0, parsed.limit);
   const memberIds = members.map((member) => member._id);
@@ -9110,19 +9154,23 @@ async function searchMembersForStaff(repository, input) {
     repository.listVisitsByMemberIds(memberIds),
     repository.listVouchersByMemberIds(memberIds)
   ]);
-  const vouchers = await syncExpiredVoucherStatuses(repository, rawVouchers, now);
+  const vouchers = rawVouchers.length > 0 ? await syncExpiredVoucherStatuses(repository, rawVouchers, now) : [];
   const relationStatusByInviteeId = new Map(relations.map((relation) => [relation.inviteeMemberId, relation.status]));
-  const visitGroups = visits.reduce((groups, visit) => {
-    (groups[visit.memberId] ??= []).push(visit);
-    return groups;
-  }, {});
-  const voucherGroups = vouchers.reduce((groups, voucher) => {
-    (groups[voucher.memberId] ??= []).push(voucher);
-    return groups;
-  }, {});
+  const latestVisitAtByMemberId = /* @__PURE__ */ new Map();
+  const totalVisitCountByMemberId = /* @__PURE__ */ new Map();
+  const readyVoucherCountByMemberId = /* @__PURE__ */ new Map();
+  const totalVoucherCountByMemberId = /* @__PURE__ */ new Map();
+  for (const visit of visits) {
+    incrementCounter(totalVisitCountByMemberId, visit.memberId);
+    retainLatestIsoTimestamp(latestVisitAtByMemberId, visit.memberId, visit.verifiedAt);
+  }
+  for (const voucher of vouchers) {
+    incrementCounter(totalVoucherCountByMemberId, voucher.memberId);
+    if (voucher.status === "READY") {
+      incrementCounter(readyVoucherCountByMemberId, voucher.memberId);
+    }
+  }
   const rows = members.map((member) => {
-    const memberVisits = (visitGroups[member._id] ?? []).slice().sort((left, right) => right.verifiedAt.localeCompare(left.verifiedAt));
-    const memberVouchers = voucherGroups[member._id] ?? [];
     return {
       member: {
         _id: member._id,
@@ -9135,10 +9183,10 @@ async function searchMembersForStaff(repository, input) {
         firstVisitAt: member.firstVisitAt
       },
       relationStatus: relationStatusByInviteeId.get(member._id) ?? null,
-      latestVisitAt: memberVisits[0]?.verifiedAt,
-      readyVoucherCount: memberVouchers.filter((voucher) => voucher.status === "READY").length,
-      totalVoucherCount: memberVouchers.length,
-      totalVisitCount: memberVisits.length
+      latestVisitAt: latestVisitAtByMemberId.get(member._id),
+      readyVoucherCount: readyVoucherCountByMemberId.get(member._id) ?? 0,
+      totalVoucherCount: totalVoucherCountByMemberId.get(member._id) ?? 0,
+      totalVisitCount: totalVisitCountByMemberId.get(member._id) ?? 0
     };
   });
   return {

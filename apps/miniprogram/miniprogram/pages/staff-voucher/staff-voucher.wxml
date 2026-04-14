@@ -1,15 +1,15 @@
 <view class="page page-tight">
   <view class="hero hero-staff">
-    <view class="hero-badge">菜券核销</view>
+    <view class="hero-badge">核销</view>
     <view class="title">菜品券核销</view>
-    <view class="subtitle">支持输入券号，也支持扫码录入。</view>
+    <view class="subtitle">扫码优先，手输兜底。</view>
     <view class="mini-metrics">
       <view class="mini-metric">
-        <view class="mini-metric-label">优先方式</view>
+        <view class="mini-metric-label">优先</view>
         <view class="mini-metric-value">扫码核销</view>
       </view>
       <view class="mini-metric">
-        <view class="mini-metric-label">兜底方式</view>
+        <view class="mini-metric-label">兜底</view>
         <view class="mini-metric-value">手输券号</view>
       </view>
       <view class="mini-metric">
@@ -21,23 +21,22 @@
 
   <view class="card">
     <view class="section-head">
-      <view class="section-kicker">核销方式</view>
       <view class="section-title">录入券号</view>
-      <view class="section-copy">手动输入可先核对券号；扫码后会直接完成核销。</view>
+      <view class="section-copy">会员出示二维码时可直接扫码。</view>
     </view>
 
-    <view class="input-label">菜品券号</view>
-    <input class="input input-strong" placeholder="请输入菜品券 ID" value="{{voucherId}}" bindinput="onInput" />
-    <view class="helper-text">会员出示二维码时，直接点“扫码即核销”即可。</view>
+    <view class="input-label">券号</view>
+    <input class="input input-strong" placeholder="请输入菜品券号" value="{{voucherId}}" bindinput="onInput" />
+    <view class="helper-text">扫不到时再手动输入。</view>
 
     <view class="button-group">
-      <button class="button-secondary" disabled="{{loading || scanning}}" loading="{{scanning}}" bindtap="scanVoucher">扫码即核销</button>
+      <button class="button-secondary" disabled="{{loading || scanning}}" loading="{{scanning}}" bindtap="scanVoucher">扫码核销</button>
       <button class="button-primary" disabled="{{loading || scanning || !voucherId}}" loading="{{loading}}" bindtap="submit">确认核销</button>
     </view>
   </view>
 
   <view wx:if="{{lastRedeemed}}" class="card card-accent">
-    <view class="section-title">最近一次核销结果</view>
+    <view class="section-title">最近一次核销</view>
     <view class="detail-grid">
       <view class="detail-row">
         <view class="detail-label">菜品名称</view>

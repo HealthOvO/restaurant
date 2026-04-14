@@ -16,8 +16,8 @@ function resolveNextMilestoneSummary(overview) {
   const pendingReward = milestones.find((item) => item.pendingRewardCount > 0);
   if (pendingReward) {
     return {
-      title: "已有积分待到账",
-      copy: `${pendingReward.title} 已满足，系统会按规则补发 ${pendingReward.pendingRewardCount * pendingReward.pointsReward} 积分。`
+      title: "有积分待到账",
+      copy: `${pendingReward.title} 已满足，待补发 ${pendingReward.pendingRewardCount * pendingReward.pointsReward} 积分。`
     };
   }
 
@@ -28,22 +28,22 @@ function resolveNextMilestoneSummary(overview) {
         ? `每满 ${nextMilestone.threshold} 人送 ${nextMilestone.pointsReward} 积分`
         : `${nextMilestone.threshold} 人达标送 ${nextMilestone.pointsReward} 积分`;
     return {
-      title: `下一档目标：${nextMilestone.threshold} 人`,
-      copy: `继续把被邀请人带到首单激活，就会朝着“${targetText}”继续累计。`
+      title: `下一档：${nextMilestone.threshold} 人`,
+      copy: `继续邀请，达标后送 ${targetText}。`
     };
   }
 
   const repeatableRule = milestones.find((item) => item.rewardMode === "REPEATABLE");
   if (repeatableRule) {
     return {
-      title: "循环积分已开启",
-      copy: `当前规则支持重复送积分，每满 ${repeatableRule.threshold} 人都会继续到账 ${repeatableRule.pointsReward} 积分。`
+      title: "循环积分中",
+      copy: `每满 ${repeatableRule.threshold} 人继续送 ${repeatableRule.pointsReward} 积分。`
     };
   }
 
   return {
-    title: "邀请链路已经跑通",
-    copy: "继续分享邀请码，新朋友完成首单后会自动计入你的邀请积分进度。"
+    title: "继续邀请好友",
+    copy: "好友首单后会计入进度。"
   };
 }
 
@@ -55,8 +55,8 @@ Page({
     relation: null,
     relationStatusText: "",
     overview: null,
-    nextMilestoneTitle: "邀请链路已经跑通",
-    nextMilestoneCopy: "继续分享邀请码，新朋友完成首单后会自动计入你的邀请积分进度。",
+    nextMilestoneTitle: "继续邀请好友",
+    nextMilestoneCopy: "好友首单后会计入进度。",
     inviteCodeInput: "",
     canBindInviteCode: false,
     bindingInviteCode: false,

@@ -9483,24 +9483,37 @@ async function ensureMemberShell(repository, openId) {
   await repository.saveMember(member);
   return member;
 }
+function normalizeOptionalText(value) {
+  const normalized = value?.trim();
+  return normalized ? normalized : void 0;
+}
+async function loadOrderPreviewContext(repository, params) {
+  const { storeConfig, items } = await ensureOrderingSeeds(repository);
+  const preview = previewOrder({
+    items: params.items,
+    menuItems: items,
+    storeConfig,
+    fulfillmentMode: params.fulfillmentMode
+  });
+  return {
+    storeConfig,
+    preview
+  };
+}
 async function createMemberOrder(repository, callerOpenId, input) {
   const parsed = orderCreateInputSchema.parse(input);
-  const { storeConfig, items } = await ensureOrderingSeeds(repository);
+  const sanitizedRequestId = sanitizeRequestId(parsed.requestId) || void 0;
+  const normalizedRemark = normalizeOptionalText(parsed.remark);
+  const { preview } = await loadOrderPreviewContext(repository, parsed);
   const member = await ensureMemberShell(repository, callerOpenId);
   assertOrderSubmissionReady({
     fulfillmentMode: parsed.fulfillmentMode,
     tableNo: parsed.tableNo,
     contactName: parsed.contactName
   });
-  const preview = previewOrder({
-    items: parsed.items,
-    menuItems: items,
-    storeConfig,
-    fulfillmentMode: parsed.fulfillmentMode
-  });
-  const normalizedTableNo = parsed.fulfillmentMode === "DINE_IN" ? parsed.tableNo?.trim() : void 0;
-  const normalizedContactName = parsed.fulfillmentMode === "PICKUP" ? parsed.contactName?.trim() : void 0;
-  const normalizedContactPhone = parsed.fulfillmentMode === "PICKUP" ? parsed.contactPhone?.trim() : void 0;
+  const normalizedTableNo = parsed.fulfillmentMode === "DINE_IN" ? normalizeOptionalText(parsed.tableNo) : void 0;
+  const normalizedContactName = parsed.fulfillmentMode === "PICKUP" ? normalizeOptionalText(parsed.contactName) : void 0;
+  const normalizedContactPhone = parsed.fulfillmentMode === "PICKUP" ? normalizeOptionalText(parsed.contactPhone) : void 0;
   const orderId = buildRequestScopedId("order", parsed.requestId);
   const now = nowIso();
   const result = await repository.runTransaction(async (transaction) => {
@@ -9519,7 +9532,7 @@ async function createMemberOrder(repository, callerOpenId, input) {
       _id: orderId,
       storeId: repository.storeId,
       orderNo,
-      requestId: sanitizeRequestId(parsed.requestId) || void 0,
+      requestId: sanitizedRequestId,
       memberId: member._id,
       memberOpenId: callerOpenId,
       memberCode: member.memberCode,
@@ -9530,7 +9543,7 @@ async function createMemberOrder(repository, callerOpenId, input) {
       tableNo: normalizedTableNo,
       contactName: normalizedContactName,
       contactPhone: normalizedContactPhone,
-      remark: parsed.remark?.trim(),
+      remark: normalizedRemark,
       itemCount: preview.itemCount,
       subtotalAmount: preview.subtotalAmount,
       payableAmount: preview.payableAmount,
@@ -9550,7 +9563,7 @@ async function createMemberOrder(repository, callerOpenId, input) {
       operatorType: "MEMBER",
       operatorId: callerOpenId,
       operatorName: member.nickname || member.memberCode,
-      note: parsed.remark?.trim(),
+      note: normalizedRemark,
       createdAt: now,
       updatedAt: now
     };

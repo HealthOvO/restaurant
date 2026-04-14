@@ -9019,11 +9019,20 @@ var BASE64_CODE = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456
 var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
 
 // src/runtime/service.order.ts
+function compareOrders(left, right) {
+  if (right.createdAt !== left.createdAt) {
+    return right.createdAt.localeCompare(left.createdAt);
+  }
+  if ((right.submittedAt ?? "") !== (left.submittedAt ?? "")) {
+    return (right.submittedAt ?? "").localeCompare(left.submittedAt ?? "");
+  }
+  return right.orderNo.localeCompare(left.orderNo);
+}
 async function listMemberOrders(repository, callerOpenId) {
   const orders = await repository.listOrdersByMemberOpenId(callerOpenId);
   return {
     ok: true,
-    orders
+    orders: [...orders].sort(compareOrders)
   };
 }
 

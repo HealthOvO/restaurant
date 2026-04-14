@@ -245,8 +245,8 @@ export function MemberSearchPanel({
         <form className="row-card stack" onSubmit={handleSearchSubmit}>
           <div className="card-title-block">
             <div className="section-eyebrow">会员列表</div>
-            <h3 className="section-title">查看会员并按条件筛选</h3>
-            <p className="subtle">默认显示最近更新的会员，支持手机号、会员号和昵称搜索。</p>
+            <h3 className="section-title">会员检索</h3>
+            <p className="subtle">支持手机号、会员号和昵称。</p>
           </div>
 
           <label className="field-label" htmlFor="member-search-input">
@@ -262,24 +262,22 @@ export function MemberSearchPanel({
 
           <div className="button-row">
             <button className="button button-primary" disabled={loading} type="submit">
-              {loading ? "加载中..." : hasQuery ? "搜索会员" : "查看最新会员"}
+              {loading ? "加载中..." : hasQuery ? "搜索会员" : "加载最近会员"}
             </button>
             <button className="button button-secondary" disabled={loading || !hasQuery} onClick={() => void handleResetSearch()} type="button">
-              清空筛选
+              重置筛选
             </button>
           </div>
 
           <div className="member-toolbar-strip">
             <div className="toolbar-pill">
-              {pagination.total > 0
-                ? `当前显示 ${pagination.rangeStart}-${pagination.rangeEnd} / ${pagination.total}`
-                : "当前没有会员数据"}
+              {pagination.total > 0 ? `显示 ${pagination.rangeStart}-${pagination.rangeEnd} / ${pagination.total}` : "暂无会员"}
             </div>
-            <div className="toolbar-pill">{hasQuery ? `筛选条件：${searchDraft.trim()}` : "排序：最近更新优先"}</div>
+            <div className="toolbar-pill">{hasQuery ? `筛选：${searchDraft.trim()}` : "最近更新"}</div>
           </div>
         </form>
 
-        <div className="section-stack">
+        <div className="section-stack member-action-stack">
           <form
             ref={adjustFormRef}
             className={`row-card stack member-adjust-card ${highlightField ? "member-adjust-card-active" : ""}`}
@@ -287,8 +285,8 @@ export function MemberSearchPanel({
           >
             <div className="card-title-block">
               <div className="section-eyebrow">人工修正</div>
-              <h3 className="section-title">人工调整邀请关系</h3>
-              <p className="subtle">误绑、补录或投诉处理时再用。可以直接从下面会员卡片一键带入会员 ID。</p>
+              <h3 className="section-title">邀请关系修正</h3>
+              <p className="subtle">只在误绑时处理，可直接从列表带入。</p>
             </div>
 
             {selectionNotice ? (
@@ -311,7 +309,7 @@ export function MemberSearchPanel({
                 <div className="summary-footnote">
                   {inviteePreview
                     ? `${inviteePreview.memberCode || "无会员号"} · 已从列表带入`
-                    : "可点击下方“设为被邀请人”，也可手动粘贴会员 ID。"}
+                    : "可从下方带入，也可手动输入。"}
                 </div>
               </div>
               <div className={`summary-card selection-summary-card ${inviterMemberId ? "selection-summary-card-active" : ""}`}>
@@ -322,7 +320,7 @@ export function MemberSearchPanel({
                 <div className="summary-footnote">
                   {inviterPreview
                     ? `${inviterPreview.memberCode || "无会员号"} · 已从列表带入`
-                    : "可点击下方“设为邀请人”，也可手动粘贴会员 ID。"}
+                    : "可从下方带入，也可手动输入。"}
                 </div>
               </div>
             </div>
@@ -387,7 +385,7 @@ export function MemberSearchPanel({
 
             <div className="button-row">
               <button className="button button-secondary" disabled={!canAdjust || adjusting} type="submit">
-                {adjusting ? "提交中..." : "提交调整"}
+                {adjusting ? "提交中..." : "保存关系修正"}
               </button>
             </div>
           </form>
@@ -395,8 +393,8 @@ export function MemberSearchPanel({
           <form className="row-card stack" onSubmit={handlePointAdjustSubmit}>
             <div className="card-title-block">
               <div className="section-eyebrow">积分调整</div>
-              <h3 className="section-title">人工增减会员积分</h3>
-              <p className="subtle">正数为补积分，负数为扣积分。系统会自动留痕，便于事后追溯。</p>
+              <h3 className="section-title">积分补扣</h3>
+              <p className="subtle">正数加分，负数扣分，都会进流水。</p>
             </div>
 
             <div className={`summary-card selection-summary-card ${pointMemberId ? "selection-summary-card-active" : ""}`}>
@@ -407,7 +405,7 @@ export function MemberSearchPanel({
               <div className="summary-footnote">
                 {pointPreview
                   ? `${pointPreview.memberCode || "无会员号"} · 已从列表带入`
-                  : "可点击下方“调整积分”一键带入，也可手动输入会员 ID。"}
+                  : "可从下方带入，也可手动输入。"}
               </div>
             </div>
 
@@ -467,7 +465,7 @@ export function MemberSearchPanel({
                 }
                 type="submit"
               >
-                {adjustingPoints ? "提交中..." : "提交积分调整"}
+                {adjustingPoints ? "提交中..." : "保存积分调整"}
               </button>
             </div>
           </form>
@@ -479,27 +477,27 @@ export function MemberSearchPanel({
           <div className="summary-card">
             <div className="summary-kicker">会员总数</div>
             <div className="summary-value">{pagination.total}</div>
-            <div className="summary-footnote">当前筛选条件下的会员总量。</div>
+            <div className="summary-footnote">当前结果</div>
           </div>
           <div className="summary-card">
             <div className="summary-kicker">当前页激活</div>
             <div className="summary-value">{activatedCount}</div>
-            <div className="summary-footnote">当前页已完成首次有效消费。</div>
+            <div className="summary-footnote">已完成首单</div>
           </div>
           <div className="summary-card">
             <div className="summary-kicker">当前页可用券</div>
             <div className="summary-value">{readyVoucherCount}</div>
-            <div className="summary-footnote">当前页还能继续核销的菜品券。</div>
+            <div className="summary-footnote">可继续核销</div>
           </div>
           <div className="summary-card">
             <div className="summary-kicker">当前页积分</div>
             <div className="summary-value">{pointsTotal}</div>
-            <div className="summary-footnote">当前页会员积分余额合计。</div>
+            <div className="summary-footnote">积分合计</div>
           </div>
           <div className="summary-card">
             <div className="summary-kicker">当前页已绑邀请</div>
             <div className="summary-value">{relationCount}</div>
-            <div className="summary-footnote">当前页已有邀请关系的会员数量。</div>
+            <div className="summary-footnote">已绑邀请</div>
           </div>
         </div>
       ) : null}
@@ -507,11 +505,11 @@ export function MemberSearchPanel({
       {rows.length === 0 ? (
         <div className="empty-state">
           <div className="tag tag-navy">{hasSearched ? "没有匹配结果" : "准备加载会员"}</div>
-          <h3 className="section-title">{hasSearched ? "这次没有查到会员" : "会员列表还没加载"}</h3>
+          <h3 className="section-title">{hasSearched ? "当前条件下没有会员" : "会员列表还没加载"}</h3>
           <p className="subtle">
             {hasSearched
-              ? "请重新核对手机号、会员号或昵称；如果是新客，先回小程序完成注册。"
-              : "打开这个页签后会自动加载最近会员，也可以直接输入条件搜索。"}
+              ? "换个手机号、会员号或昵称再试。"
+              : "可以直接搜，也可以先加载最近会员。"}
           </p>
         </div>
       ) : (
@@ -522,9 +520,7 @@ export function MemberSearchPanel({
                 <div className="section-eyebrow">当前结果</div>
                 <h3 className="section-title">会员列表</h3>
                 <p className="subtle">
-                  {pagination.total > 0
-                    ? `第 ${pagination.page} / ${pagination.totalPages} 页，显示 ${pagination.rangeStart}-${pagination.rangeEnd} 条`
-                    : "当前没有匹配会员"}
+                  {pagination.total > 0 ? `第 ${pagination.page} / ${pagination.totalPages} 页，共 ${pagination.total} 位` : "暂无会员"}
                 </p>
               </div>
 
@@ -621,26 +617,26 @@ export function MemberSearchPanel({
                     <div className="summary-card member-inline-card">
                       <div className="summary-kicker">当前积分</div>
                       <div className="summary-value summary-value-text">{row.member.pointsBalance ?? 0}</div>
-                      <div className="summary-footnote">可用于兑换菜品。</div>
+                      <div className="summary-footnote">可兑换</div>
                     </div>
                     <div className="summary-card member-inline-card">
                       <div className="summary-kicker">邀请关系</div>
                       <div className="summary-value summary-value-text">{formatRelationStatus(row.relation?.status)}</div>
-                      <div className="summary-footnote">当前会员绑定状态。</div>
+                      <div className="summary-footnote">当前状态</div>
                     </div>
                     <div className="summary-card member-inline-card">
                       <div className="summary-kicker">最近核销</div>
                       <div className="summary-value summary-value-text">
                         {latestVisit ? formatDateTime(latestVisit.verifiedAt) : "暂无记录"}
                       </div>
-                      <div className="summary-footnote">{latestVisit ? `订单号：${latestVisit.externalOrderNo}` : "还没有消费核销记录"}</div>
+                      <div className="summary-footnote">{latestVisit ? `订单号：${latestVisit.externalOrderNo}` : "暂无消费记录"}</div>
                     </div>
                     <div className="summary-card member-inline-card">
                       <div className="summary-kicker">菜品券</div>
                       <div className="summary-value summary-value-text">
                         可用 {readyCount} / 已用 {usedCount} / 失效 {expiredCount}
                       </div>
-                      <div className="summary-footnote">当前会员的券状态分布。</div>
+                      <div className="summary-footnote">券状态</div>
                     </div>
                   </div>
 

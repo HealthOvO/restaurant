@@ -9404,15 +9404,22 @@ async function ensureOrderingSeeds(repository) {
   }
   return { storeConfig, categories, items };
 }
-async function previewMemberOrder(repository, input) {
-  const parsed = orderPreviewInputSchema.parse(input);
+async function loadOrderPreviewContext(repository, params) {
   const { storeConfig, items } = await ensureOrderingSeeds(repository);
   const preview = previewOrder({
-    items: parsed.items,
+    items: params.items,
     menuItems: items,
     storeConfig,
-    fulfillmentMode: parsed.fulfillmentMode
+    fulfillmentMode: params.fulfillmentMode
   });
+  return {
+    storeConfig,
+    preview
+  };
+}
+async function previewMemberOrder(repository, input) {
+  const parsed = orderPreviewInputSchema.parse(input);
+  const { preview, storeConfig } = await loadOrderPreviewContext(repository, parsed);
   return {
     ok: true,
     preview,

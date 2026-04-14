@@ -5,6 +5,26 @@ import { hashPassword, issueSessionToken } from "../src/runtime/auth";
 process.env.SESSION_SECRET = "test-session-secret";
 
 describe("staff session service", () => {
+  it("does not auto-seed a default owner account during login", async () => {
+    const repository = {
+      storeId: "default-store",
+      getStaffByUsername: vi.fn().mockResolvedValue(null),
+      getStaffByMiniOpenId: vi.fn(),
+      saveStaffUser: vi.fn()
+    };
+
+    await expect(
+      login(repository as never, {
+        username: "owner",
+        password: "owner123456"
+      })
+    ).rejects.toMatchObject({
+      message: "账号或密码错误"
+    });
+
+    expect(repository.saveStaffUser).not.toHaveBeenCalled();
+  });
+
   it("binds miniOpenId on first successful mini-program login", async () => {
     const passwordHash = await hashPassword("123456");
     const staffUser = {
@@ -38,6 +58,38 @@ describe("staff session service", () => {
         miniOpenId: "mini-openid-1"
       })
     );
+    expect(result.staff.miniOpenId).toBe("mini-openid-1");
+  });
+
+  it("trims username and miniOpenId before login binding", async () => {
+    const passwordHash = await hashPassword("123456");
+    const staffUser = {
+      _id: "staff-1",
+      storeId: "default-store",
+      username: "cashier01",
+      passwordHash,
+      displayName: "前台小王",
+      role: "STAFF" as const,
+      isEnabled: true,
+      createdAt: "2026-04-02T08:00:00.000Z",
+      updatedAt: "2026-04-02T08:00:00.000Z"
+    };
+    const repository = {
+      storeId: "default-store",
+      listStaffUsers: vi.fn().mockResolvedValue([staffUser]),
+      getStaffByUsername: vi.fn().mockResolvedValue(staffUser),
+      getStaffByMiniOpenId: vi.fn().mockResolvedValue(null),
+      saveStaffUser: vi.fn().mockImplementation(async (user) => user)
+    };
+
+    const result = await login(repository as never, {
+      username: "  cashier01  ",
+      password: "123456",
+      miniOpenId: "  mini-openid-1  "
+    });
+
+    expect(repository.getStaffByUsername).toHaveBeenCalledWith("cashier01");
+    expect(repository.getStaffByMiniOpenId).toHaveBeenCalledWith("mini-openid-1");
     expect(result.staff.miniOpenId).toBe("mini-openid-1");
   });
 
@@ -173,6 +225,42 @@ describe("staff session service", () => {
     });
   });
 
+  it("keeps store-only staff profile scoped to its own store even if managedStoreIds is dirty", async () => {
+    const sessionToken = issueSessionToken({
+      staffUserId: "staff-1",
+      username: "cashier01",
+      role: "STAFF",
+      storeId: "default-store"
+    });
+
+    const repository = {
+      storeId: "default-store",
+      getStaffById: vi.fn().mockResolvedValue({
+        _id: "staff-1",
+        storeId: "default-store",
+        username: "cashier01",
+        passwordHash: "hash",
+        displayName: "前台小王",
+        role: "STAFF",
+        isEnabled: true,
+        miniOpenId: "openid-1",
+        accessScope: "ALL_STORES",
+        managedStoreIds: ["other-store", " default-store "],
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-02T08:00:00.000Z"
+      })
+    };
+
+    await expect(getStaffProfile(repository as never, { sessionToken })).resolves.toMatchObject({
+      ok: true,
+      staff: {
+        _id: "staff-1",
+        accessScope: "STORE_ONLY",
+        managedStoreIds: ["default-store"]
+      }
+    });
+  });
+
   it("rejects disabled staff sessions", async () => {
     const sessionToken = issueSessionToken({
       staffUserId: "staff-2",
@@ -222,7 +310,7 @@ describe("staff session service", () => {
         role: "OWNER",
         isEnabled: true,
         accessScope: "ALL_STORES",
-        managedStoreIds: ["branch-01", "branch-02"],
+        managedStoreIds: ["branch-01", " branch-02 ", "hq-store", "branch-01"],
         createdAt: "2026-04-02T08:00:00.000Z",
         updatedAt: "2026-04-02T08:00:00.000Z"
       })
@@ -327,6 +415,18 @@ describe("staff session service", () => {
           verifiedAt: "2026-04-03T10:00:00.000Z",
           createdAt: "2026-04-03T10:00:00.000Z",
           updatedAt: "2026-04-03T10:00:00.000Z"
+        },
+        {
+          _id: "visit-2",
+          storeId: "default-store",
+          memberId: "member-1",
+          externalOrderNo: "ORDER-2",
+          verifiedByStaffId: "staff-1",
+          operatorChannel: "MINIPROGRAM",
+          isFirstValidVisit: false,
+          verifiedAt: "2026-04-04T10:00:00.000Z",
+          createdAt: "2026-04-04T10:00:00.000Z",
+          updatedAt: "2026-04-04T10:00:00.000Z"
         }
       ]),
       listVouchersByMemberIds: vi.fn().mockResolvedValue([
@@ -341,6 +441,18 @@ describe("staff session service", () => {
           expiresAt: "2099-04-03T10:00:00.000Z",
           createdAt: "2026-04-03T10:00:00.000Z",
           updatedAt: "2026-04-03T10:00:00.000Z"
+        },
+        {
+          _id: "voucher-2",
+          storeId: "default-store",
+          memberId: "member-1",
+          source: "WELCOME",
+          dishId: "dish-2",
+          dishName: "欢迎小食",
+          status: "USED",
+          expiresAt: "2099-04-05T10:00:00.000Z",
+          createdAt: "2026-04-05T10:00:00.000Z",
+          updatedAt: "2026-04-05T10:00:00.000Z"
         }
       ]),
       saveVouchers: vi.fn().mockResolvedValue([])
@@ -362,10 +474,10 @@ describe("staff session service", () => {
             phone: "13812345678"
           },
           relationStatus: "ACTIVATED",
-          latestVisitAt: "2026-04-03T10:00:00.000Z",
+          latestVisitAt: "2026-04-04T10:00:00.000Z",
           readyVoucherCount: 1,
-          totalVoucherCount: 1,
-          totalVisitCount: 1
+          totalVoucherCount: 2,
+          totalVisitCount: 2
         }
       ]
     });

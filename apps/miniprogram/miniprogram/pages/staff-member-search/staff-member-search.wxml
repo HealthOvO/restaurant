@@ -1,20 +1,19 @@
 <view class="page page-tight">
   <view class="hero hero-staff">
-    <view class="hero-badge">会员查询</view>
+    <view class="hero-badge">会员</view>
     <view class="title">会员查询</view>
-    <view class="subtitle">快速查看会员验证状态、首单情况、邀请关系和菜品券数量。</view>
+    <view class="subtitle">查看状态、积分和券。</view>
     <view class="hero-chips">
       <view class="hero-chip">支持手机号</view>
       <view class="hero-chip">支持会员号</view>
-      <view class="hero-chip">核销前先确认</view>
+      <view class="hero-chip">支持会员码</view>
     </view>
   </view>
 
   <view class="card">
     <view class="section-head">
-      <view class="section-kicker">现场核对</view>
       <view class="section-title">搜索会员</view>
-      <view class="section-copy">支持手机号、会员号和会员二维码。</view>
+      <view class="section-copy">支持手机号、会员号和会员码。</view>
     </view>
     <view class="input-label">手机号 / 会员号</view>
     <input class="input input-strong" placeholder="输入手机号或会员号" value="{{query}}" bindinput="onInput" />
@@ -27,7 +26,7 @@
   <view wx:if="{{hasSearched && !rows.length && !loading}}" class="empty-state">
     <view class="tag">没有匹配结果</view>
     <view class="empty-title">查不到这个会员</view>
-    <view class="empty-copy">请重新核对手机号或会员号；如果是新客，还需要先在会员端完成注册。</view>
+    <view class="empty-copy">核对手机号或会员号后再试。</view>
   </view>
 
   <view wx:if="{{rows.length}}" class="card">

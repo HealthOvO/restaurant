@@ -1,4 +1,5 @@
 import type {
+  AccessScope,
   AuditLog,
   DishVoucher,
   FeedbackTicket,
@@ -47,6 +48,22 @@ export async function login(username: string, password: string, storeId: string)
       managedStoreIds: string[];
     };
   }>("auth-login", { username, password, storeId });
+}
+
+export async function bootstrapStoreOwner(payload: {
+  storeId: string;
+  secret: string;
+  ownerUsername: string;
+  ownerPassword: string;
+  ownerDisplayName?: string;
+  accessScope?: AccessScope;
+  managedStoreIds?: string[];
+}) {
+  return callFunction<{
+    ok: true;
+    created: boolean;
+    owner: Pick<StaffUser, "_id" | "storeId" | "username" | "displayName" | "role" | "isEnabled" | "accessScope" | "managedStoreIds">;
+  }>("bootstrap-store-owner", payload);
 }
 
 export async function fetchDashboard(sessionToken: string, storeId?: string) {

@@ -10673,6 +10673,10 @@ function _hash(password, salt, callback, progressCallback) {
 // src/runtime/auth.ts
 var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
 var SESSION_EXPIRY = "8h";
+var SUPPORTED_ROLES = ["OWNER", "STAFF"];
+function normalizeManagedStoreIds(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+}
 function getSessionSecret() {
   const secret = process.env.SESSION_SECRET?.trim();
   if (!secret) {
@@ -10680,23 +10684,31 @@ function getSessionSecret() {
   }
   return secret;
 }
-async function hashPassword(rawPassword) {
-  return hash(rawPassword, 10);
-}
 async function verifyPassword(rawPassword, passwordHash) {
   return compare(rawPassword, passwordHash);
 }
-function issueSessionToken(claims) {
-  const normalizedManagedStoreIds = Array.from(
-    new Set([claims.storeId, ...claims.managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean))
-  );
+function normalizeSessionClaims(claims) {
+  const staffUserId = typeof claims.staffUserId === "string" ? claims.staffUserId.trim() : "";
+  const username = typeof claims.username === "string" ? claims.username.trim() : "";
+  const storeId = typeof claims.storeId === "string" ? claims.storeId.trim() : "";
+  if (!staffUserId || !username || !storeId || !SUPPORTED_ROLES.includes(claims.role)) {
+    throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+  }
   const normalizedAccessScope = claims.role === "OWNER" && claims.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
+  const normalizedManagedStoreIds = normalizedAccessScope === "ALL_STORES" ? normalizeManagedStoreIds(storeId, claims.managedStoreIds) : [storeId];
+  return {
+    staffUserId,
+    username,
+    role: claims.role,
+    storeId,
+    accessScope: normalizedAccessScope,
+    managedStoreIds: normalizedManagedStoreIds
+  };
+}
+function issueSessionToken(claims) {
+  const normalizedClaims = normalizeSessionClaims(claims);
   return import_jsonwebtoken.default.sign(
-    {
-      ...claims,
-      accessScope: normalizedAccessScope,
-      managedStoreIds: normalizedManagedStoreIds
-    },
+    normalizedClaims,
     getSessionSecret(),
     {
       algorithm: "HS256",
@@ -10705,24 +10717,22 @@ function issueSessionToken(claims) {
   );
 }
 
-// src/runtime/ids.ts
-var import_node_crypto = require("node:crypto");
-function createId(prefix) {
-  return `${prefix}_${(0, import_node_crypto.randomUUID)()}`;
-}
-
 // src/runtime/service.staff.ts
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
-function normalizeManagedStoreIds(storeId, managedStoreIds) {
-  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+function normalizeOptionalText(value) {
+  const normalized = `${value ?? ""}`.trim();
+  return normalized || void 0;
+}
+function normalizeManagedStoreIds2(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => normalizeOptionalText(item)).filter(Boolean)));
 }
 function resolveStaffAccess(staff) {
   const accessScope = staff.role === "OWNER" && staff.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
   return {
     accessScope,
-    managedStoreIds: normalizeManagedStoreIds(staff.storeId, staff.managedStoreIds)
+    managedStoreIds: accessScope === "ALL_STORES" ? normalizeManagedStoreIds2(staff.storeId, staff.managedStoreIds) : [staff.storeId]
   };
 }
 async function ensureStaffMiniOpenIdCanBind(repository, staff, miniOpenId) {
@@ -10734,43 +10744,21 @@ async function ensureStaffMiniOpenIdCanBind(repository, staff, miniOpenId) {
     throw new DomainError("FORBIDDEN", "\u5F53\u524D\u5FAE\u4FE1\u5DF2\u7ED1\u5B9A\u5176\u4ED6\u5458\u5DE5\u8D26\u53F7\uFF0C\u8BF7\u4F7F\u7528\u539F\u8D26\u53F7\u767B\u5F55");
   }
 }
-async function seedOwnerIfEmpty(repository) {
-  if (repository.storeId !== DEFAULT_STORE_ID) {
-    return;
-  }
-  const staffUsers = await repository.listStaffUsers();
-  if (staffUsers.length > 0) {
-    return;
-  }
-  const now = nowIso();
-  await repository.saveStaffUser({
-    _id: createId("staff"),
-    storeId: repository.storeId,
-    username: "owner",
-    passwordHash: await hashPassword("owner123456"),
-    displayName: "\u8001\u677F\u8D26\u53F7",
-    role: "OWNER",
-    isEnabled: true,
-    accessScope: "STORE_ONLY",
-    managedStoreIds: [repository.storeId],
-    createdAt: now,
-    updatedAt: now
-  });
-}
 async function login(repository, input) {
-  await seedOwnerIfEmpty(repository);
   const parsed = loginInputSchema.parse(input);
-  const staff = await repository.getStaffByUsername(parsed.username);
+  const username = normalizeOptionalText(parsed.username);
+  const miniOpenId = normalizeOptionalText(parsed.miniOpenId);
+  const staff = username ? await repository.getStaffByUsername(username) : null;
   if (!staff || !await verifyPassword(parsed.password, staff.passwordHash) || !staff.isEnabled) {
     throw new DomainError("INVALID_CREDENTIALS", "\u8D26\u53F7\u6216\u5BC6\u7801\u9519\u8BEF");
   }
-  if (parsed.miniOpenId && !staff.miniOpenId) {
-    await ensureStaffMiniOpenIdCanBind(repository, staff, parsed.miniOpenId);
-    staff.miniOpenId = parsed.miniOpenId;
+  if (miniOpenId && !staff.miniOpenId) {
+    await ensureStaffMiniOpenIdCanBind(repository, staff, miniOpenId);
+    staff.miniOpenId = miniOpenId;
     staff.updatedAt = nowIso();
     await repository.saveStaffUser(staff);
-  } else if (parsed.miniOpenId) {
-    await ensureStaffMiniOpenIdCanBind(repository, staff, parsed.miniOpenId);
+  } else if (miniOpenId) {
+    await ensureStaffMiniOpenIdCanBind(repository, staff, miniOpenId);
   }
   const { accessScope, managedStoreIds } = resolveStaffAccess(staff);
   const sessionToken = issueSessionToken({

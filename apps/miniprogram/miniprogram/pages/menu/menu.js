@@ -25,6 +25,19 @@ function decorateCatalogItems(items) {
   }));
 }
 
+function buildCategoryNavItems(categories, items) {
+  const countMap = (items || []).reduce((result, item) => {
+    const nextResult = result;
+    nextResult[item.categoryId] = (nextResult[item.categoryId] || 0) + 1;
+    return nextResult;
+  }, {});
+
+  return (categories || []).map((category) => ({
+    ...category,
+    itemCount: countMap[category._id] || 0
+  }));
+}
+
 function decorateCartItems(items) {
   return (items || []).map((item) => ({
     ...item,
@@ -173,6 +186,7 @@ Page({
     categories: [],
     items: [],
     activeCategoryId: "",
+    activeCategoryName: "",
     visibleItems: [],
     cartItems: [],
     cartItemCount: 0,
@@ -204,7 +218,9 @@ Page({
     });
   },
   syncVisibleItems(nextActiveCategoryId) {
+    const activeCategory = this.data.categories.find((item) => item._id === nextActiveCategoryId) || null;
     this.setData({
+      activeCategoryName: activeCategory ? activeCategory.name : "",
       visibleItems: this.data.items.filter((item) => item.categoryId === nextActiveCategoryId)
     });
   },
@@ -217,8 +233,8 @@ Page({
     try {
       const catalog = await fetchMenuCatalog();
       cacheStoreConfig(getAppState().storeId, catalog.storeConfig);
-      const categories = catalog.categories || [];
       const items = decorateCatalogItems(catalog.items || []);
+      const categories = buildCategoryNavItems(catalog.categories || [], items);
       const activeCategoryId = resolveActiveCategoryId(categories, this.data.activeCategoryId);
       this.setData({
         storeConfig: catalog.storeConfig,
@@ -231,7 +247,7 @@ Page({
       this.syncCart();
     } catch (error) {
       this.setData({
-        errorMessage: error.message || "菜单加载失败，请稍后再试"
+        errorMessage: error.message || "菜单加载失败"
       });
     } finally {
       this.setData({ loading: false });

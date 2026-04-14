@@ -97,7 +97,7 @@ describe("OrdersPanel", () => {
     fireEvent.change(screen.getByLabelText("订单状态"), {
       target: { value: "PENDING_CONFIRM" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "刷新订单" }));
+    fireEvent.click(screen.getByRole("button", { name: "查询订单" }));
 
     expect(onSearch).toHaveBeenCalledWith("A08", "PENDING_CONFIRM", 1);
 

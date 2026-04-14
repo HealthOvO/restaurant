@@ -84,7 +84,11 @@ npm run build:admin
 - `SESSION_SECRET`
 - `BOOTSTRAP_SECRET`
 
-初始化新门店老板账号可参考 [store-bootstrap.md](/C:/workspace/zxf/docs/store-bootstrap.md)。
+首次初始化老板账号有两种方式：
+
+- 打开老板后台登录页，切到“首次初始化”，输入门店编号、初始化口令和老板账号密码
+- 按 [store-bootstrap.md](/C:/workspace/zxf/docs/store-bootstrap.md) 用脚本初始化
+
 其中 `-ManagedStoreIds` 支持逗号分隔和空格分隔两种写法。
 
 ## 7. 部署后台

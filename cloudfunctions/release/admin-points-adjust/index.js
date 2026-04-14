@@ -9009,6 +9009,10 @@ var BASE64_CODE = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456
 
 // src/runtime/auth.ts
 var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
+var SUPPORTED_ROLES = ["OWNER", "STAFF"];
+function normalizeManagedStoreIds(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+}
 function getSessionSecret() {
   const secret = process.env.SESSION_SECRET?.trim();
   if (!secret) {
@@ -9016,10 +9020,31 @@ function getSessionSecret() {
   }
   return secret;
 }
+function normalizeSessionClaims(claims) {
+  const staffUserId = typeof claims.staffUserId === "string" ? claims.staffUserId.trim() : "";
+  const username = typeof claims.username === "string" ? claims.username.trim() : "";
+  const storeId = typeof claims.storeId === "string" ? claims.storeId.trim() : "";
+  if (!staffUserId || !username || !storeId || !SUPPORTED_ROLES.includes(claims.role)) {
+    throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+  }
+  const normalizedAccessScope = claims.role === "OWNER" && claims.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
+  const normalizedManagedStoreIds = normalizedAccessScope === "ALL_STORES" ? normalizeManagedStoreIds(storeId, claims.managedStoreIds) : [storeId];
+  return {
+    staffUserId,
+    username,
+    role: claims.role,
+    storeId,
+    accessScope: normalizedAccessScope,
+    managedStoreIds: normalizedManagedStoreIds
+  };
+}
 function requireSessionToken(token) {
   try {
-    return import_jsonwebtoken.default.verify(token, getSessionSecret());
+    return normalizeSessionClaims(import_jsonwebtoken.default.verify(token, getSessionSecret()));
   } catch (error) {
+    if (error instanceof DomainError) {
+      throw error;
+    }
     throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55", {
       cause: error instanceof Error ? error.message : String(error)
     });
@@ -9033,14 +9058,18 @@ function createId(prefix) {
 }
 
 // src/runtime/service.staff.ts
-function normalizeManagedStoreIds(storeId, managedStoreIds) {
-  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+function normalizeOptionalText(value) {
+  const normalized = `${value ?? ""}`.trim();
+  return normalized || void 0;
+}
+function normalizeManagedStoreIds2(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => normalizeOptionalText(item)).filter(Boolean)));
 }
 function resolveStaffAccess(staff) {
   const accessScope = staff.role === "OWNER" && staff.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
   return {
     accessScope,
-    managedStoreIds: normalizeManagedStoreIds(staff.storeId, staff.managedStoreIds)
+    managedStoreIds: accessScope === "ALL_STORES" ? normalizeManagedStoreIds2(staff.storeId, staff.managedStoreIds) : [staff.storeId]
   };
 }
 async function requireActiveStaffSession(repository, token) {
@@ -9116,6 +9145,7 @@ async function adjustMemberPoints(repository, input) {
     targetId: member._id,
     summary: `\u4EBA\u5DE5\u8C03\u6574\u4F1A\u5458 ${member.memberCode} \u7684\u79EF\u5206`,
     payload: {
+      balanceBefore: member.pointsBalance - parsed.delta,
       delta: parsed.delta,
       balanceAfter: nextBalance,
       reason: parsed.reason

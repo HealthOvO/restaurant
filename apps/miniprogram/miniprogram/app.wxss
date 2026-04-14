@@ -1,8 +1,5 @@
 page {
-  background:
-    radial-gradient(circle at top left, rgba(253, 225, 182, 0.38), transparent 28%),
-    radial-gradient(circle at right center, rgba(175, 44, 33, 0.08), transparent 24%),
-    linear-gradient(180deg, #f9f4ec 0%, #f4ecde 48%, #efe4d4 100%);
+  background: linear-gradient(180deg, #f7f3ed 0%, #f1ebe2 100%);
   color: #1f2330;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
@@ -22,47 +19,45 @@ page {
 .hero {
   position: relative;
   overflow: hidden;
-  border-radius: 38rpx;
-  padding: 36rpx 30rpx 34rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.24);
-  box-shadow: 0 26rpx 58rpx rgba(36, 28, 21, 0.12);
+  border-radius: 30rpx;
+  padding: 30rpx 28rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.42);
+  box-shadow: 0 16rpx 32rpx rgba(36, 28, 21, 0.08);
 }
 
 .hero::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 44%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 48%);
   pointer-events: none;
 }
 
 .hero::after {
   content: "";
   position: absolute;
-  right: -42rpx;
-  bottom: -52rpx;
-  width: 210rpx;
-  height: 210rpx;
+  right: -36rpx;
+  bottom: -36rpx;
+  width: 150rpx;
+  height: 150rpx;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
   pointer-events: none;
 }
 
 .hero-navy,
 .hero-member {
   background:
-    radial-gradient(circle at top right, rgba(248, 226, 174, 0.28), transparent 32%),
-    radial-gradient(circle at bottom left, rgba(190, 62, 38, 0.24), transparent 30%),
-    linear-gradient(135deg, #10234d 0%, #1b3978 48%, #922f26 100%);
+    radial-gradient(circle at top right, rgba(248, 226, 174, 0.18), transparent 34%),
+    linear-gradient(135deg, #27344a 0%, #374b66 58%, #83573b 100%);
   color: #f8f6f1;
 }
 
 .hero-cream,
 .hero-staff {
   background:
-    radial-gradient(circle at top right, rgba(202, 138, 4, 0.15), transparent 34%),
-    radial-gradient(circle at bottom left, rgba(17, 36, 82, 0.08), transparent 28%),
-    linear-gradient(135deg, #fffaf2 0%, #f4e6ca 56%, #efd8b0 100%);
+    radial-gradient(circle at top right, rgba(202, 138, 4, 0.08), transparent 36%),
+    linear-gradient(135deg, #fffaf2 0%, #f5ead7 58%, #ecd8b6 100%);
   color: #2b1f19;
 }
 
@@ -90,12 +85,33 @@ page {
   color: #8b5e05;
 }
 
+.hero-topline {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.hero-table-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff5e8;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
 .title {
   position: relative;
   z-index: 1;
-  margin-top: 18rpx;
-  font-size: 52rpx;
-  line-height: 1.14;
+  margin-top: 14rpx;
+  font-size: 46rpx;
+  line-height: 1.2;
   font-weight: 700;
   letter-spacing: 1rpx;
 }
@@ -103,11 +119,11 @@ page {
 .subtitle {
   position: relative;
   z-index: 1;
-  margin-top: 16rpx;
-  font-size: 26rpx;
-  line-height: 1.72;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
   color: inherit;
-  opacity: 0.88;
+  opacity: 0.82;
 }
 
 .title,
@@ -164,11 +180,11 @@ page {
 
 .card {
   margin-top: 24rpx;
-  padding: 30rpx 28rpx;
-  border-radius: 30rpx;
-  background: rgba(255, 255, 255, 0.96);
+  padding: 28rpx 24rpx;
+  border-radius: 26rpx;
+  background: rgba(255, 255, 255, 0.97);
   border: 1rpx solid rgba(236, 224, 205, 0.86);
-  box-shadow: 0 18rpx 36rpx rgba(45, 31, 20, 0.08);
+  box-shadow: 0 10rpx 22rpx rgba(45, 31, 20, 0.05);
 }
 
 .card-compact {
@@ -205,7 +221,7 @@ page {
 
 .section-copy {
   font-size: 24rpx;
-  line-height: 1.72;
+  line-height: 1.6;
   color: #6b7282;
 }
 

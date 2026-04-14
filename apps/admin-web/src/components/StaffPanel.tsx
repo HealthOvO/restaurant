@@ -167,22 +167,22 @@ export function StaffPanel({
         <div className="metric-card compact-metric-card">
           <div className="tag tag-navy">后台账号</div>
           <div className="metric-value metric-value-compact">{ownerCount}</div>
-          <div className="metric-footnote">可登录网页后台。</div>
+          <div className="metric-footnote">Web 登录</div>
         </div>
         <div className="metric-card compact-metric-card">
           <div className="tag tag-navy">店员账号</div>
           <div className="metric-value metric-value-compact">{staffCount}</div>
-          <div className="metric-footnote">用于小程序核销和查询。</div>
+          <div className="metric-footnote">小程序登录</div>
         </div>
         <div className="metric-card compact-metric-card">
           <div className="tag tag-success">已启用</div>
           <div className="metric-value metric-value-compact">{enabledCount}</div>
-          <div className="metric-footnote">当前可登录账号。</div>
+          <div className="metric-footnote">当前可登录</div>
         </div>
         <div className="metric-card compact-metric-card">
           <div className="tag">已绑微信</div>
           <div className="metric-value metric-value-compact">{boundCount}</div>
-          <div className="metric-footnote">首次登录后自动绑定。</div>
+          <div className="metric-footnote">首次登录自动绑定</div>
         </div>
       </div>
 
@@ -193,29 +193,29 @@ export function StaffPanel({
             <div className="tag">网页后台</div>
             <div className="tag">店员小程序</div>
           </div>
-          <h3 className="section-title">网页登录和门店值班分开</h3>
-          <p className="subtle">后台只留给网页账号，门店现场统一走店员小程序。</p>
+          <h3 className="section-title">后台和门店分开</h3>
+          <p className="subtle">老板走网页，店员走小程序。</p>
         </div>
         <div className="guide-list">
           <div className="guide-item">
             <div className="guide-index">01</div>
             <div className="stack">
               <strong>先创建店员账号</strong>
-              <p className="subtle tiny">建议按岗位或班次命名，后续追溯更清楚。</p>
+              <p className="subtle tiny">建议一人一号。</p>
             </div>
           </div>
           <div className="guide-item">
             <div className="guide-index">02</div>
             <div className="stack">
               <strong>首次登录后自动绑定微信</strong>
-              <p className="subtle tiny">店员用本人微信首次登录小程序即可完成绑定。</p>
+              <p className="subtle tiny">用本人微信登录即可。</p>
             </div>
           </div>
           <div className="guide-item">
             <div className="guide-index">03</div>
             <div className="stack">
               <strong>离职或换岗时停用账号</strong>
-              <p className="subtle tiny">停用后立即拦截登录，历史记录继续保留。</p>
+              <p className="subtle tiny">历史记录会保留。</p>
             </div>
           </div>
         </div>
@@ -230,7 +230,7 @@ export function StaffPanel({
                 <div className="tag">店员专用</div>
               </div>
               <h3 className="section-title">新增店员账号</h3>
-              <p className="subtle">仅用于小程序店员端，不进入网页后台。</p>
+              <p className="subtle">只给店员小程序用。</p>
             </div>
 
             <div className="field-grid">
@@ -287,7 +287,7 @@ export function StaffPanel({
                 {usernameError || createPasswordError}
               </div>
             ) : (
-              <div className="notice">建议一人一号，后续停用、改密和追溯记录都会更省事。</div>
+              <div className="notice">建议一人一号</div>
             )}
 
             <div className="button-row">
@@ -300,30 +300,30 @@ export function StaffPanel({
           <div className="row-card stack">
             <div className="card-title-block">
               <div className="tag">创建后这样交付给店员</div>
-              <h3 className="section-title">店员开通流程</h3>
-              <p className="subtle">按这个顺序交接最顺。</p>
+              <h3 className="section-title">开通流程</h3>
+              <p className="subtle">按这个顺序就行。</p>
             </div>
 
             <div className="guide-list">
               <div className="guide-item">
-                <div className="guide-index">A</div>
+              <div className="guide-index">A</div>
               <div className="stack">
                 <strong>把账号和临时密码发给店员</strong>
-                <p className="subtle tiny">提醒店员直接从小程序工作台登录，不需要进网页后台。</p>
+                <p className="subtle tiny">提醒走小程序登录。</p>
               </div>
             </div>
               <div className="guide-item">
                 <div className="guide-index">B</div>
                 <div className="stack">
                   <strong>让店员用本人微信首次登录</strong>
-                  <p className="subtle tiny">首次成功后会自动绑定当前微信。</p>
+                  <p className="subtle tiny">首次成功后自动绑定。</p>
                 </div>
               </div>
               <div className="guide-item">
                 <div className="guide-index">C</div>
               <div className="stack">
                 <strong>班次调整时只做启用或停用</strong>
-                <p className="subtle tiny">不建议共用账号，停用后系统会直接拦截登录。</p>
+                <p className="subtle tiny">不建议共用账号。</p>
               </div>
             </div>
           </div>
@@ -336,7 +336,7 @@ export function StaffPanel({
               <div className="card-title-block">
                 <div className="section-eyebrow">网页登录账号</div>
                 <h3 className="section-title">当前后台账号</h3>
-                <p className="subtle">用于网页后台登录、规则配置和关键操作留痕。</p>
+                <p className="subtle">用于网页后台登录。</p>
               </div>
             </div>
 
@@ -421,7 +421,7 @@ export function StaffPanel({
               <div className="card-title-block">
                 <div className="section-eyebrow">店员账号</div>
                 <h3 className="section-title">小程序核销与查询账号</h3>
-                <p className="subtle">店员账号只用于门店现场，可随时重置密码或停用。</p>
+                <p className="subtle">可随时重置或停用。</p>
               </div>
               <div className="inline-tags">
                 <div className="tag">{cashierUsers.length} 个账号</div>
@@ -433,7 +433,7 @@ export function StaffPanel({
               <div className="empty-state">
                 <div className="tag tag-navy">暂无店员</div>
                 <h3 className="section-title">先创建一个店员账号</h3>
-                <p className="subtle">创建后就能登录小程序做核销和查询，后续也方便按班次管理。</p>
+                <p className="subtle">创建后就能登录小程序。</p>
               </div>
             ) : null}
 

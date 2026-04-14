@@ -9,6 +9,7 @@ import {
   fetchOpsTasks,
   fetchOrderWorkbenchDetail,
   fetchOrders,
+  searchMembers,
   resolveOpsTask,
   retryOpsTask,
   updateFeedbackTicket,
@@ -443,7 +444,7 @@ describe("DashboardPage session guard", () => {
       />
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "用户反馈" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /用户反馈/ })[0]);
 
     await waitFor(() => {
       expect(fetchFeedbackTickets).toHaveBeenCalledWith("valid-token", "branch-01");
@@ -520,7 +521,7 @@ describe("DashboardPage session guard", () => {
       />
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "异常处理" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /异常处理/ })[0]);
 
     await waitFor(() => {
       expect(fetchOpsTasks).toHaveBeenCalledWith("valid-token", "OPEN", 50, "branch-01");
@@ -624,13 +625,13 @@ describe("DashboardPage session guard", () => {
     expect(fetchMenuConfig).not.toHaveBeenCalled();
     expect(fetchOrders).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "点餐菜单" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /点餐菜单/ })[0]);
 
     await waitFor(() => {
       expect(fetchMenuConfig).toHaveBeenCalledWith("valid-token", "branch-01");
     });
 
-    fireEvent.click(screen.getAllByRole("button", { name: "订单工作台" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /订单工作台/ })[0]);
 
     await waitFor(() => {
       expect(fetchOrders).toHaveBeenCalledWith("valid-token", "", undefined, 1, 8, "branch-01");
@@ -639,5 +640,76 @@ describe("DashboardPage session guard", () => {
     await waitFor(() => {
       expect(fetchOrderWorkbenchDetail).toHaveBeenCalledWith("valid-token", "order-1", "branch-01");
     });
+  });
+
+  it("stops auto-retrying the orders bootstrap request after the first failure and keeps the workbench visible", async () => {
+    vi.mocked(fetchDashboard).mockResolvedValue(createDashboardPayload(6));
+    vi.mocked(fetchOrders).mockRejectedValue(new Error("订单接口异常"));
+
+    render(
+      <DashboardPage
+        session={{
+          sessionToken: "valid-token",
+          staff: {
+            _id: "staff-owner-1",
+            displayName: "老板",
+            role: "OWNER",
+            username: "owner",
+            storeId: "branch-01"
+          }
+        }}
+        onLogout={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: /订单工作台/ })[0]);
+
+    await waitFor(() => {
+      expect(fetchOrders).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("订单接口异常");
+    });
+
+    await new Promise((resolve) => window.setTimeout(resolve, 30));
+
+    expect(fetchOrders).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("orders-panel")).toBeInTheDocument();
+  });
+
+  it("stops auto-retrying the members bootstrap request after the first failure", async () => {
+    vi.mocked(fetchDashboard).mockResolvedValue(createDashboardPayload(6));
+    vi.mocked(searchMembers).mockRejectedValue(new Error("会员接口异常"));
+
+    render(
+      <DashboardPage
+        session={{
+          sessionToken: "valid-token",
+          staff: {
+            _id: "staff-owner-1",
+            displayName: "老板",
+            role: "OWNER",
+            username: "owner",
+            storeId: "branch-01"
+          }
+        }}
+        onLogout={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: /会员管理/ })[0]);
+
+    await waitFor(() => {
+      expect(searchMembers).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("会员接口异常");
+    });
+
+    await new Promise((resolve) => window.setTimeout(resolve, 30));
+
+    expect(searchMembers).toHaveBeenCalledTimes(1);
   });
 });

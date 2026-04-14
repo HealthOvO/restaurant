@@ -1,6 +1,6 @@
 <view class="page page-tight">
   <view class="hero hero-member home-hero">
-    <view class="hero-badge">我的</view>
+    <view class="hero-badge">我的会员</view>
     <view class="title">{{statusHeadline}}</view>
     <view class="subtitle">{{statusSummary}}</view>
     <view class="mini-metrics home-metrics">
@@ -13,10 +13,6 @@
         <view class="mini-metric-value">{{inviteStatusText}}</view>
       </view>
       <view class="mini-metric">
-        <view class="mini-metric-label">首单</view>
-        <view class="mini-metric-value">{{firstVisitStatusText}}</view>
-      </view>
-      <view class="mini-metric">
         <view class="mini-metric-label">积分</view>
         <view class="mini-metric-value">{{pointsBalance}}</view>
       </view>
@@ -25,7 +21,7 @@
 
   <view wx:if="{{loading}}" class="card">
     <view class="section-title">加载中</view>
-    <view class="section-copy">正在读取会员状态，请稍候。</view>
+    <view class="section-copy">正在读取会员信息。</view>
   </view>
 
   <view wx:if="{{errorMessage}}" class="card card-accent">
@@ -35,9 +31,14 @@
   </view>
 
   <view wx:if="{{member}}" class="card card-soft home-card">
-    <view class="section-kicker">现在先做</view>
-    <view class="section-title">{{nextStepTitle}}</view>
-    <view class="card-subtitle">{{nextStepCopy}}</view>
+    <view class="card-header-row">
+      <view class="card-title-wrap">
+        <view class="section-kicker">当前状态</view>
+        <view class="section-title">{{nextStepTitle}}</view>
+        <view class="card-subtitle">{{nextStepCopy}}</view>
+      </view>
+      <view class="tag {{memberStatusText === '已开通' ? 'tag-success' : ''}}">{{memberStatusText}}</view>
+    </view>
 
     <view class="member-brief">
       <view class="member-brief-item">
@@ -47,6 +48,10 @@
       <view class="member-brief-item">
         <view class="member-brief-label">手机号</view>
         <view class="member-brief-value">{{memberPhoneText}}</view>
+      </view>
+      <view class="member-brief-item">
+        <view class="member-brief-label">积分</view>
+        <view class="member-brief-value">{{pointsBalance}}</view>
       </view>
     </view>
 
@@ -61,94 +66,58 @@
     </view>
 
     <view class="button-group home-actions">
-      <button wx:if="{{showRegisterButton}}" class="button-primary" bindtap="goRegister">微信验证手机号</button>
-      <button wx:else class="button-primary" bindtap="goVouchers">积分与菜品券</button>
-      <button wx:if="{{!showRegisterButton}}" class="button-secondary" bindtap="goMemberCard">查看会员码</button>
+      <button wx:if="{{showRegisterButton}}" class="button-primary" bindtap="goRegister">验证手机号</button>
+      <button wx:else class="button-primary" bindtap="goVouchers">积分和券</button>
+      <button wx:if="{{!showRegisterButton}}" class="button-secondary" bindtap="goMemberCard">会员码</button>
     </view>
   </view>
 
-  <view wx:if="{{showInviteEntry}}" class="card home-card">
-    <view class="section-kicker">常用功能</view>
+  <view class="card home-card">
+    <view class="section-kicker">会员服务</view>
     <view class="section-title">常用入口</view>
-    <view class="card-subtitle">先看积分和券，再看订单、邀请和消费记录。</view>
+    <view class="card-subtitle">订单、邀请、券包都从这里进。</view>
 
     <view class="quick-grid home-quick-grid">
-      <navigator class="quick-card home-quick-card" url="/pages/vouchers/vouchers">
-        <view class="quick-card-tag">积分</view>
-        <view class="quick-card-title">积分与菜品券</view>
-        <view class="quick-card-copy">看积分余额、兑换菜品，再出示二维码给店员扫码。</view>
-        <view class="quick-card-meta">去兑换和出示券</view>
-      </navigator>
-
       <view class="quick-card home-quick-card" bindtap="goOrders">
         <view class="quick-card-tag">订单</view>
         <view class="quick-card-title">我的订单</view>
-        <view class="quick-card-copy">查看进行中订单、历史订单和状态更新时间线。</view>
-        <view class="quick-card-meta">查看订单记录</view>
+        <view class="quick-card-copy">看状态和历史订单。</view>
       </view>
 
-      <navigator class="quick-card home-quick-card" url="/pages/invite/invite">
+      <navigator class="quick-card home-quick-card" url="/pages/vouchers/vouchers">
+        <view class="quick-card-tag">积分</view>
+        <view class="quick-card-title">积分和券</view>
+        <view class="quick-card-copy">查看积分，兑换菜品。</view>
+      </navigator>
+
+      <navigator wx:if="{{showInviteEntry}}" class="quick-card home-quick-card" url="/pages/invite/invite">
         <view class="quick-card-tag">邀请</view>
         <view class="quick-card-title">邀请中心</view>
-        <view class="quick-card-copy">看邀请码、已激活人数和积分进度。</view>
-        <view class="quick-card-meta">查看邀请情况</view>
+        <view class="quick-card-copy">分享邀请码，看邀请进度。</view>
       </navigator>
 
       <navigator class="quick-card home-quick-card" url="/pages/member-card/member-card">
         <view class="quick-card-tag">会员码</view>
         <view class="quick-card-title">我的会员码</view>
-        <view class="quick-card-copy">到店时直接出示会员码，方便店员查询和核对信息。</view>
-        <view class="quick-card-meta">查看会员码</view>
+        <view class="quick-card-copy">到店出示即可。</view>
       </navigator>
 
       <navigator class="quick-card home-quick-card" url="/pages/records/records">
         <view class="quick-card-tag">记录</view>
         <view class="quick-card-title">消费记录</view>
-        <view class="quick-card-copy">查看首次到店和后续消费记录。</view>
-        <view class="quick-card-meta">查看到店记录</view>
+        <view class="quick-card-copy">查看首单和历史消费。</view>
       </navigator>
 
       <navigator class="quick-card home-quick-card" url="/pages/rules/rules">
         <view class="quick-card-tag">规则</view>
         <view class="quick-card-title">活动规则</view>
-        <view class="quick-card-copy">看积分档位、兑换菜品和券有效期。</view>
-        <view class="quick-card-meta">查看规则说明</view>
+        <view class="quick-card-copy">注册、邀请、用券说明。</view>
       </navigator>
-    </view>
-  </view>
 
-  <view class="card card-soft home-card">
-    <view class="card-header-row">
-      <view class="card-title-wrap">
-        <view class="section-kicker">有问题直接说</view>
-        <view class="section-title">用户反馈</view>
-        <view class="card-subtitle">积分没到账、券状态不对、页面不好用，都能直接留言。</view>
-      </view>
-      <view class="tag">反馈</view>
-    </view>
-    <view class="support-strip">
-      <view class="support-pill">会员可提交</view>
-      <view class="support-pill">老板会回复</view>
-      <view class="support-pill">状态会回显</view>
-    </view>
-    <button class="button-secondary" bindtap="goFeedback">进入反馈页</button>
-  </view>
-
-  <view wx:if="{{member}}" class="card card-compact home-card">
-    <view class="section-kicker">到店使用</view>
-    <view class="section-title">点餐和会员配合方式</view>
-    <view class="usage-list">
-      <view class="usage-item">
-        <view class="usage-title">点餐前</view>
-        <view class="usage-copy">如果别人邀请了你，记得在首单前去邀请中心填邀请码。</view>
-      </view>
-      <view class="usage-item">
-        <view class="usage-title">点餐后</view>
-        <view class="usage-copy">完成有效消费后，系统会自动记录首单并结算邀请积分。</view>
-      </view>
-      <view class="usage-item">
-        <view class="usage-title">用券时</view>
-        <view class="usage-copy">先在“积分与菜品券”里兑换菜品，再把二维码给店员扫，核销后状态会自动更新。</view>
+      <view class="quick-card home-quick-card" bindtap="goFeedback">
+        <view class="quick-card-tag">反馈</view>
+        <view class="quick-card-title">问题反馈</view>
+        <view class="quick-card-copy">页面、积分、券问题都能提。</view>
       </view>
     </view>
   </view>

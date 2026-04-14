@@ -1,27 +1,30 @@
 <view class="page page-tight">
-  <view class="hero hero-staff">
-    <view class="hero-badge">{{hasSession ? '店员工作台' : '店员入口'}}</view>
-    <view class="title">{{hasSession ? '开始值班' : '先登录店员账号'}}</view>
-    <view class="subtitle">{{hasSession ? '查会员、录订单、扫券核销都在这里。' : '登录后再进核销和会员查询。'}}</view>
-    <view class="mini-metrics">
-      <view class="mini-metric">
-        <view class="mini-metric-label">当前状态</view>
-        <view class="mini-metric-value">{{loginStatusText}}</view>
+  <view class="hero hero-staff staff-home-hero">
+    <view class="hero-topline">
+      <view class="hero-badge">{{hasSession ? '店员' : '店员入口'}}</view>
+      <view wx:if="{{hasSession && staffRoleLabel}}" class="hero-table-chip hero-table-chip-light">{{staffRoleLabel}}</view>
+    </view>
+    <view class="title">{{hasSession ? workHintTitle : '先登录店员账号'}}</view>
+    <view class="subtitle">{{workHintCopy}}</view>
+    <view class="staff-status-strip">
+      <view class="staff-status-chip">
+        <view class="staff-status-label">状态</view>
+        <view class="staff-status-value">{{loginStatusText}}</view>
       </view>
-      <view class="mini-metric">
-        <view class="mini-metric-label">账号</view>
-        <view class="mini-metric-value">{{hasSession && staffProfile ? staffProfile.username : '待登录'}}</view>
+      <view class="staff-status-chip">
+        <view class="staff-status-label">账号</view>
+        <view class="staff-status-value">{{hasSession && staffProfile ? staffProfile.username : '待登录'}}</view>
       </view>
-      <view class="mini-metric">
-        <view class="mini-metric-label">数据</view>
-        <view class="mini-metric-value">实时校验</view>
+      <view class="staff-status-chip">
+        <view class="staff-status-label">刷新</view>
+        <view class="staff-status-value">下拉即可</view>
       </view>
     </view>
   </view>
 
   <view wx:if="{{loading}}" class="card">
     <view class="section-title">加载中</view>
-    <view class="section-copy">正在校验店员登录状态。</view>
+    <view class="section-copy">正在检查登录状态。</view>
   </view>
 
   <view wx:if="{{errorMessage}}" class="card card-accent">
@@ -30,132 +33,68 @@
     <button class="button-secondary" bindtap="goLogin">重新登录</button>
   </view>
 
-  <view class="card card-compact">
-    <view class="card-header-row">
-      <view class="card-title-wrap">
-        <view class="section-kicker">当前安排</view>
-        <view class="section-title">{{workHintTitle}}</view>
-        <view class="card-subtitle">{{workHintCopy}}</view>
-      </view>
-      <view class="tag {{hasSession ? 'tag-success' : ''}}">{{loginStatusText}}</view>
-    </view>
-
-    <view class="support-strip">
-      <view class="support-pill">会员先查后核销</view>
-      <view class="support-pill">菜品券优先扫码</view>
-      <view class="support-pill">关键操作自动留痕</view>
-    </view>
-  </view>
-
   <view wx:if="{{!loading && !hasSession}}" class="card card-soft staff-login-card">
-    <view class="section-kicker">先登录</view>
+    <view class="section-kicker">登录</view>
     <view class="section-title">店员登录</view>
-    <view class="section-copy">用老板后台创建的店员账号登录，登录后再进入核销和会员查询。</view>
-    <view class="support-strip">
-      <view class="support-pill">老板先创建账号</view>
-      <view class="support-pill">首次成功会绑定当前微信</view>
-    </view>
+    <view class="section-copy">用老板创建的账号登录。</view>
     <button class="button-primary" bindtap="goLogin">去登录</button>
   </view>
 
-  <view wx:if="{{hasSession && staffProfile}}" class="card card-soft">
-    <view class="card-header-row">
-      <view class="card-title-wrap">
-        <view class="section-kicker">今天值班</view>
-        <view class="section-title">{{staffProfile.displayName}}</view>
-        <view class="card-subtitle">先扫券，再查会员和订单，最后处理特殊核销。</view>
-      </view>
-      <view class="tag tag-success">{{staffRoleLabel}}</view>
-    </view>
-
-    <view class="action-grid" style="margin-top: 20rpx;">
-      <view class="action-card">
-        <view class="action-card-title">菜品券核销</view>
-        <view class="action-card-copy">支持直接扫码，也支持手动输入券号。</view>
-        <button class="button-primary" bindtap="goVoucher">先去核销券</button>
-      </view>
-
-      <view class="action-card">
-        <view class="action-card-title">会员查询</view>
-        <view class="action-card-copy">核销前先确认会员状态、积分和菜品券情况。</view>
-        <button class="button-secondary" bindtap="goSearch">进入会员查询</button>
-      </view>
-
-      <view class="action-card">
-        <view class="action-card-title">订单看板</view>
-        <view class="action-card-copy">新订单、制作中、待取餐和已完成订单都在这里切换查看。</view>
-        <button class="button-secondary" bindtap="goOrders">进入订单看板</button>
-      </view>
-
-      <view class="action-card">
-        <view class="action-card-title">会员消费核销</view>
-        <view class="action-card-copy">录入订单号后，系统会自动判断是否触发首单礼和邀请积分。</view>
-        <button class="button-secondary" bindtap="goVisit">进入消费核销</button>
-      </view>
-
-      <view class="action-card">
-        <view class="action-card-title">问题反馈</view>
-        <view class="action-card-copy">遇到登录、核销、查询异常时，直接把现场问题提上去。</view>
-        <button class="button-secondary" bindtap="goFeedback">进入反馈页</button>
-      </view>
-    </view>
-
-    <button class="button-secondary" bindtap="logout">退出店员登录</button>
-  </view>
-
-  <view wx:if="{{hasSession}}" class="card">
-    <view class="section-kicker">值班流程</view>
-    <view class="section-title">现场照着这 3 步走</view>
-    <view class="guide-grid">
-      <view class="guide-card">
-        <view class="guide-card-head">
-          <view class="guide-card-index">01</view>
-          <view class="guide-card-title">先查会员状态</view>
+  <block wx:if="{{hasSession && staffProfile}}">
+    <view class="card card-soft staff-work-card">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="section-kicker">高频</view>
+          <view class="section-title">常用操作</view>
+          <view class="card-subtitle">先做核销和消费结算。</view>
         </view>
-        <view class="guide-card-copy">帮助顾客确认会员是否已注册、是否完成首单、邀请积分和菜品券是否到账。</view>
+        <view class="tag tag-success">在线</view>
       </view>
-      <view class="guide-card">
-        <view class="guide-card-head">
-          <view class="guide-card-index">02</view>
-          <view class="guide-card-title">再录订单号做消费核销</view>
-        </view>
-        <view class="guide-card-copy">首次有效消费会自动触发新客礼、邀请激活和积分结算，同一订单不会重复入账。</view>
-      </view>
-      <view class="guide-card">
-        <view class="guide-card-head">
-          <view class="guide-card-index">03</view>
-          <view class="guide-card-title">最后扫会员券或输入券号</view>
-        </view>
-        <view class="guide-card-copy">菜品券优先扫码，扫不到时再手动输入券号；已核销或过期的券会被拦截。</view>
-      </view>
-    </view>
-  </view>
 
-  <view wx:if="{{hasSession}}" class="card card-compact">
-    <view class="section-kicker">值班提醒</view>
-    <view class="section-title">开工前快速检查</view>
-    <view class="tip-stack">
-      <view class="tip-row">
-        <view class="tip-badge">账号</view>
-        <view class="tip-body">
-          <view class="tip-title">先确认自己登录的是店员账号</view>
-          <view class="tip-copy">店员不需要进入网页后台，所有门店现场操作都在这个小程序完成。</view>
+      <view class="staff-primary-grid">
+        <view class="staff-task-card staff-task-card-primary" bindtap="goVoucher">
+          <view class="quick-card-tag">核销</view>
+          <view class="staff-task-title">菜品券核销</view>
+          <view class="staff-task-copy">扫码优先，也能手输。</view>
         </view>
-      </view>
-      <view class="tip-row">
-        <view class="tip-badge">首单</view>
-        <view class="tip-body">
-          <view class="tip-title">首单核销最关键</view>
-          <view class="tip-copy">它会同时影响新客礼、邀请激活和积分到账，所以订单号要录准确。</view>
-        </view>
-      </view>
-      <view class="tip-row">
-        <view class="tip-badge">异常</view>
-        <view class="tip-body">
-          <view class="tip-title">退款、改绑、补录不要自己硬处理</view>
-          <view class="tip-copy">这类情况让老板到后台修正，系统会保留审计记录，避免门店口径不一致。</view>
+
+        <view class="staff-task-card" bindtap="goVisit">
+          <view class="quick-card-tag">消费</view>
+          <view class="staff-task-title">消费核销</view>
+          <view class="staff-task-copy">查会员后录订单号。</view>
         </view>
       </view>
     </view>
-  </view>
+
+    <view class="card staff-tools-card">
+      <view class="section-kicker">其他</view>
+      <view class="section-title">更多功能</view>
+
+      <view class="quick-grid staff-tools-grid">
+        <view class="quick-card staff-tool-card" bindtap="goSearch">
+          <view class="quick-card-tag">会员</view>
+          <view class="quick-card-title">会员查询</view>
+          <view class="quick-card-copy">查状态、积分、券。</view>
+        </view>
+
+        <view class="quick-card staff-tool-card" bindtap="goOrders">
+          <view class="quick-card-tag">订单</view>
+          <view class="quick-card-title">订单看板</view>
+          <view class="quick-card-copy">查看和处理订单。</view>
+        </view>
+
+        <view class="quick-card staff-tool-card" bindtap="goFeedback">
+          <view class="quick-card-tag">反馈</view>
+          <view class="quick-card-title">问题反馈</view>
+          <view class="quick-card-copy">现场异常直接提交。</view>
+        </view>
+
+        <view class="quick-card staff-tool-card" bindtap="logout">
+          <view class="quick-card-tag">账号</view>
+          <view class="quick-card-title">退出登录</view>
+          <view class="quick-card-copy">换人值班时退出。</view>
+        </view>
+      </view>
+    </view>
+  </block>
 </view>

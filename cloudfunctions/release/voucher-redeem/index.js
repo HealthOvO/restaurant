@@ -9019,6 +9019,10 @@ var BASE64_CODE = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456
 
 // src/runtime/auth.ts
 var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
+var SUPPORTED_ROLES = ["OWNER", "STAFF"];
+function normalizeManagedStoreIds(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+}
 function getSessionSecret() {
   const secret = process.env.SESSION_SECRET?.trim();
   if (!secret) {
@@ -9026,20 +9030,35 @@ function getSessionSecret() {
   }
   return secret;
 }
+function normalizeSessionClaims(claims) {
+  const staffUserId = typeof claims.staffUserId === "string" ? claims.staffUserId.trim() : "";
+  const username = typeof claims.username === "string" ? claims.username.trim() : "";
+  const storeId = typeof claims.storeId === "string" ? claims.storeId.trim() : "";
+  if (!staffUserId || !username || !storeId || !SUPPORTED_ROLES.includes(claims.role)) {
+    throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+  }
+  const normalizedAccessScope = claims.role === "OWNER" && claims.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
+  const normalizedManagedStoreIds = normalizedAccessScope === "ALL_STORES" ? normalizeManagedStoreIds(storeId, claims.managedStoreIds) : [storeId];
+  return {
+    staffUserId,
+    username,
+    role: claims.role,
+    storeId,
+    accessScope: normalizedAccessScope,
+    managedStoreIds: normalizedManagedStoreIds
+  };
+}
 function requireSessionToken(token) {
   try {
-    return import_jsonwebtoken.default.verify(token, getSessionSecret());
+    return normalizeSessionClaims(import_jsonwebtoken.default.verify(token, getSessionSecret()));
   } catch (error) {
+    if (error instanceof DomainError) {
+      throw error;
+    }
     throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55", {
       cause: error instanceof Error ? error.message : String(error)
     });
   }
-}
-
-// src/runtime/ids.ts
-var import_node_crypto = require("node:crypto");
-function createId(prefix) {
-  return `${prefix}_${(0, import_node_crypto.randomUUID)()}`;
 }
 
 // src/runtime/voucher-status.ts
@@ -9060,14 +9079,18 @@ async function syncExpiredVoucherStatuses(repository, vouchers, now) {
 }
 
 // src/runtime/service.staff.ts
-function normalizeManagedStoreIds(storeId, managedStoreIds) {
-  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+function normalizeOptionalText(value) {
+  const normalized = `${value ?? ""}`.trim();
+  return normalized || void 0;
+}
+function normalizeManagedStoreIds2(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => normalizeOptionalText(item)).filter(Boolean)));
 }
 function resolveStaffAccess(staff) {
   const accessScope = staff.role === "OWNER" && staff.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
   return {
     accessScope,
-    managedStoreIds: normalizeManagedStoreIds(staff.storeId, staff.managedStoreIds)
+    managedStoreIds: accessScope === "ALL_STORES" ? normalizeManagedStoreIds2(staff.storeId, staff.managedStoreIds) : [staff.storeId]
   };
 }
 async function requireActiveStaffSession(repository, token) {
@@ -9090,6 +9113,12 @@ async function requireActiveStaffSession(repository, token) {
     accessScope,
     accessibleStoreIds: managedStoreIds
   };
+}
+
+// src/runtime/ids.ts
+var import_node_crypto = require("node:crypto");
+function createId(prefix) {
+  return `${prefix}_${(0, import_node_crypto.randomUUID)()}`;
 }
 
 // src/runtime/service.member.ts
@@ -9116,6 +9145,19 @@ async function writeAuditSafely(repository, payload) {
 function buildVoucherRedemptionId(voucherId) {
   return `redeem_${voucherId}`;
 }
+function buildVoucherRedemptionRecord(params) {
+  const { redeemedAt, redeemedByStaffId, repository, voucher } = params;
+  return {
+    _id: buildVoucherRedemptionId(voucher._id),
+    storeId: repository.storeId,
+    voucherId: voucher._id,
+    memberId: voucher.memberId,
+    redeemedByStaffId,
+    redeemedAt,
+    createdAt: redeemedAt,
+    updatedAt: redeemedAt
+  };
+}
 async function redeemVoucher(repository, input) {
   const parsed = redeemVoucherInputSchema.parse(input);
   const { staff } = await requireActiveStaffSession(repository, parsed.sessionToken);
@@ -9136,22 +9178,27 @@ async function redeemVoucher(repository, input) {
     }
     const existingRedemption = await transaction.getVoucherRedemptionById(redemptionId);
     if (existingRedemption) {
+      if (currentVoucher.status !== "USED" || currentVoucher.usedAt !== existingRedemption.redeemedAt || currentVoucher.usedByStaffId !== existingRedemption.redeemedByStaffId) {
+        currentVoucher.status = "USED";
+        currentVoucher.usedAt = existingRedemption.redeemedAt;
+        currentVoucher.usedByStaffId = existingRedemption.redeemedByStaffId;
+        currentVoucher.updatedAt = now;
+        await transaction.saveVoucher(currentVoucher);
+      }
       return {
         voucher: currentVoucher,
         isIdempotent: true
       };
     }
     if (currentVoucher.status === "USED" && currentVoucher.usedAt && currentVoucher.usedByStaffId) {
-      await transaction.saveVoucherRedemption({
-        _id: redemptionId,
-        storeId: repository.storeId,
-        voucherId: currentVoucher._id,
-        memberId: currentVoucher.memberId,
-        redeemedByStaffId: currentVoucher.usedByStaffId,
-        redeemedAt: currentVoucher.usedAt,
-        createdAt: currentVoucher.usedAt,
-        updatedAt: currentVoucher.usedAt
-      });
+      await transaction.saveVoucherRedemption(
+        buildVoucherRedemptionRecord({
+          repository,
+          voucher: currentVoucher,
+          redeemedByStaffId: currentVoucher.usedByStaffId,
+          redeemedAt: currentVoucher.usedAt
+        })
+      );
       return {
         voucher: currentVoucher,
         isIdempotent: true
@@ -9163,16 +9210,14 @@ async function redeemVoucher(repository, input) {
     currentVoucher.usedByStaffId = staff._id;
     currentVoucher.updatedAt = now;
     await transaction.saveVoucher(currentVoucher);
-    await transaction.saveVoucherRedemption({
-      _id: redemptionId,
-      storeId: repository.storeId,
-      voucherId: currentVoucher._id,
-      memberId: currentVoucher.memberId,
-      redeemedByStaffId: staff._id,
-      redeemedAt: now,
-      createdAt: now,
-      updatedAt: now
-    });
+    await transaction.saveVoucherRedemption(
+      buildVoucherRedemptionRecord({
+        repository,
+        voucher: currentVoucher,
+        redeemedByStaffId: staff._id,
+        redeemedAt: now
+      })
+    );
     return {
       voucher: currentVoucher,
       isIdempotent: false

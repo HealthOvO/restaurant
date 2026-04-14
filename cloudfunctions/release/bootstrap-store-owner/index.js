@@ -10644,8 +10644,14 @@ function getBootstrapSecret() {
   }
   return secret;
 }
-function normalizeManagedStoreIds(storeId, managedStoreIds) {
+function normalizeManagedStoreIds(storeId, accessScope, managedStoreIds) {
+  if (accessScope !== "ALL_STORES") {
+    return [storeId];
+  }
   return Array.from(/* @__PURE__ */ new Set([storeId, ...managedStoreIds.map((item) => item.trim()).filter(Boolean)]));
+}
+function resolveOwnerDisplayName(accessScope, ownerDisplayName) {
+  return ownerDisplayName?.trim() || (accessScope === "ALL_STORES" ? "\u603B\u5E97\u8001\u677F" : "\u95E8\u5E97\u8001\u677F");
 }
 async function writeAudit(repository, payload) {
   const now = nowIso();
@@ -10667,8 +10673,8 @@ async function bootstrapStoreOwner(repository, input) {
     throw new DomainError("STAFF_USERNAME_EXISTS", "\u8BE5\u8D26\u53F7\u5DF2\u5B58\u5728\u4E14\u4E0D\u662F\u8001\u677F\u8D26\u53F7\uFF0C\u8BF7\u66F4\u6362\u7528\u6237\u540D");
   }
   const now = nowIso();
-  const managedStoreIds = normalizeManagedStoreIds(repository.storeId, parsed.managedStoreIds);
-  const displayName = parsed.ownerDisplayName?.trim() || (parsed.accessScope === "ALL_STORES" ? "\u603B\u5E97\u8001\u677F" : "\u95E8\u5E97\u8001\u677F");
+  const managedStoreIds = normalizeManagedStoreIds(repository.storeId, parsed.accessScope, parsed.managedStoreIds);
+  const displayName = resolveOwnerDisplayName(parsed.accessScope, parsed.ownerDisplayName);
   const owner = existing ? {
     ...existing,
     displayName,
@@ -10700,6 +10706,7 @@ async function bootstrapStoreOwner(repository, input) {
     targetId: owner._id,
     summary: `${repository.storeId} \u5DF2\u521D\u59CB\u5316\u8001\u677F\u8D26\u53F7 ${owner.username}`,
     payload: {
+      username: owner.username,
       accessScope: owner.accessScope,
       managedStoreIds: owner.managedStoreIds
     }

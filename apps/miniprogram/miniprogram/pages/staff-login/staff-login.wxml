@@ -1,27 +1,18 @@
 <view class="page page-tight">
   <view class="hero hero-staff">
-    <view class="hero-badge">店员入口</view>
+    <view class="hero-badge">店员</view>
     <view class="title">店员登录</view>
-    <view class="subtitle">登录后就能处理核销、订单和会员查询。</view>
-    <view class="mini-metrics">
-      <view class="mini-metric">
-        <view class="mini-metric-label">账号</view>
-        <view class="mini-metric-value">账号密码</view>
-      </view>
-      <view class="mini-metric">
-        <view class="mini-metric-label">绑定</view>
-        <view class="mini-metric-value">当前微信</view>
-      </view>
-      <view class="mini-metric">
-        <view class="mini-metric-label">操作</view>
-        <view class="mini-metric-value">自动留痕</view>
-      </view>
+    <view class="subtitle">账号密码登录。</view>
+    <view class="hero-chips">
+      <view class="hero-chip">老板后台建号</view>
+      <view class="hero-chip">首次登录自动绑微信</view>
+      <view class="hero-chip">换班时记得退出</view>
     </view>
   </view>
 
   <view class="card card-soft card-compact">
-    <view class="section-title">登录信息</view>
-    <view class="section-copy">使用老板后台创建的店员账号登录，首次成功后会自动绑定当前微信。</view>
+    <view class="section-title">登录</view>
+    <view class="section-copy">使用老板创建的账号登录。</view>
     <view wx:if="{{redirectPath}}" class="redirect-tip">{{redirectHint}}</view>
 
     <view class="input-label">账号</view>
@@ -44,36 +35,8 @@
       data-field="password"
       bindinput="onInput"
     />
-    <view class="helper-text">如果提示账号或密码错误，请回老板后台核对账号是否启用。</view>
+    <view class="helper-text">账号有问题请找老板处理。</view>
 
     <button class="button-primary" disabled="{{loading || !username || !password}}" loading="{{loading}}" bindtap="submit">登录</button>
-  </view>
-
-  <view class="card">
-    <view class="section-kicker">登录前确认</view>
-    <view class="section-title">先核对这 3 件事</view>
-    <view class="process-list">
-      <view class="process-item">
-        <view class="process-index">01</view>
-        <view class="process-body">
-          <view class="process-title">老板已经创建并启用账号</view>
-          <view class="process-copy">店员账号需要在网页后台先创建，再到小程序里登录。</view>
-        </view>
-      </view>
-      <view class="process-item">
-        <view class="process-index">02</view>
-        <view class="process-body">
-          <view class="process-title">用本人微信登录当前设备</view>
-          <view class="process-copy">首次登录成功后，当前微信会和这个店员账号绑定起来。</view>
-        </view>
-      </view>
-      <view class="process-item">
-        <view class="process-index">03</view>
-        <view class="process-body">
-          <view class="process-title">登录后直接去核销或查会员</view>
-          <view class="process-copy">消费核销建议先查会员，菜品券优先扫码。</view>
-        </view>
-      </view>
-    </view>
   </view>
 </view>

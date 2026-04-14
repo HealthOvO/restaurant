@@ -40,6 +40,32 @@ describe("bootstrap store owner service", () => {
     );
   });
 
+  it("ignores extra managed stores for store-only owners", async () => {
+    const repository = {
+      storeId: "branch-03",
+      getStaffByUsername: vi.fn().mockResolvedValue(null),
+      saveStaffUser: vi.fn().mockResolvedValue(undefined),
+      addAuditLog: vi.fn().mockResolvedValue(undefined)
+    };
+
+    const result = await bootstrapStoreOwner(repository as never, {
+      secret: "bootstrap-secret-123",
+      ownerUsername: "owner-branch-03",
+      ownerPassword: "owner123456",
+      accessScope: "STORE_ONLY",
+      managedStoreIds: ["branch-04", "branch-05"]
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      owner: {
+        storeId: "branch-03",
+        accessScope: "STORE_ONLY",
+        managedStoreIds: ["branch-03"]
+      }
+    });
+  });
+
   it("updates an existing owner instead of creating a duplicate", async () => {
     const repository = {
       storeId: "hq-store",
@@ -101,6 +127,33 @@ describe("bootstrap store owner service", () => {
       })
     ).rejects.toMatchObject({
       message: "门店初始化口令无效"
+    });
+  });
+
+  it("rejects a non-owner account that already uses the target username", async () => {
+    const repository = {
+      storeId: "branch-10",
+      getStaffByUsername: vi.fn().mockResolvedValue({
+        _id: "staff-10",
+        storeId: "branch-10",
+        username: "owner-10",
+        passwordHash: "hash",
+        displayName: "收银员",
+        role: "STAFF",
+        isEnabled: true,
+        createdAt: "2026-04-01T00:00:00.000Z",
+        updatedAt: "2026-04-01T00:00:00.000Z"
+      })
+    };
+
+    await expect(
+      bootstrapStoreOwner(repository as never, {
+        secret: "bootstrap-secret-123",
+        ownerUsername: "owner-10",
+        ownerPassword: "owner123456"
+      })
+    ).rejects.toMatchObject({
+      code: "STAFF_USERNAME_EXISTS"
     });
   });
 });

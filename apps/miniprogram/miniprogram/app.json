@@ -23,7 +23,7 @@
     "pages/staff-feedback/staff-feedback"
   ],
   "window": {
-    "navigationBarTitleText": "餐饮会员积分换菜",
+    "navigationBarTitleText": "门店点餐",
     "navigationBarBackgroundColor": "#ffffff",
     "navigationBarTextStyle": "black",
     "backgroundTextStyle": "light",

@@ -9049,16 +9049,26 @@ function createId(prefix) {
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
+async function findMemberByInviteCode(repository, inviteCode) {
+  const normalizedCode = inviteCode?.trim();
+  if (!normalizedCode) {
+    return void 0;
+  }
+  return (await repository.listMembers()).find((member) => member.memberCode === normalizedCode);
+}
+function assertMemberPhoneVerified(member, message) {
+  if (!member.phone || !member.phoneVerifiedAt) {
+    throw new DomainError("MEMBER_PHONE_REQUIRED", message);
+  }
+}
 async function bindInvite(repository, input) {
   const parsed = bindInviteInputSchema.parse(input);
   const invitee = await repository.getMemberById(parsed.inviteeMemberId);
-  const inviter = parsed.inviterMemberId ? await repository.getMemberById(parsed.inviterMemberId) : (await repository.listMembers()).find((member) => member.memberCode === parsed.inviteCode);
+  const inviter = parsed.inviterMemberId ? await repository.getMemberById(parsed.inviterMemberId) : await findMemberByInviteCode(repository, parsed.inviteCode);
   if (!invitee || !inviter) {
     throw new DomainError("MEMBER_NOT_FOUND", parsed.inviteCode ? "\u9080\u8BF7\u7801\u4E0D\u5B58\u5728\u6216\u5BF9\u5E94\u4F1A\u5458\u65E0\u6548" : "\u9080\u8BF7\u53CC\u65B9\u4F1A\u5458\u4E0D\u5B58\u5728");
   }
-  if (!invitee.phone || !invitee.phoneVerifiedAt) {
-    throw new DomainError("MEMBER_PHONE_REQUIRED", "\u5B8C\u6210\u5FAE\u4FE1\u624B\u673A\u53F7\u9A8C\u8BC1\u540E\u624D\u80FD\u7ED1\u5B9A\u9080\u8BF7\u7801");
-  }
+  assertMemberPhoneVerified(invitee, "\u5B8C\u6210\u5FAE\u4FE1\u624B\u673A\u53F7\u9A8C\u8BC1\u540E\u624D\u80FD\u7ED1\u5B9A\u9080\u8BF7\u7801");
   const existingRelation = await repository.getInviteRelationByInviteeId(invitee._id);
   assertInviteBindingAllowed({
     inviterMemberId: inviter._id,

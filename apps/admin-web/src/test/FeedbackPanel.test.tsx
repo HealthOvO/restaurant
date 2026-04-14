@@ -71,7 +71,7 @@ describe("FeedbackPanel", () => {
     expect(screen.queryByText("积分没有到账")).toBeNull();
     expect(screen.getByText("当前显示 1 / 2")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "清空筛选" }));
+    fireEvent.click(screen.getByRole("button", { name: "重置筛选" }));
     expect(screen.getByText("积分没有到账")).toBeInTheDocument();
   });
 
@@ -83,7 +83,7 @@ describe("FeedbackPanel", () => {
     expect(card).toBeTruthy();
 
     const scoped = within(card as HTMLElement);
-    const saveButton = scoped.getByRole("button", { name: "保存处理结果" });
+    const saveButton = scoped.getByRole("button", { name: "保存处理" });
     expect(saveButton).toBeDisabled();
 
     fireEvent.change(scoped.getByRole("combobox", { name: "处理状态" }), {

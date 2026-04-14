@@ -24,7 +24,8 @@ import {
   type Member,
   type MemberPointTransaction,
   type PointExchangeItem,
-  type RewardRule
+  type RewardRule,
+  type VisitRecord
 } from "@restaurant/shared";
 import { requireActiveStaffSession } from "./service.staff";
 import { syncExpiredVoucherStatuses } from "./voucher-status";
@@ -219,6 +220,10 @@ function buildVoucherRedemptionId(voucherId: string): string {
   return `redeem_${voucherId}`;
 }
 
+function normalizeNumber(value: unknown): number {
+  return Number(value) || 0;
+}
+
 function buildRequestScopedId(prefix: string, requestId?: string): string {
   const normalized = `${requestId || ""}`.trim().replace(/[^a-zA-Z0-9_-]/g, "");
   if (!normalized) {
@@ -238,6 +243,93 @@ function isLikelyDuplicateError(error: unknown): boolean {
     message.includes("e11000") ||
     code.includes("duplicate")
   );
+}
+
+async function findMemberByInviteCode(
+  repository: RestaurantRepository,
+  inviteCode?: string
+): Promise<Member | undefined> {
+  const normalizedCode = inviteCode?.trim();
+  if (!normalizedCode) {
+    return undefined;
+  }
+
+  return (await repository.listMembers()).find((member) => member.memberCode === normalizedCode);
+}
+
+function assertMemberPhoneVerified(member: Pick<Member, "phone" | "phoneVerifiedAt">, message: string): void {
+  if (!member.phone || !member.phoneVerifiedAt) {
+    throw new DomainError("MEMBER_PHONE_REQUIRED", message);
+  }
+}
+
+function buildIdempotentVisitSettlement(params: {
+  visitRecord: VisitRecord;
+  activatedInviteCountAfterVisit?: number;
+  inviterPointsBalanceAfter?: number;
+}) {
+  return {
+    isIdempotent: true,
+    visitRecord: params.visitRecord,
+    markMemberFirstVisit: false,
+    activateInviteRelation: false,
+    welcomeVoucher: undefined,
+    milestonePointAwards: [],
+    milestonePointTransactions: [],
+    activatedInviteCountAfterVisit: params.activatedInviteCountAfterVisit ?? 0,
+    inviterPointsBalanceAfter: params.inviterPointsBalanceAfter ?? 0
+  };
+}
+
+async function buildInviteSettlementSnapshot(
+  repository: RestaurantRepository,
+  inviteeMemberId: string,
+  fallbackRelation?: InviteRelation | null,
+  fallbackInviter?: Member | null
+): Promise<{
+  activatedInviteCountAfterVisit: number;
+  inviterPointsBalanceAfter: number;
+}> {
+  const relation = fallbackRelation ?? (await repository.getInviteRelationByInviteeId(inviteeMemberId));
+  if (!relation?.inviterMemberId) {
+    return {
+      activatedInviteCountAfterVisit: 0,
+      inviterPointsBalanceAfter: 0
+    };
+  }
+
+  const [relations, inviter] = await Promise.all([
+    repository.listInviteRelations(),
+    repository.getMemberById(relation.inviterMemberId)
+  ]);
+  const effectiveInviter = inviter ?? fallbackInviter ?? null;
+
+  return {
+    activatedInviteCountAfterVisit: relations.filter(
+      (item) => item.inviterMemberId === relation.inviterMemberId && isInviteRelationActivated(item)
+    ).length,
+    inviterPointsBalanceAfter: normalizeNumber(effectiveInviter?.pointsBalance)
+  };
+}
+
+function buildVoucherRedemptionRecord(params: {
+  repository: RestaurantRepository;
+  voucher: DishVoucher;
+  redeemedAt: string;
+  redeemedByStaffId: string;
+}) {
+  const { redeemedAt, redeemedByStaffId, repository, voucher } = params;
+
+  return {
+    _id: buildVoucherRedemptionId(voucher._id),
+    storeId: repository.storeId,
+    voucherId: voucher._id,
+    memberId: voucher.memberId,
+    redeemedByStaffId,
+    redeemedAt,
+    createdAt: redeemedAt,
+    updatedAt: redeemedAt
+  };
 }
 
 export async function bootstrapMember(
@@ -306,7 +398,7 @@ export async function bootstrapMember(
     if (!member.phoneVerifiedAt) {
       nextPendingInviteCode = effectiveInviteCode;
     } else {
-      const inviter = (await repository.listMembers()).find((item) => item.memberCode === effectiveInviteCode);
+      const inviter = await findMemberByInviteCode(repository, effectiveInviteCode);
       nextPendingInviteCode = undefined;
 
       if (inviter && inviter._id !== member._id) {
@@ -371,14 +463,12 @@ export async function bindInvite(
   const invitee = await repository.getMemberById(parsed.inviteeMemberId);
   const inviter = parsed.inviterMemberId
     ? await repository.getMemberById(parsed.inviterMemberId)
-    : (await repository.listMembers()).find((member) => member.memberCode === parsed.inviteCode);
+    : await findMemberByInviteCode(repository, parsed.inviteCode);
 
   if (!invitee || !inviter) {
     throw new DomainError("MEMBER_NOT_FOUND", parsed.inviteCode ? "邀请码不存在或对应会员无效" : "邀请双方会员不存在");
   }
-  if (!invitee.phone || !invitee.phoneVerifiedAt) {
-    throw new DomainError("MEMBER_PHONE_REQUIRED", "完成微信手机号验证后才能绑定邀请码");
-  }
+  assertMemberPhoneVerified(invitee, "完成微信手机号验证后才能绑定邀请码");
 
   const existingRelation = await repository.getInviteRelationByInviteeId(invitee._id);
   assertInviteBindingAllowed({
@@ -463,19 +553,14 @@ export async function settleFirstVisit(repository: RestaurantRepository, input: 
         ).length
       : 0;
   if (existingVisit) {
+    const snapshot = await buildInviteSettlementSnapshot(repository, parsed.memberId, relation, inviter);
     return {
       ok: true,
-      settlement: {
-        isIdempotent: true,
+      settlement: buildIdempotentVisitSettlement({
         visitRecord: existingVisit,
-        markMemberFirstVisit: false,
-        activateInviteRelation: false,
-        welcomeVoucher: undefined,
-        milestonePointAwards: [],
-        milestonePointTransactions: [],
-        activatedInviteCountAfterVisit: inviterActivatedCountBeforeVisit,
-        inviterPointsBalanceAfter: inviter?.pointsBalance ?? 0
-      }
+        activatedInviteCountAfterVisit: snapshot.activatedInviteCountAfterVisit,
+        inviterPointsBalanceAfter: snapshot.inviterPointsBalanceAfter
+      })
     };
   }
 
@@ -488,9 +573,7 @@ export async function settleFirstVisit(repository: RestaurantRepository, input: 
       if (!currentMember) {
         throw new DomainError("MEMBER_NOT_FOUND", "会员不存在");
       }
-      if (!currentMember.phone || !currentMember.phoneVerifiedAt) {
-        throw new DomainError("MEMBER_PHONE_REQUIRED", "会员尚未完成微信手机号验证");
-      }
+      assertMemberPhoneVerified(currentMember, "会员尚未完成微信手机号验证");
 
       const isFirstValidVisit = !currentMember.hasCompletedFirstVisit;
       const visitRecord = {
@@ -556,7 +639,7 @@ export async function settleFirstVisit(repository: RestaurantRepository, input: 
 
           activatedInviteCountAfterVisit = Math.max(
             0,
-            Number(currentInviter.activatedInviteCount ?? inviterActivatedCountBeforeVisit) || 0
+            normalizeNumber(currentInviter.activatedInviteCount ?? inviterActivatedCountBeforeVisit)
           ) + 1;
 
           const currentRewardCounts = normalizeInviteRewardCounts(
@@ -564,7 +647,7 @@ export async function settleFirstVisit(repository: RestaurantRepository, input: 
             inviterRewardCountsByRuleId
           );
           const rulesToReward = deriveMilestoneRulesToReward(rules, activatedInviteCountAfterVisit, currentRewardCounts);
-          let runningBalance = Number(currentInviter.pointsBalance) || 0;
+          let runningBalance = normalizeNumber(currentInviter.pointsBalance);
           const nextRewardCounts = { ...currentRewardCounts };
 
           milestonePointAwards = rulesToReward.map((rule) => {
@@ -647,19 +730,14 @@ export async function settleFirstVisit(repository: RestaurantRepository, input: 
           throw new DomainError("ORDER_ALREADY_USED", "该订单号已用于其他会员核销，不能重复作为首单激活");
         }
 
+        const snapshot = await buildInviteSettlementSnapshot(repository, parsed.memberId, relation, inviter);
         return {
           ok: true,
-          settlement: {
-            isIdempotent: true,
+          settlement: buildIdempotentVisitSettlement({
             visitRecord: duplicatedVisit,
-            markMemberFirstVisit: false,
-            activateInviteRelation: false,
-            welcomeVoucher: undefined,
-            milestonePointAwards: [],
-            milestonePointTransactions: [],
-            activatedInviteCountAfterVisit: inviterActivatedCountBeforeVisit,
-            inviterPointsBalanceAfter: inviter?.pointsBalance ?? 0
-          }
+            activatedInviteCountAfterVisit: snapshot.activatedInviteCountAfterVisit,
+            inviterPointsBalanceAfter: snapshot.inviterPointsBalanceAfter
+          })
         };
       }
     }
@@ -683,7 +761,7 @@ export async function listMyVouchers(repository: RestaurantRepository, memberId:
 
   return {
     ok: true,
-    pointsBalance: member.pointsBalance,
+    pointsBalance: normalizeNumber(member.pointsBalance),
     exchangeItems: exchangeItems.filter((item) => item.isEnabled),
     pointTransactions: pointTransactions.sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, 20),
     vouchers: vouchers.sort((left, right) => right.createdAt.localeCompare(left.createdAt))
@@ -826,6 +904,18 @@ export async function redeemVoucher(repository: RestaurantRepository, input: unk
 
     const existingRedemption = await transaction.getVoucherRedemptionById(redemptionId);
     if (existingRedemption) {
+      if (
+        currentVoucher.status !== "USED" ||
+        currentVoucher.usedAt !== existingRedemption.redeemedAt ||
+        currentVoucher.usedByStaffId !== existingRedemption.redeemedByStaffId
+      ) {
+        currentVoucher.status = "USED";
+        currentVoucher.usedAt = existingRedemption.redeemedAt;
+        currentVoucher.usedByStaffId = existingRedemption.redeemedByStaffId;
+        currentVoucher.updatedAt = now;
+        await transaction.saveVoucher(currentVoucher);
+      }
+
       return {
         voucher: currentVoucher,
         isIdempotent: true
@@ -833,16 +923,14 @@ export async function redeemVoucher(repository: RestaurantRepository, input: unk
     }
 
     if (currentVoucher.status === "USED" && currentVoucher.usedAt && currentVoucher.usedByStaffId) {
-      await transaction.saveVoucherRedemption({
-        _id: redemptionId,
-        storeId: repository.storeId,
-        voucherId: currentVoucher._id,
-        memberId: currentVoucher.memberId,
-        redeemedByStaffId: currentVoucher.usedByStaffId,
-        redeemedAt: currentVoucher.usedAt,
-        createdAt: currentVoucher.usedAt,
-        updatedAt: currentVoucher.usedAt
-      });
+      await transaction.saveVoucherRedemption(
+        buildVoucherRedemptionRecord({
+          repository,
+          voucher: currentVoucher,
+          redeemedByStaffId: currentVoucher.usedByStaffId,
+          redeemedAt: currentVoucher.usedAt
+        })
+      );
       return {
         voucher: currentVoucher,
         isIdempotent: true
@@ -855,16 +943,14 @@ export async function redeemVoucher(repository: RestaurantRepository, input: unk
     currentVoucher.usedByStaffId = staff._id;
     currentVoucher.updatedAt = now;
     await transaction.saveVoucher(currentVoucher);
-    await transaction.saveVoucherRedemption({
-      _id: redemptionId,
-      storeId: repository.storeId,
-      voucherId: currentVoucher._id,
-      memberId: currentVoucher.memberId,
-      redeemedByStaffId: staff._id,
-      redeemedAt: now,
-      createdAt: now,
-      updatedAt: now
-    });
+    await transaction.saveVoucherRedemption(
+      buildVoucherRedemptionRecord({
+        repository,
+        voucher: currentVoucher,
+        redeemedByStaffId: staff._id,
+        redeemedAt: now
+      })
+    );
 
     return {
       voucher: currentVoucher,

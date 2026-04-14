@@ -3,24 +3,23 @@
 }
 
 .home-hero {
-  padding: 34rpx 28rpx 28rpx;
-  border-radius: 34rpx;
+  padding: 30rpx 28rpx;
 }
 
 .home-hero .title {
-  margin-top: 16rpx;
-  font-size: 46rpx;
-  line-height: 1.2;
+  margin-top: 14rpx;
+  font-size: 42rpx;
+  line-height: 1.22;
 }
 
 .home-hero .subtitle {
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  line-height: 1.68;
+  margin-top: 10rpx;
+  font-size: 23rpx;
+  line-height: 1.56;
 }
 
 .home-metrics {
-  margin-top: 22rpx;
+  margin-top: 20rpx;
   gap: 12rpx;
 }
 
@@ -30,22 +29,22 @@
 }
 
 .home-card {
-  padding: 28rpx 24rpx;
+  padding: 26rpx 22rpx;
 }
 
 .member-brief {
   display: flex;
   flex-wrap: wrap;
-  gap: 20rpx;
+  gap: 18rpx;
   margin-top: 18rpx;
-  padding: 20rpx 0;
+  padding: 18rpx 0;
   border-top: 1rpx solid #ece1d2;
   border-bottom: 1rpx solid #ece1d2;
 }
 
 .member-brief-item {
   flex: 1;
-  min-width: 220rpx;
+  min-width: 180rpx;
 }
 
 .member-brief-label {
@@ -71,7 +70,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 20rpx;
-  padding: 20rpx 0;
+  padding: 18rpx 0;
   border-bottom: 1rpx solid #efe6d9;
 }
 
@@ -86,7 +85,7 @@
 }
 
 .status-label {
-  font-size: 28rpx;
+  font-size: 27rpx;
   font-weight: 700;
   color: #1f2330;
 }
@@ -94,7 +93,7 @@
 .status-detail {
   margin-top: 8rpx;
   font-size: 22rpx;
-  line-height: 1.68;
+  line-height: 1.56;
   color: #73695d;
   overflow-wrap: anywhere;
 }
@@ -147,43 +146,10 @@
 }
 
 .home-quick-card .quick-card-copy {
-  min-height: 72rpx;
-}
-
-.quick-card-meta {
-  margin-top: 14rpx;
-  font-size: 21rpx;
-  color: #9a6f35;
-}
-
-.usage-list {
-  display: grid;
-  gap: 16rpx;
-  margin-top: 18rpx;
-}
-
-.usage-item {
-  padding-top: 14rpx;
-  border-top: 1rpx dashed #e6d8c6;
-}
-
-.usage-item:first-child {
-  padding-top: 0;
-  border-top: none;
-}
-
-.usage-title {
-  font-size: 27rpx;
-  font-weight: 700;
-  color: #1f2330;
-}
-
-.usage-copy {
-  margin-top: 8rpx;
+  margin-top: 10rpx;
+  min-height: 64rpx;
   font-size: 22rpx;
-  line-height: 1.68;
-  color: #73695d;
-  overflow-wrap: anywhere;
+  line-height: 1.56;
 }
 
 .entry-link-button {

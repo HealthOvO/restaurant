@@ -289,6 +289,132 @@ describe("member transaction safety", () => {
     expect(repository.runTransaction).not.toHaveBeenCalled();
   });
 
+  it("returns the latest inviter snapshot when duplicate first-visit settlement is detected after commit", async () => {
+    const repository = {
+      storeId: "default-store",
+      getStaffById: vi.fn().mockResolvedValue({
+        _id: "staff-1",
+        storeId: "default-store",
+        username: "cashier01",
+        passwordHash: "hash",
+        displayName: "前台小王",
+        role: "STAFF",
+        isEnabled: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-02T08:00:00.000Z"
+      }),
+      getMemberById: vi
+        .fn()
+        .mockResolvedValueOnce({
+          _id: "member-1",
+          storeId: "default-store",
+          memberCode: "M00000001",
+          openId: "openid-member-1",
+          phone: "13812345678",
+          phoneVerifiedAt: "2026-04-02T08:00:00.000Z",
+          pointsBalance: 0,
+          hasCompletedFirstVisit: false,
+          createdAt: "2026-04-02T08:00:00.000Z",
+          updatedAt: "2026-04-03T10:00:00.000Z"
+        })
+        .mockResolvedValueOnce({
+          _id: "member-inviter",
+          storeId: "default-store",
+          memberCode: "M00000009",
+          openId: "openid-member-inviter",
+          phone: "13812345679",
+          phoneVerifiedAt: "2026-04-02T08:00:00.000Z",
+          pointsBalance: 30,
+          hasCompletedFirstVisit: true,
+          createdAt: "2026-04-02T08:00:00.000Z",
+          updatedAt: "2026-04-03T10:05:00.000Z"
+        }),
+      getVisitByExternalOrderNo: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          _id: "visit-dup",
+          storeId: "default-store",
+          memberId: "member-1",
+          externalOrderNo: "ORDER-1002",
+          verifiedByStaffId: "staff-1",
+          operatorChannel: "MINIPROGRAM" as const,
+          isFirstValidVisit: true,
+          verifiedAt: "2026-04-03T10:00:00.000Z",
+          createdAt: "2026-04-03T10:00:00.000Z",
+          updatedAt: "2026-04-03T10:00:00.000Z"
+        }),
+      getInviteRelationByInviteeId: vi
+        .fn()
+        .mockResolvedValueOnce({
+          _id: "invite-1",
+          storeId: "default-store",
+          inviterMemberId: "member-inviter",
+          inviteeMemberId: "member-1",
+          status: "PENDING" as const,
+          createdAt: "2026-04-02T08:00:00.000Z",
+          updatedAt: "2026-04-03T09:00:00.000Z"
+        })
+        .mockResolvedValueOnce({
+          _id: "invite-1",
+          storeId: "default-store",
+          inviterMemberId: "member-inviter",
+          inviteeMemberId: "member-1",
+          status: "ACTIVATED" as const,
+          activatedAt: "2026-04-03T10:00:00.000Z",
+          createdAt: "2026-04-02T08:00:00.000Z",
+          updatedAt: "2026-04-03T10:00:00.000Z"
+        }),
+      listRewardRules: vi.fn().mockResolvedValue([]),
+      listInviteRelations: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            _id: "invite-1",
+            storeId: "default-store",
+            inviterMemberId: "member-inviter",
+            inviteeMemberId: "member-1",
+            status: "PENDING" as const,
+            createdAt: "2026-04-02T08:00:00.000Z",
+            updatedAt: "2026-04-03T09:00:00.000Z"
+          }
+        ])
+        .mockResolvedValueOnce([
+          {
+            _id: "invite-1",
+            storeId: "default-store",
+            inviterMemberId: "member-inviter",
+            inviteeMemberId: "member-1",
+            status: "ACTIVATED" as const,
+            activatedAt: "2026-04-03T10:00:00.000Z",
+            createdAt: "2026-04-02T08:00:00.000Z",
+            updatedAt: "2026-04-03T10:00:00.000Z"
+          }
+        ]),
+      listMemberPointTransactions: vi.fn().mockResolvedValue([]),
+      runTransaction: vi.fn().mockRejectedValue(new Error("E11000 duplicate key error collection"))
+    };
+
+    const result = await settleFirstVisit(repository as never, {
+      sessionToken: staffSessionToken,
+      memberId: "member-1",
+      externalOrderNo: "ORDER-1002",
+      operatorChannel: "MINIPROGRAM"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      settlement: {
+        isIdempotent: true,
+        activatedInviteCountAfterVisit: 1,
+        inviterPointsBalanceAfter: 30,
+        visitRecord: {
+          _id: "visit-dup"
+        }
+      }
+    });
+  });
+
   it("treats repeated point exchange requests with the same requestId as idempotent", async () => {
     const repository = {
       storeId: "default-store",
@@ -494,5 +620,87 @@ describe("member transaction safety", () => {
       })
     );
     expect(repository.addAuditLog).not.toHaveBeenCalled();
+  });
+
+  it("repairs voucher status from an existing redemption record before returning idempotent success", async () => {
+    const saveVoucher = vi.fn().mockResolvedValue(undefined);
+    const repository = {
+      storeId: "default-store",
+      getStaffById: vi.fn().mockResolvedValue({
+        _id: "staff-1",
+        storeId: "default-store",
+        username: "cashier01",
+        passwordHash: "hash",
+        displayName: "前台小王",
+        role: "STAFF",
+        isEnabled: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-02T08:00:00.000Z"
+      }),
+      getVoucherById: vi.fn().mockResolvedValue({
+        _id: "voucher-1",
+        storeId: "default-store",
+        memberId: "member-1",
+        source: "POINT_EXCHANGE" as const,
+        dishId: "dish-1",
+        dishName: "招牌凉菜",
+        status: "READY" as const,
+        expiresAt: "2099-04-02T08:00:00.000Z",
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-03T11:00:00.000Z"
+      }),
+      runTransaction: vi.fn(async (callback) =>
+        callback({
+          getVoucherById: vi.fn().mockResolvedValue({
+            _id: "voucher-1",
+            storeId: "default-store",
+            memberId: "member-1",
+            source: "POINT_EXCHANGE" as const,
+            dishId: "dish-1",
+            dishName: "招牌凉菜",
+            status: "READY" as const,
+            expiresAt: "2099-04-02T08:00:00.000Z",
+            createdAt: "2026-04-02T08:00:00.000Z",
+            updatedAt: "2026-04-03T11:00:00.000Z"
+          }),
+          getVoucherRedemptionById: vi.fn().mockResolvedValue({
+            _id: "redeem_voucher-1",
+            storeId: "default-store",
+            voucherId: "voucher-1",
+            memberId: "member-1",
+            redeemedByStaffId: "staff-2",
+            redeemedAt: "2026-04-03T12:00:00.000Z",
+            createdAt: "2026-04-03T12:00:00.000Z",
+            updatedAt: "2026-04-03T12:00:00.000Z"
+          }),
+          saveVoucher
+        })
+      ),
+      addAuditLog: vi.fn()
+    };
+
+    const result = await redeemVoucher(repository as never, {
+      sessionToken: staffSessionToken,
+      voucherId: "voucher-1"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      isIdempotent: true,
+      voucher: {
+        _id: "voucher-1",
+        status: "USED",
+        usedByStaffId: "staff-2",
+        usedAt: "2026-04-03T12:00:00.000Z"
+      }
+    });
+    expect(saveVoucher).toHaveBeenCalledWith(
+      expect.objectContaining({
+        _id: "voucher-1",
+        status: "USED",
+        usedByStaffId: "staff-2",
+        usedAt: "2026-04-03T12:00:00.000Z"
+      })
+    );
   });
 });

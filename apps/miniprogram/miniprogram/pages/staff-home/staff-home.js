@@ -8,14 +8,14 @@ function formatRoleLabel(role) {
 function resolveWorkHint(hasSession, staffProfile) {
   if (!hasSession || !staffProfile) {
     return {
-      title: "先登录后再开始核销",
-      copy: "登录后才能进入消费核销、菜品券核销和会员查询。首次成功会自动绑定当前微信。"
+      title: "先登录店员账号",
+      copy: "登录后再核销、查单、查会员。"
     };
   }
 
   return {
-    title: `${staffProfile.displayName} 已登录，可以开始值班`,
-    copy: "现在可以直接查会员、录订单和扫券核销，所有关键操作都会同步留痕。"
+    title: `${staffProfile.displayName} 已登录`,
+    copy: "核销、查会员、看订单。"
   };
 }
 
@@ -28,10 +28,16 @@ Page({
     staffRoleLabel: "",
     loginStatusText: "未登录",
     workHintTitle: "先登录店员账号",
-    workHintCopy: "登录后才能进入消费核销、菜品券核销和会员查询；首次成功会自动绑定当前微信。"
+    workHintCopy: "登录后再核销、查单、查会员。"
   },
   onShow() {
     this.refresh();
+  },
+  async onPullDownRefresh() {
+    await this.refresh().catch(() => null);
+    if (typeof wx.stopPullDownRefresh === "function") {
+      wx.stopPullDownRefresh();
+    }
   },
   async refresh() {
     this.setData({
@@ -105,7 +111,7 @@ Page({
       staffRoleLabel: "",
       loginStatusText: "未登录",
       workHintTitle: "先登录店员账号",
-      workHintCopy: "登录后才能进入消费核销、菜品券核销和会员查询；首次成功会自动绑定当前微信。",
+      workHintCopy: "登录后再核销、查单、查会员。",
       errorMessage: ""
     });
     wx.showToast({

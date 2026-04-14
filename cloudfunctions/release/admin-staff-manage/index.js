@@ -10623,6 +10623,10 @@ function _hash(password, salt, callback, progressCallback) {
 
 // src/runtime/auth.ts
 var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
+var SUPPORTED_ROLES = ["OWNER", "STAFF"];
+function normalizeManagedStoreIds(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+}
 function getSessionSecret() {
   const secret = process.env.SESSION_SECRET?.trim();
   if (!secret) {
@@ -10633,10 +10637,31 @@ function getSessionSecret() {
 async function hashPassword(rawPassword) {
   return hash(rawPassword, 10);
 }
+function normalizeSessionClaims(claims) {
+  const staffUserId = typeof claims.staffUserId === "string" ? claims.staffUserId.trim() : "";
+  const username = typeof claims.username === "string" ? claims.username.trim() : "";
+  const storeId = typeof claims.storeId === "string" ? claims.storeId.trim() : "";
+  if (!staffUserId || !username || !storeId || !SUPPORTED_ROLES.includes(claims.role)) {
+    throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+  }
+  const normalizedAccessScope = claims.role === "OWNER" && claims.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
+  const normalizedManagedStoreIds = normalizedAccessScope === "ALL_STORES" ? normalizeManagedStoreIds(storeId, claims.managedStoreIds) : [storeId];
+  return {
+    staffUserId,
+    username,
+    role: claims.role,
+    storeId,
+    accessScope: normalizedAccessScope,
+    managedStoreIds: normalizedManagedStoreIds
+  };
+}
 function requireSessionToken(token) {
   try {
-    return import_jsonwebtoken.default.verify(token, getSessionSecret());
+    return normalizeSessionClaims(import_jsonwebtoken.default.verify(token, getSessionSecret()));
   } catch (error) {
+    if (error instanceof DomainError) {
+      throw error;
+    }
     throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55", {
       cause: error instanceof Error ? error.message : String(error)
     });
@@ -10650,14 +10675,18 @@ function createId(prefix) {
 }
 
 // src/runtime/service.staff.ts
-function normalizeManagedStoreIds(storeId, managedStoreIds) {
-  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+function normalizeOptionalText(value) {
+  const normalized = `${value ?? ""}`.trim();
+  return normalized || void 0;
+}
+function normalizeManagedStoreIds2(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => normalizeOptionalText(item)).filter(Boolean)));
 }
 function resolveStaffAccess(staff) {
   const accessScope = staff.role === "OWNER" && staff.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
   return {
     accessScope,
-    managedStoreIds: normalizeManagedStoreIds(staff.storeId, staff.managedStoreIds)
+    managedStoreIds: accessScope === "ALL_STORES" ? normalizeManagedStoreIds2(staff.storeId, staff.managedStoreIds) : [staff.storeId]
   };
 }
 async function requireActiveStaffSession(repository, token) {
@@ -10685,6 +10714,19 @@ async function requireActiveStaffSession(repository, token) {
 // src/runtime/service.admin.ts
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
+}
+function compareStaffUsers(left, right) {
+  const roleWeight = {
+    OWNER: 2,
+    STAFF: 1
+  };
+  return roleWeight[right.role] - roleWeight[left.role] || Number(right.isEnabled) - Number(left.isEnabled) || left.username.localeCompare(right.username);
+}
+function sanitizeStaffUser(staffUser) {
+  return {
+    ...staffUser,
+    passwordHash: void 0
+  };
 }
 async function writeAudit(repository, payload) {
   const now = nowIso();
@@ -10723,14 +10765,15 @@ async function manageStaff(repository, input) {
       action: "UPDATE_PASSWORD",
       targetCollection: "staff_users",
       targetId: existing._id,
-      summary: staff._id === existing._id ? `\u4FEE\u6539\u8D26\u53F7 ${existing.username} \u7684\u767B\u5F55\u5BC6\u7801` : `\u91CD\u7F6E\u5458\u5DE5\u8D26\u53F7 ${existing.username} \u7684\u767B\u5F55\u5BC6\u7801`
+      summary: staff._id === existing._id ? `\u4FEE\u6539\u8D26\u53F7 ${existing.username} \u7684\u767B\u5F55\u5BC6\u7801` : `\u91CD\u7F6E\u5458\u5DE5\u8D26\u53F7 ${existing.username} \u7684\u767B\u5F55\u5BC6\u7801`,
+      payload: {
+        updatedBySelf: staff._id === existing._id,
+        username: existing.username
+      }
     });
     return {
       ok: true,
-      staff: {
-        ...existing,
-        passwordHash: void 0
-      }
+      staff: sanitizeStaffUser(existing)
     };
   }
   if (staff.role !== "OWNER") {
@@ -10739,10 +10782,7 @@ async function manageStaff(repository, input) {
   if (parsed.action === "LIST") {
     return {
       ok: true,
-      staffUsers: (await repository.listStaffUsers()).map((staffUser) => ({
-        ...staffUser,
-        passwordHash: void 0
-      }))
+      staffUsers: (await repository.listStaffUsers()).sort(compareStaffUsers).map(sanitizeStaffUser)
     };
   }
   if (!parsed.user) {
@@ -10751,6 +10791,10 @@ async function manageStaff(repository, input) {
   if (parsed.action === "CREATE") {
     if (parsed.user.role !== "STAFF") {
       throw new DomainError("FORBIDDEN", "\u8001\u677F\u8D26\u53F7\u4E0D\u652F\u6301\u5728\u540E\u53F0\u65B0\u589E\uFF0C\u8BF7\u4FDD\u7559\u521D\u59CB\u5316\u8001\u677F\u4E3B\u8D26\u53F7");
+    }
+    const initialPassword = parsed.user.password?.trim();
+    if (!initialPassword) {
+      throw new DomainError("INVALID_INPUT", "\u7F3A\u5C11\u5458\u5DE5\u521D\u59CB\u5BC6\u7801");
     }
     const existing = await repository.getStaffByUsername(parsed.user.username);
     if (existing) {
@@ -10761,7 +10805,7 @@ async function manageStaff(repository, input) {
       _id: createId("staff"),
       storeId: repository.storeId,
       username: parsed.user.username,
-      passwordHash: await hashPassword(parsed.user.password ?? "123456"),
+      passwordHash: await hashPassword(initialPassword),
       displayName: parsed.user.displayName,
       role: parsed.user.role,
       isEnabled: parsed.user.isEnabled ?? true,
@@ -10776,14 +10820,16 @@ async function manageStaff(repository, input) {
       action: "CREATE_STAFF",
       targetCollection: "staff_users",
       targetId: user._id,
-      summary: `\u521B\u5EFA\u5458\u5DE5\u8D26\u53F7 ${user.username}`
+      summary: `\u521B\u5EFA\u5458\u5DE5\u8D26\u53F7 ${user.username}`,
+      payload: {
+        username: user.username,
+        role: user.role,
+        isEnabled: user.isEnabled
+      }
     });
     return {
       ok: true,
-      staff: {
-        ...user,
-        passwordHash: void 0
-      }
+      staff: sanitizeStaffUser(user)
     };
   }
   if (parsed.action === "UPDATE_STATUS") {
@@ -10811,23 +10857,23 @@ async function manageStaff(repository, input) {
       action: "UPDATE_STAFF",
       targetCollection: "staff_users",
       targetId: existing._id,
-      summary: `\u66F4\u65B0\u5458\u5DE5\u8D26\u53F7 ${existing.username}`
+      summary: `\u66F4\u65B0\u5458\u5DE5\u8D26\u53F7 ${existing.username}`,
+      payload: {
+        username: existing.username,
+        role: existing.role,
+        isEnabled: existing.isEnabled
+      }
     });
     return {
       ok: true,
-      staff: {
-        ...existing,
-        passwordHash: void 0
-      }
+      staff: sanitizeStaffUser(existing)
     };
   }
   throw new DomainError("UNSUPPORTED_ACTION", "\u5F53\u524D\u5458\u5DE5\u64CD\u4F5C\u4E0D\u652F\u6301");
 }
 
 // src/handlers/admin.staff.manage.ts
-var main = defineHandler(
-  async ({ event, context, repository }) => manageStaff(repository, event)
-);
+var main = defineHandler(async ({ event, repository }) => manageStaff(repository, event));
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   main

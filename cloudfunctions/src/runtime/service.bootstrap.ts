@@ -16,8 +16,23 @@ function getBootstrapSecret(): string {
   return secret;
 }
 
-function normalizeManagedStoreIds(storeId: string, managedStoreIds: string[]): string[] {
+function normalizeManagedStoreIds(
+  storeId: string,
+  accessScope: "STORE_ONLY" | "ALL_STORES",
+  managedStoreIds: string[]
+): string[] {
+  if (accessScope !== "ALL_STORES") {
+    return [storeId];
+  }
+
   return Array.from(new Set([storeId, ...managedStoreIds.map((item) => item.trim()).filter(Boolean)]));
+}
+
+function resolveOwnerDisplayName(
+  accessScope: "STORE_ONLY" | "ALL_STORES",
+  ownerDisplayName?: string
+): string {
+  return ownerDisplayName?.trim() || (accessScope === "ALL_STORES" ? "总店老板" : "门店老板");
 }
 
 async function writeAudit(
@@ -46,8 +61,8 @@ export async function bootstrapStoreOwner(repository: RestaurantRepository, inpu
   }
 
   const now = nowIso();
-  const managedStoreIds = normalizeManagedStoreIds(repository.storeId, parsed.managedStoreIds);
-  const displayName = parsed.ownerDisplayName?.trim() || (parsed.accessScope === "ALL_STORES" ? "总店老板" : "门店老板");
+  const managedStoreIds = normalizeManagedStoreIds(repository.storeId, parsed.accessScope, parsed.managedStoreIds);
+  const displayName = resolveOwnerDisplayName(parsed.accessScope, parsed.ownerDisplayName);
 
   const owner: StaffUser = existing
     ? {
@@ -83,6 +98,7 @@ export async function bootstrapStoreOwner(repository: RestaurantRepository, inpu
     targetId: owner._id,
     summary: `${repository.storeId} 已初始化老板账号 ${owner.username}`,
     payload: {
+      username: owner.username,
       accessScope: owner.accessScope,
       managedStoreIds: owner.managedStoreIds
     }

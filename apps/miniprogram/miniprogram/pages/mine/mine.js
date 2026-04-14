@@ -20,10 +20,10 @@ function resolveMemberPhoneText(member) {
   }
 
   if (member.phoneVerifiedAt) {
-    return `${maskPhone(member.phone)}（微信已验证）`;
+    return `${maskPhone(member.phone)}（已验证）`;
   }
 
-  return "待微信验证";
+  return "待验证";
 }
 
 function resolveInviteStatusText(member, relation, hasBoundPhone) {
@@ -31,7 +31,7 @@ function resolveInviteStatusText(member, relation, hasBoundPhone) {
     return "待验证";
   }
   if (!relation) {
-    return member && member.hasCompletedFirstVisit ? "可去邀请" : "可绑定/邀请";
+    return member && member.hasCompletedFirstVisit ? "可邀请" : "可绑定";
   }
   if (relation.status === "ACTIVATED") {
     return "已激活";
@@ -47,104 +47,101 @@ function resolveInviteStatusText(member, relation, hasBoundPhone) {
 
 function resolveInviteDetail(member, relation, hasBoundPhone) {
   if (!hasBoundPhone) {
-    return "先完成手机号验证，邀请关系和积分记录才会生效。";
+    return "先完成手机号验证。";
   }
   if (!relation && member && !member.hasCompletedFirstVisit) {
-    return "首单前可以填写邀请码，也可以直接开始邀请朋友。";
+    return "首单前可填写邀请码。";
   }
   if (!relation) {
-    return "你还没有绑定邀请人，现在可以直接分享自己的邀请码。";
+    return "可以直接分享自己的邀请码。";
   }
   if (relation.status === "ACTIVATED") {
-    return "这条邀请关系已经生效，并已计入邀请进度。";
+    return "已计入邀请进度。";
   }
   if (relation.status === "PENDING") {
-    return "已经绑定，等第一次到店核销后自动生效。";
+    return "首单后生效。";
   }
   if (relation.status === "ADJUSTED") {
-    return "这条邀请关系由老板后台调整过。";
+    return "老板已调整。";
   }
-  return "邀请关系已经记录。";
+  return "邀请关系已记录。";
 }
 
 function resolveFirstVisitDetail(member) {
   if (member && member.hasCompletedFirstVisit && member.firstVisitAt) {
-    return `已在 ${formatDateTime(member.firstVisitAt)} 记录首次到店。`;
+    return `已记录 ${formatDateTime(member.firstVisitAt)}`;
   }
   if (member && member.hasCompletedFirstVisit) {
-    return "首次到店已经记录。";
+    return "已记录";
   }
-  return "完成有效消费后，系统会自动结算积分和首单记录。";
+  return "完成后会自动更新。";
 }
 
 function resolveStatusHeadline(member, relation, hasBoundPhone) {
   if (!hasBoundPhone) {
-    return "先完成手机号验证";
+    return "完成手机号验证";
   }
 
   if (member && !member.hasCompletedFirstVisit) {
-    if (relation && relation.status === "PENDING") {
-      return "邀请关系已记下，等首单生效";
-    }
-    return "会员已开通，首单前可先处理邀请";
+    return relation && relation.status === "PENDING" ? "待完成首单" : "会员已开通";
   }
 
   if (relation && relation.status === "ACTIVATED") {
-    return "已经可以继续邀请朋友了";
+    return "会员正常";
   }
 
-  return "会员状态已经正常，可以直接看积分和菜品券";
+  return "查看积分和券";
 }
 
 function resolveStatusSummary(member, relation, hasBoundPhone) {
   if (!hasBoundPhone) {
-    return "验证后才能完整记录邀请关系、首单礼、积分和菜品券。";
+    return "验证后才能正常累计积分。";
   }
 
   if (member && !member.hasCompletedFirstVisit && !relation) {
-    return "如果朋友给了你邀请码，首单前可以先去填写；不填也可以先邀请别人。";
+    return "首单前可绑定邀请码。";
   }
 
   if (member && !member.hasCompletedFirstVisit && relation && relation.status === "PENDING") {
-    return "第一次到店完成后，系统会把首单礼和邀请进度一起结算。";
+    return "首单后会更新邀请和积分。";
   }
 
   if (member && !member.hasCompletedFirstVisit) {
-    return "现在只差第一次有效消费，完成后系统会自动更新状态。";
+    return "完成首单后会自动更新。";
   }
 
   if (relation && relation.status === "ACTIVATED") {
-    return "后面继续邀请新朋友到店，达标后会自动送积分，再去兑换菜品券。";
+    return "可以继续邀请好友。";
   }
 
-  return "现在可以直接分享邀请码，后面看积分、菜品券和订单记录。";
+  return "订单、积分和券都在这里看。";
 }
 
 function resolveNextStep(member, relation, hasBoundPhone) {
   if (!hasBoundPhone) {
     return {
-      title: "先去验证手机号",
-      copy: "验证后，邀请关系、首单礼、积分和菜品券记录才会完整生效。"
+      title: "先验证手机号",
+      copy: "验证后再累计积分。"
     };
   }
 
   if (!relation && member && !member.hasCompletedFirstVisit) {
     return {
-      title: "首单前可先绑定邀请码，或者直接开始邀请",
-      copy: "如果朋友已经把邀请码发给你，现在就能填写；如果没有，也可以先把自己的邀请码分享出去。"
+      title: "首单前可绑定邀请码",
+      copy: "也可以直接去点餐。"
     };
   }
 
   if (member && !member.hasCompletedFirstVisit) {
     return {
-      title: "下一步是完成第一次有效消费",
-      copy: "点餐并完成订单后，系统会自动结算首单礼和邀请积分。"
+      title: "等待首单完成",
+      copy: "完成后自动更新。"
     };
   }
 
   return {
-    title: "现在可以继续邀请朋友",
-    copy: "后面重点看邀请人数、菜品券到账和订单记录就可以了。"
+    title: "常用入口都在下面",
+    copy: "需要什么直接点。"
   };
 }
 
@@ -162,21 +159,19 @@ function buildStatusItems(member, relation, hasBoundPhone) {
       key: "phone",
       label: "手机号",
       value: hasBoundPhone ? "已验证" : "未验证",
-      detail: hasBoundPhone
-        ? `已绑定 ${maskPhone(member.phone)}`
-        : "先去注册页完成微信手机号验证。",
+      detail: hasBoundPhone ? `已绑定 ${maskPhone(member.phone)}` : "去注册页完成验证。",
       tone: hasBoundPhone ? "success" : "neutral"
     },
     {
       key: "invite",
-      label: "邀请关系",
+      label: "邀请",
       value: inviteStatusText,
       detail: resolveInviteDetail(member, relation, hasBoundPhone),
       tone: hasBoundPhone ? inviteTone : "neutral"
     },
     {
       key: "firstVisit",
-      label: "首次有效消费",
+      label: "首单",
       value: member && member.hasCompletedFirstVisit ? "已完成" : "未完成",
       detail: resolveFirstVisitDetail(member),
       tone: member && member.hasCompletedFirstVisit ? "success" : "warning"
@@ -198,10 +193,10 @@ Page({
     memberStatusText: "待验证",
     inviteStatusText: "待验证",
     firstVisitStatusText: "未完成",
-    nextStepTitle: "先去验证手机号",
-    nextStepCopy: "验证后，邀请关系、首单礼、积分和菜品券记录才会完整生效。",
-    statusHeadline: "先完成手机号验证",
-    statusSummary: "验证后才能完整记录邀请关系、首单礼、积分和菜品券。",
+    nextStepTitle: "先验证手机号",
+    nextStepCopy: "验证后再累计积分。",
+    statusHeadline: "完成手机号验证",
+    statusSummary: "验证后可正常累计积分。",
     statusItems: [],
     pointsBalance: 0
   },
@@ -250,10 +245,10 @@ Page({
         memberStatusText: "待验证",
         inviteStatusText: "待验证",
         firstVisitStatusText: "未完成",
-        nextStepTitle: "先去验证手机号",
-        nextStepCopy: "验证后，邀请关系、首单礼、积分和菜品券记录才会完整生效。",
-        statusHeadline: "先完成手机号验证",
-        statusSummary: "验证后才能完整记录邀请关系、首单礼、积分和菜品券。",
+        nextStepTitle: "先验证手机号",
+        nextStepCopy: "验证后再累计积分。",
+        statusHeadline: "完成手机号验证",
+        statusSummary: "验证后可正常累计积分。",
         statusItems: [],
         pointsBalance: 0
       });

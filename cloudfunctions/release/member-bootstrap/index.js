@@ -9071,6 +9071,13 @@ async function resolveVerifiedPhoneNumber(phoneCode) {
     throw new DomainError("PHONE_VERIFY_FAILED", "\u5FAE\u4FE1\u624B\u673A\u53F7\u9A8C\u8BC1\u5931\u8D25\uFF0C\u8BF7\u91CD\u65B0\u6388\u6743");
   }
 }
+async function findMemberByInviteCode(repository, inviteCode) {
+  const normalizedCode = inviteCode?.trim();
+  if (!normalizedCode) {
+    return void 0;
+  }
+  return (await repository.listMembers()).find((member) => member.memberCode === normalizedCode);
+}
 async function bootstrapMember(repository, callerOpenId, input) {
   const parsed = bootstrapInputSchema.parse(input);
   const now = nowIso();
@@ -9124,7 +9131,7 @@ async function bootstrapMember(repository, callerOpenId, input) {
     if (!member.phoneVerifiedAt) {
       nextPendingInviteCode = effectiveInviteCode;
     } else {
-      const inviter = (await repository.listMembers()).find((item) => item.memberCode === effectiveInviteCode);
+      const inviter = await findMemberByInviteCode(repository, effectiveInviteCode);
       nextPendingInviteCode = void 0;
       if (inviter && inviter._id !== member._id) {
         assertInviteBindingAllowed({

@@ -9015,6 +9015,10 @@ var BASE64_CODE = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456
 
 // src/runtime/auth.ts
 var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
+var SUPPORTED_ROLES = ["OWNER", "STAFF"];
+function normalizeManagedStoreIds(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+}
 function getSessionSecret() {
   const secret = process.env.SESSION_SECRET?.trim();
   if (!secret) {
@@ -9022,10 +9026,31 @@ function getSessionSecret() {
   }
   return secret;
 }
+function normalizeSessionClaims(claims) {
+  const staffUserId = typeof claims.staffUserId === "string" ? claims.staffUserId.trim() : "";
+  const username = typeof claims.username === "string" ? claims.username.trim() : "";
+  const storeId = typeof claims.storeId === "string" ? claims.storeId.trim() : "";
+  if (!staffUserId || !username || !storeId || !SUPPORTED_ROLES.includes(claims.role)) {
+    throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+  }
+  const normalizedAccessScope = claims.role === "OWNER" && claims.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
+  const normalizedManagedStoreIds = normalizedAccessScope === "ALL_STORES" ? normalizeManagedStoreIds(storeId, claims.managedStoreIds) : [storeId];
+  return {
+    staffUserId,
+    username,
+    role: claims.role,
+    storeId,
+    accessScope: normalizedAccessScope,
+    managedStoreIds: normalizedManagedStoreIds
+  };
+}
 function requireSessionToken(token) {
   try {
-    return import_jsonwebtoken.default.verify(token, getSessionSecret());
+    return normalizeSessionClaims(import_jsonwebtoken.default.verify(token, getSessionSecret()));
   } catch (error) {
+    if (error instanceof DomainError) {
+      throw error;
+    }
     throw new DomainError("UNAUTHORIZED", "\u767B\u5F55\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55", {
       cause: error instanceof Error ? error.message : String(error)
     });
@@ -9033,14 +9058,18 @@ function requireSessionToken(token) {
 }
 
 // src/runtime/service.staff.ts
-function normalizeManagedStoreIds(storeId, managedStoreIds) {
-  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => item.trim()).filter(Boolean)));
+function normalizeOptionalText(value) {
+  const normalized = `${value ?? ""}`.trim();
+  return normalized || void 0;
+}
+function normalizeManagedStoreIds2(storeId, managedStoreIds) {
+  return Array.from(new Set([storeId, ...managedStoreIds ?? []].map((item) => normalizeOptionalText(item)).filter(Boolean)));
 }
 function resolveStaffAccess(staff) {
   const accessScope = staff.role === "OWNER" && staff.accessScope === "ALL_STORES" ? "ALL_STORES" : "STORE_ONLY";
   return {
     accessScope,
-    managedStoreIds: normalizeManagedStoreIds(staff.storeId, staff.managedStoreIds)
+    managedStoreIds: accessScope === "ALL_STORES" ? normalizeManagedStoreIds2(staff.storeId, staff.managedStoreIds) : [staff.storeId]
   };
 }
 async function requireActiveStaffSession(repository, token) {
@@ -9069,9 +9098,12 @@ async function requireActiveStaffSession(repository, token) {
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
-function normalizeOptionalText(value) {
+function normalizeOptionalText2(value) {
   const normalized = `${value ?? ""}`.trim();
   return normalized || void 0;
+}
+function resolveOwnerReply(nextOwnerReply, currentOwnerReply) {
+  return nextOwnerReply ?? currentOwnerReply;
 }
 async function writeAudit(repository, payload) {
   const now = nowIso();
@@ -9100,14 +9132,15 @@ async function updateAdminFeedback(repository, input) {
   if (!ticket) {
     throw new DomainError("FEEDBACK_NOT_FOUND", "\u53CD\u9988\u8BB0\u5F55\u4E0D\u5B58\u5728");
   }
-  const nextOwnerReply = normalizeOptionalText(parsed.ownerReply);
-  if (parsed.status === "RESOLVED" && !nextOwnerReply && !ticket.ownerReply) {
+  const nextOwnerReply = normalizeOptionalText2(parsed.ownerReply);
+  const ownerReply = resolveOwnerReply(nextOwnerReply, ticket.ownerReply);
+  if (parsed.status === "RESOLVED" && !ownerReply) {
     throw new DomainError("FEEDBACK_REPLY_REQUIRED", "\u5904\u7406\u4E3A\u5DF2\u89E3\u51B3\u524D\uFF0C\u8BF7\u5148\u586B\u5199\u7ED9\u7528\u6237\u7684\u56DE\u590D");
   }
   const now = nowIso();
   ticket.status = parsed.status;
   ticket.priority = parsed.priority;
-  ticket.ownerReply = nextOwnerReply;
+  ticket.ownerReply = ownerReply;
   ticket.handledByStaffId = staff._id;
   ticket.handledAt = now;
   ticket.updatedAt = now;

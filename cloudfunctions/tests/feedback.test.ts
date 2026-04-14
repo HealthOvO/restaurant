@@ -270,6 +270,59 @@ describe("feedback flow", () => {
     expect(listResult.tickets).toHaveLength(1);
   });
 
+  it("keeps the existing owner reply when only status or priority changes", async () => {
+    const feedbackTicket = {
+      _id: "feedback-2",
+      storeId: "default-store",
+      feedbackCode: "F00000002",
+      sourceType: "MEMBER" as const,
+      sourceChannel: "MINIPROGRAM_MEMBER" as const,
+      status: "PROCESSING" as const,
+      priority: "NORMAL" as const,
+      category: "OTHER" as const,
+      title: "想补充说明",
+      content: "这里是内容",
+      ownerReply: "我们已经收到，正在排查。",
+      submitterOpenId: "openid-member-2",
+      createdAt: "2026-04-02T08:00:00.000Z",
+      updatedAt: "2026-04-02T08:00:00.000Z"
+    };
+    const repository = {
+      storeId: "default-store",
+      getStaffById: vi.fn().mockResolvedValue({
+        _id: "staff-owner-1",
+        storeId: "default-store",
+        username: "owner",
+        passwordHash: "hash",
+        displayName: "老板",
+        role: "OWNER",
+        isEnabled: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-02T08:00:00.000Z"
+      }),
+      getFeedbackTicketById: vi.fn().mockResolvedValue(feedbackTicket),
+      saveFeedbackTicket: vi.fn().mockImplementation(async (ticket) => ticket),
+      addAuditLog: vi.fn().mockResolvedValue(undefined)
+    };
+
+    const result = await updateAdminFeedback(repository as never, {
+      sessionToken: ownerSessionToken,
+      feedbackId: "feedback-2",
+      status: "RESOLVED",
+      priority: "HIGH",
+      ownerReply: ""
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      ticket: {
+        status: "RESOLVED",
+        priority: "HIGH",
+        ownerReply: "我们已经收到，正在排查。"
+      }
+    });
+  });
+
   it("rejects non-owner access when reading or updating admin feedback", async () => {
     const repository = {
       storeId: "default-store",

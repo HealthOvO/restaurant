@@ -101,7 +101,7 @@ npm run build:release
 
 ## 云开发控制台手工创建数据集合
 
-### 6. 创建 8 个集合
+### 6. 创建业务集合
 
 进入 CloudBase 控制台，创建下面这些集合：
 
@@ -109,8 +109,17 @@ npm run build:release
 - `invite_relations`
 - `visit_records`
 - `reward_rules`
+- `point_exchange_items`
+- `member_point_transactions`
 - `dish_vouchers`
 - `voucher_redemptions`
+- `menu_categories`
+- `menu_items`
+- `store_configs`
+- `order_records`
+- `order_status_logs`
+- `feedback_tickets`
+- `ops_tasks`
 - `staff_users`
 - `audit_logs`
 
@@ -139,6 +148,7 @@ npm run deploy:functions -- -EnvId 你的环境ID
 在 CloudBase 控制台里，给云函数配置环境变量：
 
 - `SESSION_SECRET`
+- `BOOTSTRAP_SECRET`
 
 建议填一串你自己生成的随机字符串，比如：
 
@@ -170,12 +180,14 @@ npm run deploy:admin -- -EnvId 你的环境ID
 
 老板用电脑浏览器打开 CloudBase 静态托管地址访问后台。
 
-首次默认账号：
+首次使用先在登录页切到“首次初始化”，输入：
 
-- 用户名：`owner`
-- 密码：`owner123456`
+- 门店编号
+- 初始化口令 `BOOTSTRAP_SECRET`
+- 老板账号
+- 老板密码
 
-老板登录后可以：
+初始化完成后会自动尝试登录。老板登录后可以：
 
 - 配返菜规则
 - 创建员工账号
@@ -224,9 +236,9 @@ npm run deploy:admin -- -EnvId 你的环境ID
 2. 改 [config.js](/C:/workspace/zxf/apps/miniprogram/miniprogram/config.js)
 3. 新建 `apps/admin-web/.env`
 4. 跑 `npm run build:release`
-5. 创建 8 个集合
+5. 创建业务集合和索引
 6. 跑 `.\scripts\deploy-cloudfunctions.ps1 -EnvId 你的环境ID`
 7. 跑 `.\scripts\deploy-admin-web.ps1 -EnvId 你的环境ID`
-8. 打开后台地址，用 `owner / owner123456` 登录
-9. 在后台创建员工账号
+8. 打开后台地址，先完成老板账号初始化
+9. 登录后台并创建员工账号
 10. 员工用小程序登录

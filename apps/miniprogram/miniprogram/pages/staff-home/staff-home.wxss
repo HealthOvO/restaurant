@@ -2,6 +2,95 @@
   padding-top: 24rpx;
 }
 
+.staff-home-hero {
+  padding-bottom: 26rpx;
+}
+
+.hero-table-chip-light {
+  background: rgba(255, 255, 255, 0.76);
+  color: #6f4b1b;
+}
+
+.staff-status-strip {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12rpx;
+  margin-top: 22rpx;
+}
+
+.staff-status-chip {
+  padding: 18rpx 16rpx;
+  border-radius: 22rpx;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1rpx solid rgba(214, 189, 147, 0.24);
+}
+
+.staff-status-label {
+  font-size: 20rpx;
+  color: #7a684f;
+}
+
+.staff-status-value {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #2b2119;
+}
+
 .staff-login-card .button-primary {
   margin-top: 20rpx;
+}
+
+.staff-work-card,
+.staff-tools-card {
+  margin-top: 24rpx;
+}
+
+.staff-primary-grid {
+  display: grid;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.staff-task-card {
+  padding: 24rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1rpx solid rgba(225, 210, 191, 0.92);
+}
+
+.staff-task-card-primary {
+  background: linear-gradient(180deg, rgba(255, 250, 246, 0.99), rgba(249, 238, 224, 0.98));
+}
+
+.staff-task-title {
+  margin-top: 14rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1f2330;
+}
+
+.staff-task-copy {
+  margin-top: 10rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #756a5d;
+}
+
+.staff-tools-grid {
+  margin-top: 18rpx;
+}
+
+.staff-tool-card {
+  background: #fffaf3;
+  border-color: rgba(229, 212, 188, 0.92);
+  box-shadow: none;
+}
+
+@media (max-width: 420px) {
+  .staff-status-strip {
+    grid-template-columns: 1fr;
+  }
 }

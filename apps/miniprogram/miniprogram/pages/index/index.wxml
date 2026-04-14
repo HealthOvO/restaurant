@@ -1,39 +1,28 @@
 <view class="page home-shell">
   <view class="hero hero-member dining-hero">
-    <view class="hero-badge">点餐首页</view>
-    <view class="title">{{storeConfig ? storeConfig.bannerTitle : '现点现做，先把这一餐点上'}}</view>
-    <view class="subtitle">{{storeConfig ? storeConfig.bannerSubtitle : '堂食和自提都能在小程序里直接下单，订单状态会实时更新。'}}</view>
+    <view class="hero-topline">
+      <view class="hero-badge">点餐</view>
+      <view wx:if="{{activeTableNo}}" class="hero-table-chip">桌号 {{activeTableNo}}</view>
+    </view>
+    <view class="title">{{storeConfig ? storeConfig.storeName : '门店点餐'}}</view>
+    <view class="subtitle">{{storeConfig && storeConfig.announcement ? storeConfig.announcement : '点餐、下单、查订单。'}}</view>
 
     <view class="hero-chips">
-      <view wx:for="{{storeConfig && storeConfig.bannerTags ? storeConfig.bannerTags : []}}" wx:key="*this" class="hero-chip">{{item}}</view>
-      <view wx:if="{{activeTableNo}}" class="hero-chip">当前桌号 {{activeTableNo}}</view>
+      <view class="hero-chip">{{storeConfig && storeConfig.dineInEnabled ? '堂食' : '堂食暂停'}}</view>
+      <view class="hero-chip">{{storeConfig && storeConfig.pickupEnabled ? '自提' : '自提暂停'}}</view>
+      <view class="hero-chip">{{hasMember ? '会员已开通' : '先注册会员'}}</view>
     </view>
 
-    <view class="mini-metrics dining-metrics">
-      <view class="mini-metric">
-        <view class="mini-metric-label">门店</view>
-        <view class="mini-metric-value">{{storeConfig ? storeConfig.storeName : '门店加载中'}}</view>
-      </view>
-      <view class="mini-metric">
-        <view class="mini-metric-label">会员</view>
-        <view class="mini-metric-value">{{memberStatusText}}</view>
-      </view>
-      <view class="mini-metric">
-        <view class="mini-metric-label">积分</view>
-        <view class="mini-metric-value">{{pointsBalance}}</view>
-      </view>
-    </view>
-
-    <view class="button-group dining-hero-actions">
-      <button class="button-primary" bindtap="goMenu">立即点餐</button>
-      <button class="button-secondary" bindtap="goOrders">查看订单</button>
-      <button class="button-secondary" bindtap="goVouchers">积分换菜品</button>
+    <view class="home-primary-actions">
+      <button class="button-primary home-primary-button" bindtap="goMenu">去点餐</button>
+      <button class="button-secondary home-secondary-button" bindtap="goOrders">订单</button>
+      <button class="button-secondary home-secondary-button" bindtap="goMine">我的</button>
     </view>
   </view>
 
   <view wx:if="{{loading}}" class="card">
-    <view class="section-title">正在准备菜单</view>
-    <view class="section-copy">正在同步门店和菜品信息，请稍候。</view>
+    <view class="section-title">加载中</view>
+    <view class="section-copy">正在读取门店信息。</view>
   </view>
 
   <view wx:if="{{errorMessage}}" class="card card-accent">
@@ -42,98 +31,79 @@
     <button class="button-secondary" bindtap="refresh">重新加载</button>
   </view>
 
-  <view class="card card-soft">
+  <view class="card card-soft home-summary-card">
     <view class="card-header-row">
       <view class="card-title-wrap">
-        <view class="section-kicker">本店推荐</view>
-        <view class="section-title">先点这些不容易出错</view>
-        <view class="card-subtitle">先看招牌菜，再去完整菜单慢慢选。</view>
+        <view class="section-kicker">会员</view>
+        <view class="section-title">{{memberActionTitle}}</view>
+        <view class="card-subtitle">{{memberActionCopy}}</view>
       </view>
-      <view class="tag">推荐</view>
+      <view class="tag {{hasMember && memberStatusText !== '待验证' ? 'tag-success' : ''}}">{{memberStatusText}}</view>
     </view>
 
-    <view class="home-recommend-list">
-      <view wx:for="{{recommendedItems}}" wx:key="_id" class="home-dish-item">
-        <view class="home-dish-copy">
-          <view class="home-dish-name">{{item.name}}</view>
-          <view class="home-dish-desc">{{item.description || '门店推荐，适合第一次点。'}}</view>
-          <view class="home-dish-tags">
-            <view wx:for="{{item.tagsText}}" wx:key="*this" class="home-dish-tag">{{item}}</view>
-          </view>
-        </view>
-        <view class="home-dish-side">
-          <view class="home-dish-price">{{item.priceText}}</view>
-          <view class="home-dish-sales">{{item.salesText}}</view>
-        </view>
+    <view class="home-summary-grid">
+      <view class="home-summary-item">
+        <view class="home-summary-label">状态</view>
+        <view class="home-summary-value">{{memberStatusText}}</view>
+      </view>
+      <view class="home-summary-item">
+        <view class="home-summary-label">积分</view>
+        <view class="home-summary-value">{{pointsBalance}}</view>
+      </view>
+      <view class="home-summary-item">
+        <view class="home-summary-label">菜品券</view>
+        <view class="home-summary-value">{{hasMember ? '到我的里查看' : '注册后可用'}}</view>
       </view>
     </view>
 
-    <button class="button-secondary" bindtap="goMenu">去点餐页看全部菜品</button>
-  </view>
-
-  <view class="card">
-    <view class="section-kicker">分类入口</view>
-    <view class="section-title">今天想吃什么</view>
-    <view class="section-copy">进点餐页后可以按分类快速切换。</view>
-
-    <view class="category-chip-row">
-      <view wx:for="{{categories}}" wx:key="_id" class="category-chip">{{item.name}}</view>
+    <view class="button-group-tight home-summary-actions">
+      <button wx:if="{{!hasMember || memberStatusText === '待验证'}}" class="button-primary" bindtap="goRegister">去注册</button>
+      <button wx:else class="button-primary" bindtap="goVouchers">积分换菜</button>
+      <button class="button-secondary" bindtap="goMine">打开我的</button>
     </view>
   </view>
 
-  <view class="card card-soft">
+  <view class="card home-shortcuts-card">
     <view class="card-header-row">
       <view class="card-title-wrap">
-        <view class="section-kicker">会员入口</view>
-        <view class="section-title">{{hasMember ? '积分、兑换和邀请都在这里看' : memberActionTitle}}</view>
-        <view class="card-subtitle">{{hasMember ? '先看积分和菜品券，再决定要不要去邀请中心继续拉新。' : memberActionCopy}}</view>
+        <view class="section-kicker">常用</view>
+        <view class="section-title">直接进入</view>
       </view>
-      <view class="tag {{hasMember ? 'tag-success' : ''}}">{{memberStatusText}}</view>
+      <view class="tag">快捷</view>
     </view>
 
-    <view class="support-strip">
-      <view class="support-pill">邀请返积分</view>
-      <view class="support-pill">积分换菜品</view>
-      <view class="support-pill">店员扫码核销</view>
+    <view class="quick-grid home-shortcuts-grid">
+      <view class="quick-card home-shortcut-card" bindtap="goMenu">
+        <view class="quick-card-tag">点餐</view>
+        <view class="quick-card-title">菜单</view>
+        <view class="quick-card-copy">按分类看菜。</view>
+      </view>
+
+      <view class="quick-card home-shortcut-card" bindtap="goOrders">
+        <view class="quick-card-tag">订单</view>
+        <view class="quick-card-title">我的订单</view>
+        <view class="quick-card-copy">查看状态。</view>
+      </view>
+
+      <view class="quick-card home-shortcut-card" bindtap="goMine">
+        <view class="quick-card-tag">会员</view>
+        <view class="quick-card-title">我的会员</view>
+        <view class="quick-card-copy">积分、邀请、券。</view>
+      </view>
+
+      <view class="quick-card home-shortcut-card" bindtap="goFeedback">
+        <view class="quick-card-tag">反馈</view>
+        <view class="quick-card-title">问题反馈</view>
+        <view class="quick-card-copy">有问题直接提。</view>
+      </view>
     </view>
 
-    <view class="button-group">
-      <button wx:if="{{!hasMember || memberStatusText === '待验证'}}" class="button-primary" bindtap="goRegister">去补全会员资料</button>
-      <button wx:else class="button-primary" bindtap="goVouchers">先看积分与菜品券</button>
-      <button wx:if="{{hasMember && memberStatusText !== '待验证'}}" class="button-secondary" bindtap="goMine">进入我的</button>
-      <button wx:if="{{!hasMember || memberStatusText === '待验证'}}" class="button-secondary" bindtap="goFeedback">提交反馈</button>
-    </view>
-  </view>
-
-  <view class="card card-compact">
-    <view class="section-kicker">门店配合</view>
-    <view class="section-title">点餐后现场这样走</view>
-    <view class="guide-grid">
-      <view class="guide-card">
-        <view class="guide-card-head">
-          <view class="guide-card-index">01</view>
-          <view class="guide-card-title">先下单</view>
-        </view>
-        <view class="guide-card-copy">堂食和自提都能直接提交订单，店员会在小程序里更新状态。</view>
-      </view>
-      <view class="guide-card">
-        <view class="guide-card-head">
-          <view class="guide-card-index">02</view>
-          <view class="guide-card-title">再看状态</view>
-        </view>
-        <view class="guide-card-copy">订单确认、制作中、待取餐和已完成都能在“订单”页看到。</view>
-      </view>
-      <view class="guide-card">
-        <view class="guide-card-head">
-          <view class="guide-card-index">03</view>
-          <view class="guide-card-title">最后用积分和券</view>
-        </view>
-        <view class="guide-card-copy">邀请积分继续累计，到“我的”里换菜品券，再给店员扫码核销。</view>
-      </view>
+    <view wx:if="{{categories.length}}" class="home-category-row">
+      <view wx:for="{{categories}}" wx:for-item="category" wx:key="_id" class="home-category-chip">{{category.name}}</view>
     </view>
   </view>
 
   <view class="entry-footer">
-    <button class="entry-link-button" bindtap="goStaffEntry">店员请从这里进入工作台</button>
+    <button class="entry-link-button" bindtap="goStaffEntry">店员入口</button>
   </view>
 </view>

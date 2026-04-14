@@ -17,7 +17,7 @@ Page({
     password: "",
     loading: false,
     redirectPath: "",
-    redirectHint: "登录后进入店员工作台。"
+    redirectHint: "登录后进入工作台。"
   },
   onLoad(query) {
     applyStoreLaunchContext(query);
@@ -29,7 +29,7 @@ Page({
     saveStaffRedirectPath(redirectPath);
     this.setData({
       redirectPath,
-      redirectHint: "登录后会回到刚才的店员页面。"
+      redirectHint: "登录后回到上一页。"
     });
   },
   async onShow() {

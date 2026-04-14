@@ -31,6 +31,7 @@
 
 html {
   min-height: 100%;
+  scroll-behavior: smooth;
   background:
     radial-gradient(circle at top left, rgba(254, 243, 199, 0.9), transparent 26%),
     radial-gradient(circle at top right, rgba(220, 38, 38, 0.1), transparent 24%),
@@ -82,7 +83,7 @@ textarea::placeholder {
 
 .app-shell {
   min-height: 100vh;
-  padding: 24px;
+  padding: 20px;
 }
 
 .app-shell,
@@ -268,8 +269,8 @@ textarea::placeholder {
 
 .dashboard-grid {
   display: grid;
-  gap: 28px;
-  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 24px;
+  grid-template-columns: 288px minmax(0, 1fr);
   align-items: start;
 }
 
@@ -357,6 +358,12 @@ textarea::placeholder {
 .sidebar-nav {
   display: grid;
   gap: 10px;
+  max-height: min(46vh, 520px);
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 243, 230, 0.28) transparent;
 }
 
 .sidebar-tip {
@@ -381,12 +388,54 @@ textarea::placeholder {
 
 .nav-button {
   width: 100%;
-  padding: 14px 16px;
+  display: grid;
+  gap: 6px;
+  padding: 13px 15px;
   text-align: left;
   color: #fff6ec;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: none;
+}
+
+.nav-button-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.98rem;
+}
+
+.nav-button-summary {
+  color: rgba(255, 243, 230, 0.76);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.nav-button-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 148px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.nav-button-badge-default {
+  background: rgba(255, 231, 173, 0.18);
+  color: #fff0c8;
+}
+
+.nav-button-badge-success {
+  background: rgba(52, 211, 153, 0.16);
+  color: #eafff6;
+}
+
+.nav-button-badge-navy {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 243, 230, 0.84);
 }
 
 .nav-button.active {
@@ -423,7 +472,7 @@ textarea::placeholder {
 }
 
 .content {
-  padding: 30px;
+  padding: 26px;
   background:
     linear-gradient(180deg, rgba(255, 252, 248, 0.94), rgba(255, 247, 241, 0.9)),
     radial-gradient(circle at top right, rgba(220, 38, 38, 0.04), transparent 30%);
@@ -431,8 +480,8 @@ textarea::placeholder {
 
 .hero {
   display: grid;
-  gap: 24px;
-  padding: 28px;
+  gap: 20px;
+  padding: 24px;
   border-radius: 28px;
   background:
     radial-gradient(circle at top right, rgba(220, 38, 38, 0.07), transparent 28%),
@@ -482,6 +531,33 @@ textarea::placeholder {
 
 .hero-summary {
   max-width: 44rem;
+}
+
+.hero-brief-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hero-brief-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(90, 39, 39, 0.08);
+}
+
+.hero-brief-label {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.hero-brief-value {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .hero-side-label {
@@ -631,8 +707,8 @@ textarea::placeholder {
 
 .row-card {
   display: grid;
-  gap: 14px;
-  padding: 22px;
+  gap: 12px;
+  padding: 20px;
   border-radius: var(--radius-lg);
   border: 1px solid rgba(90, 39, 39, 0.08);
   background: rgba(255, 255, 255, 0.84);
@@ -699,6 +775,11 @@ textarea::placeholder {
 .tag-success {
   background: rgba(31, 122, 92, 0.12);
   color: var(--success);
+}
+
+.tag-accent {
+  background: rgba(202, 138, 4, 0.14);
+  color: #8b5f03;
 }
 
 .notice {
@@ -919,6 +1000,41 @@ textarea::placeholder {
   color: var(--navy);
   font-size: 0.9rem;
   font-weight: 700;
+}
+
+.login-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 8px;
+  border-radius: 999px;
+  background: rgba(111, 35, 38, 0.06);
+  border: 1px solid rgba(111, 35, 38, 0.08);
+}
+
+.login-mode-button {
+  min-height: 46px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 700;
+  transition: background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+}
+
+.login-mode-button.is-active {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+
+.login-setup-box {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  border: 1px solid rgba(90, 39, 39, 0.08);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .content-section {
@@ -1185,6 +1301,11 @@ textarea::placeholder {
   scroll-margin-top: 24px;
 }
 
+.member-action-stack {
+  position: sticky;
+  top: 24px;
+}
+
 .member-adjust-card-active {
   border-color: rgba(156, 51, 39, 0.24);
   box-shadow: 0 20px 40px rgba(156, 51, 39, 0.12);
@@ -1240,6 +1361,10 @@ textarea::placeholder {
 
 .member-result-card {
   gap: 18px;
+}
+
+.dashboard-quick-actions .button {
+  flex: 1 1 180px;
 }
 
 .feedback-card-list {
@@ -1365,6 +1490,25 @@ textarea::placeholder {
 .menu-workbench-grid,
 .orders-workbench-grid {
   grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1.05fr);
+}
+
+.orders-scroll-list {
+  max-height: min(1080px, calc(100vh - 340px));
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(111, 35, 38, 0.18) transparent;
+}
+
+.orders-detail-stack {
+  position: sticky;
+  top: 24px;
+}
+
+.orders-detail-panel,
+.orders-log-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 248, 243, 0.88));
 }
 
 .menu-workbench-header {
@@ -1566,9 +1710,12 @@ textarea::placeholder {
   .sidebar-nav {
     display: flex;
     gap: 10px;
+    max-height: none;
     overflow-x: auto;
+    overflow-y: hidden;
     overscroll-behavior-x: contain;
     padding-bottom: 4px;
+    padding-right: 0;
     scroll-snap-type: x proximity;
     scrollbar-width: none;
   }
@@ -1580,8 +1727,7 @@ textarea::placeholder {
 
   .nav-button {
     flex: 0 0 auto;
-    min-width: 116px;
-    text-align: center;
+    min-width: 180px;
     scroll-snap-align: start;
   }
 
@@ -1595,6 +1741,11 @@ textarea::placeholder {
 
   .menu-option-choice-row {
     grid-template-columns: 1fr 120px;
+  }
+
+  .member-action-stack,
+  .orders-detail-stack {
+    position: static;
   }
 }
 
@@ -1614,6 +1765,10 @@ textarea::placeholder {
   .brand-title,
   .headline {
     font-size: 2rem;
+  }
+
+  .hero-brief-grid {
+    grid-template-columns: 1fr;
   }
 
   .sidebar-meta,
@@ -1728,6 +1883,15 @@ textarea::placeholder {
     width: 100%;
     text-align: center;
     justify-content: center;
+  }
+
+  .nav-button-main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nav-button-badge {
+    max-width: none;
   }
 
   .menu-option-choice-row,

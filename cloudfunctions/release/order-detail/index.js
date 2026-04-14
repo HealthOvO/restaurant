@@ -9019,6 +9019,15 @@ var BASE64_CODE = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456
 var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
 
 // src/runtime/service.order.ts
+function compareOrderLogs(left, right) {
+  if (right.createdAt !== left.createdAt) {
+    return right.createdAt.localeCompare(left.createdAt);
+  }
+  if (right.updatedAt !== left.updatedAt) {
+    return right.updatedAt.localeCompare(left.updatedAt);
+  }
+  return right._id.localeCompare(left._id);
+}
 async function getMemberOrderDetail(repository, callerOpenId, input) {
   const parsed = orderDetailInputSchema.parse(input);
   const order = await repository.getOrderById(parsed.orderId);
@@ -9029,7 +9038,7 @@ async function getMemberOrderDetail(repository, callerOpenId, input) {
   return {
     ok: true,
     order,
-    logs
+    logs: [...logs].sort(compareOrderLogs)
   };
 }
 
