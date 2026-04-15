@@ -9,13 +9,13 @@ function resolveWorkHint(hasSession, staffProfile) {
   if (!hasSession || !staffProfile) {
     return {
       title: "先登录店员账号",
-      copy: "登录后再核销、查单、查会员。"
+      copy: "登录后再核销、补录、查单。"
     };
   }
 
   return {
     title: `${staffProfile.displayName} 已登录`,
-    copy: "核销、查会员、看订单。"
+    copy: "核销、补录、查会员。"
   };
 }
 
@@ -111,7 +111,7 @@ Page({
       staffRoleLabel: "",
       loginStatusText: "未登录",
       workHintTitle: "先登录店员账号",
-      workHintCopy: "登录后再核销、查单、查会员。",
+      workHintCopy: "登录后再核销、补录、查单。",
       errorMessage: ""
     });
     wx.showToast({

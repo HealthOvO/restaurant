@@ -3,6 +3,7 @@ import {
   bindInvite,
   bootstrapMember,
   getMemberState,
+  previewVoucherRedemption,
   redeemPoints,
   redeemVoucher,
   settleFirstVisit
@@ -26,7 +27,7 @@ describe("member bootstrap", () => {
       getMemberByPhone: vi.fn().mockResolvedValue(null),
       saveMember: vi.fn().mockImplementation(async (member) => member),
       getInviteRelationByInviteeId: vi.fn().mockResolvedValue(null),
-      listMembers: vi.fn(),
+      listMembers: vi.fn().mockResolvedValue([]),
       saveInviteRelation: vi.fn()
     };
 
@@ -44,7 +45,7 @@ describe("member bootstrap", () => {
       }
     });
     expect(result.relation).toBeNull();
-    expect(repository.listMembers).not.toHaveBeenCalled();
+    expect(repository.listMembers).toHaveBeenCalledTimes(1);
     expect(repository.saveInviteRelation).not.toHaveBeenCalled();
   });
 
@@ -72,13 +73,71 @@ describe("member bootstrap", () => {
     };
     const repository = {
       getMemberByOpenId: vi.fn().mockResolvedValue(member),
-      getInviteRelationByInviteeId: vi.fn().mockResolvedValue(relation)
+      getInviteRelationByInviteeId: vi.fn().mockResolvedValue(relation),
+      getMemberById: vi.fn().mockResolvedValue({
+        _id: "member-owner",
+        storeId: "default-store",
+        memberCode: "M00000999",
+        openId: "openid-owner",
+        nickname: "邀请人",
+        phone: "13800009999",
+        phoneVerifiedAt: "2026-04-02T08:00:00.000Z",
+        hasCompletedFirstVisit: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-03T08:00:00.000Z"
+      })
     };
 
     await expect(getMemberState(repository as never, "mini-openid-1")).resolves.toMatchObject({
       ok: true,
       member,
       relation
+    });
+  });
+
+  it("returns pending invite context when the member entered with an invite code but has not bound yet", async () => {
+    const member = {
+      _id: "member-1",
+      storeId: "default-store",
+      memberCode: "M00000001",
+      openId: "mini-openid-1",
+      pendingInviteCode: "M00000009",
+      phone: "13812345678",
+      phoneVerifiedAt: "2026-04-02T08:00:00.000Z",
+      hasCompletedFirstVisit: false,
+      createdAt: "2026-04-02T08:00:00.000Z",
+      updatedAt: "2026-04-03T08:00:00.000Z"
+    };
+    const repository = {
+      getMemberByOpenId: vi.fn().mockResolvedValue(member),
+      getInviteRelationByInviteeId: vi.fn().mockResolvedValue(null),
+      listMembers: vi.fn().mockResolvedValue([
+        {
+          _id: "member-9",
+          storeId: "default-store",
+          memberCode: "M00000009",
+          openId: "openid-inviter",
+          nickname: "邀请人张三",
+          phone: "13812340009",
+          phoneVerifiedAt: "2026-04-02T08:00:00.000Z",
+          hasCompletedFirstVisit: true,
+          createdAt: "2026-04-02T08:00:00.000Z",
+          updatedAt: "2026-04-03T08:00:00.000Z"
+        }
+      ])
+    };
+
+    await expect(getMemberState(repository as never, "mini-openid-1")).resolves.toMatchObject({
+      ok: true,
+      member,
+      relation: null,
+      pendingInviteCode: "M00000009",
+      canBindInvite: true,
+      inviterSummary: {
+        memberId: "member-9",
+        memberCode: "M00000009",
+        nickname: "邀请人张三"
+      }
     });
   });
 });
@@ -702,5 +761,65 @@ describe("member transaction safety", () => {
         usedAt: "2026-04-03T12:00:00.000Z"
       })
     );
+  });
+
+  it("previews voucher status and member summary before staff redemption", async () => {
+    const repository = {
+      storeId: "default-store",
+      getStaffById: vi.fn().mockResolvedValue({
+        _id: "staff-1",
+        storeId: "default-store",
+        username: "cashier01",
+        passwordHash: "hash",
+        displayName: "前台小王",
+        role: "STAFF",
+        isEnabled: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-02T08:00:00.000Z"
+      }),
+      getVoucherById: vi.fn().mockResolvedValue({
+        _id: "voucher-preview-1",
+        storeId: "default-store",
+        memberId: "member-1",
+        source: "POINT_EXCHANGE" as const,
+        dishId: "dish-1",
+        dishName: "招牌凉菜",
+        status: "READY" as const,
+        expiresAt: "2099-04-02T08:00:00.000Z",
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-03T11:00:00.000Z"
+      }),
+      getMemberById: vi.fn().mockResolvedValue({
+        _id: "member-1",
+        storeId: "default-store",
+        memberCode: "M00000001",
+        openId: "openid-member-1",
+        nickname: "张三",
+        phone: "13812345678",
+        phoneVerifiedAt: "2026-04-02T08:00:00.000Z",
+        hasCompletedFirstVisit: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-03T08:00:00.000Z"
+      })
+    };
+
+    await expect(
+      previewVoucherRedemption(repository as never, {
+        sessionToken: staffSessionToken,
+        voucherId: "voucher-preview-1"
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      voucher: {
+        _id: "voucher-preview-1",
+        status: "READY"
+      },
+      member: {
+        _id: "member-1",
+        memberCode: "M00000001",
+        nickname: "张三",
+        phone: "13812345678"
+      }
+    });
   });
 });

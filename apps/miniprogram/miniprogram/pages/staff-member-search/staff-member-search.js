@@ -88,5 +88,26 @@ Page({
         this.setData({ scanning: false });
       }
     });
+  },
+  openVisit(event) {
+    const query = `${event.currentTarget.dataset.query || ""}`.trim();
+    if (!query) {
+      wx.showToast({ icon: "none", title: "这位会员缺少可查询编号" });
+      return;
+    }
+
+    wx.navigateTo({
+      url: `/pages/staff-visit/staff-visit?query=${encodeURIComponent(query)}`
+    });
+  },
+  openVoucher() {
+    wx.navigateTo({
+      url: "/pages/staff-voucher/staff-voucher"
+    });
+  },
+  openOrders() {
+    wx.navigateTo({
+      url: "/pages/staff-orders/staff-orders"
+    });
   }
 });

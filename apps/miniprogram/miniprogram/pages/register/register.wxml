@@ -2,7 +2,7 @@
   <view class="hero hero-member">
     <view class="hero-badge">注册</view>
     <view class="title">会员注册</view>
-    <view class="subtitle">微信手机号验证后可正常累计积分。</view>
+    <view class="subtitle">用微信手机号完成验证即可。</view>
     <view class="hero-chips">
       <view class="hero-chip">微信手机号</view>
       <view class="hero-chip">会员身份</view>
@@ -11,13 +11,13 @@
 
   <view class="card">
     <view class="section-kicker">昵称</view>
-    <view class="section-title">填写昵称</view>
+    <view class="section-title">怎么称呼你</view>
     <input class="input" placeholder="请输入昵称" value="{{nickname}}" data-field="nickname" bindinput="onInput" />
   </view>
 
   <view class="card card-soft">
     <view class="section-kicker">手机号</view>
-    <view class="section-title">微信验证</view>
+    <view class="section-title">验证手机号</view>
     <view class="section-copy">当前：{{hasVerifiedPhone ? phoneDisplay : '未验证'}}</view>
     <view wx:if="{{hasLegacyPhone}}" class="notice phone-notice">
       检测到历史测试号码 {{legacyPhoneDisplay}}，请改用微信手机号完成验证。

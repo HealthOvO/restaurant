@@ -52,11 +52,13 @@ export function LoginPage({
   const [accessScope, setAccessScope] = useState<"STORE_ONLY" | "ALL_STORES">("STORE_ONLY");
   const [managedStoreIdsText, setManagedStoreIdsText] = useState("");
   const [localBootstrapError, setLocalBootstrapError] = useState("");
+  const [showAdvancedSetup, setShowAdvancedSetup] = useState(false);
 
   useEffect(() => {
     if (noticeMessage) {
       setMode("login");
       setLocalBootstrapError("");
+      setShowAdvancedSetup(false);
     }
   }, [noticeMessage]);
 
@@ -69,6 +71,9 @@ export function LoginPage({
   function handleModeChange(nextMode: SetupMode) {
     setMode(nextMode);
     clearLocalBootstrapError();
+    if (nextMode !== "bootstrap") {
+      setShowAdvancedSetup(false);
+    }
   }
 
   async function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
@@ -129,35 +134,48 @@ export function LoginPage({
             <div className="stack">
               <p className="section-eyebrow">门店后台</p>
               <h1 className="headline">老板后台</h1>
-              <p className="subtle login-story-lead">规则、订单、会员、员工都在这里处理。</p>
+              <p className="subtle login-story-lead">看订单、会员、菜单和员工。</p>
             </div>
 
             <div className="login-stat-strip">
               <div className="login-stat-card">
                 <div className="summary-kicker">老板</div>
-                <div className="summary-value summary-value-text">电脑后台</div>
-                <div className="summary-footnote">看数据、配规则、管账号。</div>
+                <div className="summary-value summary-value-text">网页登录</div>
+                <div className="summary-footnote">看经营数据和门店设置。</div>
               </div>
               <div className="login-stat-card">
                 <div className="summary-kicker">店员</div>
-                <div className="summary-value summary-value-text">店员小程序</div>
-                <div className="summary-footnote">核销、查会员、看订单。</div>
+                <div className="summary-value summary-value-text">小程序登录</div>
+                <div className="summary-footnote">核销、查会员、处理订单。</div>
               </div>
               <div className="login-stat-card">
                 <div className="summary-kicker">首次使用</div>
-                <div className="summary-value summary-value-text">先初始化</div>
-                <div className="summary-footnote">新环境先创建老板账号。</div>
+                <div className="summary-value summary-value-text">先开通老板账号</div>
+                <div className="summary-footnote">新环境只做一次。</div>
               </div>
             </div>
 
-            <div className="login-support-grid">
-              <div className="story-item">
-                <div className="section-title">门店编号</div>
-                <p className="subtle">单店默认用 `default-store`，多店按门店编号切换。</p>
+            <div className="story-step-list">
+              <div className="story-step-item">
+                <div className="story-step-index">01</div>
+                <div className="stack">
+                  <div className="section-title">先开通老板账号</div>
+                  <p className="subtle">填写初始化口令、账号和密码就行，单店默认不用改高级项。</p>
+                </div>
               </div>
-              <div className="story-item">
-                <div className="section-title">初始化口令</div>
-                <p className="subtle">只在首次建老板账号或需要重置时使用，对应云函数环境变量 `BOOTSTRAP_SECRET`。</p>
+              <div className="story-step-item">
+                <div className="story-step-index">02</div>
+                <div className="stack">
+                  <div className="section-title">再把门店配起来</div>
+                  <p className="subtle">先配菜单、积分和兑换规则，再建店员账号。</p>
+                </div>
+              </div>
+              <div className="story-step-item">
+                <div className="story-step-index">03</div>
+                <div className="stack">
+                  <div className="section-title">最后让店员登录</div>
+                  <p className="subtle">店员在小程序里登录，处理订单、核销和查会员。</p>
+                </div>
               </div>
             </div>
           </div>
@@ -166,8 +184,8 @@ export function LoginPage({
         <section className="panel login-form stack">
           <div className="stack">
             <p className="section-eyebrow">入口</p>
-            <h2 className="headline">进入后台</h2>
-            <p className="subtle">老板网页登录，店员走小程序。</p>
+            <h2 className="headline">登录后台</h2>
+            <p className="subtle">老板在这里登录，店员请到小程序。</p>
           </div>
 
           <div className="login-mode-switch" role="tablist" aria-label="后台入口模式">
@@ -197,6 +215,29 @@ export function LoginPage({
                 <div className="tag tag-success">已处理</div>
               </div>
               <p className="subtle">{noticeMessage}</p>
+              <div className="guide-list">
+                <div className="guide-item">
+                  <div className="guide-index">1</div>
+                  <div className="stack">
+                    <div className="section-title">先配菜单</div>
+                    <p className="subtle">把分类、菜品和规格补齐，顾客端点餐才会完整。</p>
+                  </div>
+                </div>
+                <div className="guide-item">
+                  <div className="guide-index">2</div>
+                  <div className="stack">
+                    <div className="section-title">再建店员账号</div>
+                    <p className="subtle">店员用小程序登录，不用进老板后台。</p>
+                  </div>
+                </div>
+                <div className="guide-item">
+                  <div className="guide-index">3</div>
+                  <div className="stack">
+                    <div className="section-title">最后开规则</div>
+                    <p className="subtle">确认积分、首单礼和兑换项后，再给门店正式使用。</p>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -211,6 +252,7 @@ export function LoginPage({
                   value={storeId}
                   onChange={(event) => setStoreId(event.target.value)}
                 />
+                <span className="field-hint">单店一般保持 `default-store`。</span>
               </label>
 
               <label className="field-label" htmlFor="admin-username">
@@ -246,51 +288,43 @@ export function LoginPage({
 
               <div className="login-callout">
                 <div className="inline-tags">
-                  <div className="tag tag-navy">老板后台</div>
-                  <div className="tag">店员不在这里登录</div>
+                  <div className="tag tag-navy">网页登录</div>
+                  <div className="tag">店员去小程序</div>
                 </div>
-                <p className="subtle">如果是新环境，先切到“首次初始化”。</p>
+                <p className="subtle">新环境再切到“首次初始化”。</p>
               </div>
 
               <div className="button-row">
                 <button className="button button-primary" disabled={loginLoading} type="submit">
                   {loginLoading ? "登录中..." : "进入后台"}
                 </button>
-                <div className="login-submit-note">店员请在小程序登录</div>
+                <div className="login-submit-note">店员请到小程序登录</div>
               </div>
             </form>
           ) : (
             <form className="stack" onSubmit={handleBootstrapSubmit}>
-              <div className="field-grid">
-                <label className="field-label" htmlFor="bootstrap-store-id">
-                  门店编号
-                  <input
-                    id="bootstrap-store-id"
-                    className="field"
-                    placeholder="例如 default-store"
-                    value={storeId}
-                    onChange={(event) => {
-                      clearLocalBootstrapError();
-                      setStoreId(event.target.value);
-                    }}
-                  />
-                </label>
-
-                <label className="field-label" htmlFor="bootstrap-secret">
-                  初始化口令
-                  <input
-                    id="bootstrap-secret"
-                    className="field"
-                    placeholder="请输入 BOOTSTRAP_SECRET"
-                    type="password"
-                    value={bootstrapSecret}
-                    onChange={(event) => {
-                      clearLocalBootstrapError();
-                      setBootstrapSecret(event.target.value);
-                    }}
-                  />
-                </label>
+              <div className="login-callout">
+                <div className="inline-tags">
+                  <div className="tag tag-accent">默认按单店开通</div>
+                  <div className="tag">高级项可稍后再开</div>
+                </div>
+                <p className="subtle">先把老板账号建起来，跨店和门店编号需要时再展开高级设置。</p>
               </div>
+
+              <label className="field-label" htmlFor="bootstrap-secret">
+                初始化口令
+                <input
+                  id="bootstrap-secret"
+                  className="field"
+                  placeholder="请输入初始化口令"
+                  type="password"
+                  value={bootstrapSecret}
+                  onChange={(event) => {
+                    clearLocalBootstrapError();
+                    setBootstrapSecret(event.target.value);
+                  }}
+                />
+              </label>
 
               <div className="field-grid">
                 <label className="field-label" htmlFor="bootstrap-owner-username">
@@ -312,7 +346,7 @@ export function LoginPage({
                   <input
                     id="bootstrap-owner-display-name"
                     className="field"
-                    placeholder="例如 门店老板"
+                    placeholder="例如 店长"
                     value={ownerDisplayName}
                     onChange={(event) => {
                       clearLocalBootstrapError();
@@ -354,43 +388,70 @@ export function LoginPage({
                 </label>
               </div>
 
-              <div className="login-setup-box">
-                <div className="section-title">高级设置</div>
-                <p className="subtle">单店不用改。总店账号才需要开启跨店查看。</p>
+              <div className="button-row">
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => setShowAdvancedSetup((current) => !current)}
+                >
+                  {showAdvancedSetup ? "收起高级设置" : "展开高级设置"}
+                </button>
+              </div>
 
-                <div className="field-grid">
-                  <label className="field-label" htmlFor="bootstrap-access-scope">
-                    权限范围
-                    <select
-                      id="bootstrap-access-scope"
-                      className="field"
-                      value={accessScope}
-                      onChange={(event) => {
-                        clearLocalBootstrapError();
-                        setAccessScope(event.target.value as "STORE_ONLY" | "ALL_STORES");
-                      }}
-                    >
-                      <option value="STORE_ONLY">仅当前门店</option>
-                      <option value="ALL_STORES">总店，可切店</option>
-                    </select>
-                  </label>
+              {showAdvancedSetup ? (
+                <div className="login-setup-box">
+                  <div className="section-title">高级设置</div>
+                  <p className="subtle">多店或总店账号再改这里，单店保持默认即可。</p>
+
+                  <div className="field-grid">
+                    <label className="field-label" htmlFor="bootstrap-store-id">
+                      门店编号
+                      <input
+                        id="bootstrap-store-id"
+                        className="field"
+                        placeholder="例如 default-store"
+                        value={storeId}
+                        onChange={(event) => {
+                          clearLocalBootstrapError();
+                          setStoreId(event.target.value);
+                        }}
+                      />
+                    </label>
+
+                    <label className="field-label" htmlFor="bootstrap-access-scope">
+                      权限范围
+                      <select
+                        id="bootstrap-access-scope"
+                        className="field"
+                        value={accessScope}
+                        onChange={(event) => {
+                          clearLocalBootstrapError();
+                          setAccessScope(event.target.value as "STORE_ONLY" | "ALL_STORES");
+                        }}
+                      >
+                        <option value="STORE_ONLY">仅当前门店</option>
+                        <option value="ALL_STORES">总店，可切店</option>
+                      </select>
+                    </label>
+                  </div>
 
                   <label className="field-label" htmlFor="bootstrap-managed-store-ids">
                     可管理门店
                     <input
                       id="bootstrap-managed-store-ids"
-                    className="field"
-                    placeholder="branch-01, branch-02"
-                    value={managedStoreIdsText}
-                    disabled={accessScope !== "ALL_STORES"}
-                    onChange={(event) => {
-                      clearLocalBootstrapError();
-                      setManagedStoreIdsText(event.target.value);
-                    }}
-                  />
-                </label>
-              </div>
-              </div>
+                      className="field"
+                      placeholder="branch-01, branch-02"
+                      value={managedStoreIdsText}
+                      disabled={accessScope !== "ALL_STORES"}
+                      onChange={(event) => {
+                        clearLocalBootstrapError();
+                        setManagedStoreIdsText(event.target.value);
+                      }}
+                    />
+                    <span className="field-hint">只在总店账号时填写，多个门店用空格或逗号分开。</span>
+                  </label>
+                </div>
+              ) : null}
 
               {activeErrorMessage ? (
                 <div className="error" role="alert">
@@ -401,9 +462,9 @@ export function LoginPage({
               <div className="login-callout">
                 <div className="inline-tags">
                   <div className="tag tag-accent">仅首次使用</div>
-                  <div className="tag">也可用于老板重置</div>
+                  <div className="tag">也可用于重置老板账号</div>
                 </div>
-                <p className="subtle">初始化完成后会自动尝试登录。</p>
+                <p className="subtle">完成后会自动登录。</p>
               </div>
 
               <div className="button-row">

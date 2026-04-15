@@ -13,6 +13,7 @@
     "pages/records/records",
     "pages/rules/rules",
     "pages/feedback/feedback",
+    "pages/staff-entry/staff-entry",
     "pages/staff-home/staff-home",
     "pages/staff-login/staff-login",
     "pages/staff-orders/staff-orders",

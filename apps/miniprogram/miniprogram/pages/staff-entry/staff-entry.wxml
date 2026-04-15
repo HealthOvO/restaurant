@@ -1,0 +1,18 @@
+<view class="page page-tight">
+  <view class="hero hero-staff">
+    <view class="hero-badge">店员入口</view>
+    <view class="title">{{hasSession ? '进入工作台' : '店员登录'}}</view>
+    <view class="subtitle">{{hasSession ? '当前设备已登录，可直接处理订单和核销。' : '扫店员码进入，登录后再处理订单、补录和核销。'}}</view>
+  </view>
+
+  <view class="card card-soft">
+    <view class="section-kicker">使用方式</view>
+    <view class="section-title">只给店员使用</view>
+    <view class="card-subtitle">顾客端不展示这个入口，店员直接扫专用码进入。</view>
+
+    <view class="button-group-tight">
+      <button wx:if="{{!hasSession}}" class="button-primary" bindtap="goLogin">去登录</button>
+      <button wx:else class="button-primary" bindtap="goWorkbench">进入工作台</button>
+    </view>
+  </view>
+</view>

@@ -15,8 +15,8 @@
 
     <view class="hero hero-member">
       <view class="hero-badge">到店记录</view>
-      <view class="title">我的到店记录</view>
-      <view class="subtitle">每次店员录入消费后，都会沉淀在这里，方便你回看首次激活和后续到店情况。</view>
+      <view class="title">到店记录</view>
+      <view class="subtitle">到店后录入的记录都会显示在这里。</view>
       <view class="mini-metrics">
         <view class="mini-metric">
           <view class="mini-metric-label">总核销</view>
@@ -35,15 +35,15 @@
 
     <view class="card">
       <view class="section-kicker">消费时间线</view>
-      <view class="section-title">每次到店都会留痕</view>
-      <view class="section-copy">首次有效消费会激活邀请关系并触发积分结算，后续到店也会继续记入消费记录。</view>
+      <view class="section-title">每次到店都会记录</view>
+      <view class="section-copy">首单会激活邀请关系，后续到店也会继续记录。</view>
 
       <view wx:if="{{loading}}" class="notice">正在同步最新消费记录...</view>
 
       <view wx:if="{{!loading && !visits.length}}" class="empty-state">
         <view class="tag">暂无记录</view>
         <view class="empty-title">还没有到店核销</view>
-        <view class="empty-copy">下次到店时出示会员号，让店员录入订单号后，这里就会自动生成第一条记录。</view>
+        <view class="empty-copy">到店时出示会员号，店员录单后这里会更新。</view>
       </view>
 
       <view wx:if="{{visits.length}}" class="timeline">

@@ -144,6 +144,22 @@ function loadPage(pageRelativePath, moduleMocks, globals) {
   };
 }
 
+const verifiedMemberAccessMocks = {
+  "../../utils/member-access": {
+    refreshMemberState: async () => ({
+      member: {
+        _id: "member-1",
+        phone: "13800000000",
+        phoneVerifiedAt: "2026-04-05T10:00:00.000Z"
+      },
+      relation: null,
+      pendingInviteCode: "",
+      inviterSummary: null,
+      canBindInvite: false
+    })
+  }
+};
+
 test("miniprogram page flows keep key feedback and guard behavior", async (t) => {
   await t.test("invite page blocks locked binding with an explicit toast", async () => {
     const wx = createWxMock();
@@ -237,7 +253,7 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
       assert.equal(page.data.relation, relation);
       assert.equal(page.data.inviteCodeInput, "");
       assert.equal(page.data.canBindInviteCode, false);
-      assert.equal(wx.toastCalls[0].title, "邀请绑定成功");
+      assert.equal(wx.toastCalls[0].title, "绑定成功");
     } finally {
       pageModule.restore();
     }
@@ -274,7 +290,7 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
       });
 
       assert.deepEqual(page.onShareAppMessage(), {
-        title: "来店里吃饭，注册会员还能一起拿积分换菜品",
+        title: "来店里吃饭，一起攒积分换菜",
         path: "/pages/index/index?storeId=branch-05&inviteCode=M0088"
       });
     } finally {
@@ -335,6 +351,57 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
     }
   });
 
+  await t.test("staff visit auto-searches when opened from member shortcuts", async () => {
+    const wx = createWxMock();
+    let searchPayload = null;
+    const row = {
+      member: {
+        _id: "member-quick",
+        memberCode: "M0099",
+        phone: "13800009999",
+        phoneVerifiedAt: "2026-04-05T10:00:00.000Z",
+        hasCompletedFirstVisit: false
+      },
+      relationStatus: null,
+      readyVoucherCount: 0,
+      totalVoucherCount: 0,
+      totalVisitCount: 0
+    };
+    const pageModule = loadPage(
+      "pages/staff-visit/staff-visit.js",
+      {
+        "../../services/staff": {
+          searchMembers: async (sessionToken, query) => {
+            searchPayload = { sessionToken, query };
+            return { rows: [row] };
+          },
+          settleFirstVisit: async () => ({})
+        },
+        "../../utils/staff-access": {
+          requireStaffAccess: async () => ({ sessionToken: "token-entry" })
+        }
+      },
+      { wx }
+    );
+
+    try {
+      const page = createPageInstance(pageModule.definition);
+      page.onLoad({
+        query: encodeURIComponent("M0099")
+      });
+
+      await page.onShow();
+
+      assert.deepEqual(searchPayload, {
+        sessionToken: "token-entry",
+        query: "M0099"
+      });
+      assert.equal(page.data.selectedMemberId, "member-quick");
+    } finally {
+      pageModule.restore();
+    }
+  });
+
   await t.test("staff visit settle blocks members without verified phone", async () => {
     const wx = createWxMock();
     let settleCalled = false;
@@ -378,14 +445,110 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
     }
   });
 
+  await t.test("staff visit blocks mini program orders from being manually backfilled", async () => {
+    const wx = createWxMock();
+    let settleCalled = false;
+    const pageModule = loadPage(
+      "pages/staff-visit/staff-visit.js",
+      {
+        "../../services/staff": {
+          searchMembers: async () => ({ rows: [] }),
+          settleFirstVisit: async () => {
+            settleCalled = true;
+            return {};
+          }
+        },
+        "../../utils/staff-access": {
+          requireStaffAccess: async () => ({ sessionToken: "token-2" })
+        }
+      },
+      { wx }
+    );
+
+    try {
+      const page = createPageInstance(pageModule.definition);
+      page.setData({
+        selectedMemberId: "member-2",
+        selectedMember: {
+          member: {
+            _id: "member-2",
+            phoneVerifiedAt: "2026-04-05T10:00:00.000Z"
+          }
+        },
+        orderNo: "OD20260415093000ABCD"
+      });
+
+      await page.settle();
+
+      assert.equal(settleCalled, false);
+      assert.equal(wx.toastCalls.length, 1);
+      assert.equal(wx.toastCalls[0].title, "小程序订单请去订单看板完成");
+    } finally {
+      pageModule.restore();
+    }
+  });
+
+  await t.test("staff visit copies verification guidance for unverified members", async () => {
+    const wx = createWxMock();
+    const pageModule = loadPage(
+      "pages/staff-visit/staff-visit.js",
+      {
+        "../../services/staff": {
+          searchMembers: async () => ({ rows: [] }),
+          settleFirstVisit: async () => ({})
+        },
+        "../../utils/staff-access": {
+          requireStaffAccess: async () => ({ sessionToken: "token-copy" })
+        }
+      },
+      { wx }
+    );
+
+    try {
+      const page = createPageInstance(pageModule.definition);
+      page.setData({
+        selectedMember: {
+          member: {
+            memberCode: "M0008",
+            phoneVerifiedAt: ""
+          }
+        }
+      });
+
+      page.copyVerificationGuide();
+
+      assert.equal(wx.clipboardCalls.length, 1);
+      assert.match(wx.clipboardCalls[0].data, /M0008/);
+      assert.equal(wx.toastCalls.at(-1).title, "提示已复制");
+    } finally {
+      pageModule.restore();
+    }
+  });
+
   await t.test("staff voucher submit normalizes QR payloads and keeps a redeemed result", async () => {
     const wx = createWxMock();
     const voucherId = "entity_12345678-abcd-efgh";
     let redeemPayload = null;
+    let previewPayload = null;
     const pageModule = loadPage(
       "pages/staff-voucher/staff-voucher.js",
       {
         "../../services/staff": {
+          previewVoucher: async (payload) => {
+            previewPayload = payload;
+            return {
+              voucher: {
+                _id: voucherId,
+                dishName: "招牌肥牛",
+                status: "READY"
+              },
+              member: {
+                _id: "member-1",
+                memberCode: "M0001",
+                nickname: "张三"
+              }
+            };
+          },
           redeemVoucher: async (payload) => {
             redeemPayload = payload;
             return {
@@ -405,10 +568,15 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
 
     try {
       const page = createPageInstance(pageModule.definition);
-      await page.submit({
+      await page.loadPreview({
         voucherId: buildVoucherQrPayload(voucherId)
       });
+      await page.submit();
 
+      assert.deepEqual(previewPayload, {
+        sessionToken: "token-3",
+        voucherId
+      });
       assert.deepEqual(redeemPayload, {
         sessionToken: "token-3",
         voucherId
@@ -428,6 +596,17 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
       "pages/staff-voucher/staff-voucher.js",
       {
         "../../services/staff": {
+          previewVoucher: async () => ({
+            voucher: {
+              _id: "voucher-1",
+              dishName: "招牌肥牛",
+              status: "READY"
+            },
+            member: {
+              _id: "member-1",
+              memberCode: "M0001"
+            }
+          }),
           redeemVoucher: async () => ({
             isIdempotent: true,
             voucher: {
@@ -445,9 +624,10 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
 
     try {
       const page = createPageInstance(pageModule.definition);
-      await page.submit({
+      await page.loadPreview({
         voucherId: "voucher-1"
       });
+      await page.submit();
 
       assert.equal(wx.modalCalls.length, 1);
       assert.match(wx.modalCalls[0].content, /已经核销过/);
@@ -1389,6 +1569,7 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
             activeTableNo: ""
           })
         },
+        ...verifiedMemberAccessMocks,
         "../../utils/cart": {
           loadCart: () => [],
           summarizeCart: () => ({
@@ -1425,6 +1606,249 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
     }
   });
 
+  await t.test("checkout page asks unverified members to verify their phone before participating in member benefits", async () => {
+    const wx = createWxMock();
+    let createOrderCalled = false;
+    const pageModule = loadPage(
+      "pages/checkout/checkout.js",
+      {
+        "../../services/order": {
+          createOrder: async () => {
+            createOrderCalled = true;
+            return {
+              order: {
+                _id: "order-unverified"
+              }
+            };
+          }
+        },
+        "../../utils/session": {
+          getAppState: () => ({
+            storeId: "default-store",
+            activeTableNo: ""
+          })
+        },
+        "../../utils/cart": {
+          loadCart: () => [],
+          summarizeCart: () => ({
+            itemCount: 0,
+            totalAmount: 0
+          }),
+          clearCart: () => undefined
+        }
+      },
+      { wx }
+    );
+
+    try {
+      const page = createPageInstance(pageModule.definition);
+      page.setData({
+        cartItems: [
+          {
+            menuItemId: "dish-1",
+            quantity: 1,
+            selectedOptions: []
+          }
+        ],
+        fulfillmentMode: "DINE_IN",
+        tableNo: "A01",
+        memberBenefitsRequiresChoice: true,
+        memberBenefitsChoice: "VERIFY_AND_PARTICIPATE"
+      });
+
+      await page.submitOrder();
+
+      assert.equal(createOrderCalled, false);
+      assert.equal(wx.modalCalls.length, 1);
+      assert.equal(wx.modalCalls[0].title, "先验证手机号");
+    } finally {
+      pageModule.restore();
+    }
+  });
+
+  await t.test("checkout page exposes a direct verify action before submit", async () => {
+    const wx = createWxMock();
+    const pageModule = loadPage(
+      "pages/checkout/checkout.js",
+      {
+        "../../services/order": {
+          createOrder: async () => ({
+            order: {
+              _id: "order-direct-verify"
+            }
+          })
+        },
+        "../../utils/session": {
+          getAppState: () => ({
+            storeId: "default-store",
+            activeTableNo: ""
+          })
+        },
+        "../../utils/cart": {
+          loadCart: () => [],
+          summarizeCart: () => ({
+            itemCount: 0,
+            totalAmount: 0
+          }),
+          clearCart: () => undefined
+        }
+      },
+      { wx }
+    );
+
+    try {
+      const page = createPageInstance(pageModule.definition);
+      page.setData({
+        memberBenefitsRequiresChoice: true,
+        memberBenefitsChoice: "SKIP_THIS_ORDER"
+      });
+
+      page.goVerifyMemberBenefits();
+
+      assert.equal(page.data.memberBenefitsChoice, "VERIFY_AND_PARTICIPATE");
+      assert.equal(wx.navigateToCalls.length, 1);
+      assert.equal(wx.navigateToCalls[0].url, "/pages/register/register");
+    } finally {
+      pageModule.restore();
+    }
+  });
+
+  await t.test("checkout page submits skip choice for unverified members when they choose not to join benefits", async () => {
+    const wx = createWxMock();
+    let createOrderPayload = null;
+    const pageModule = loadPage(
+      "pages/checkout/checkout.js",
+      {
+        "../../services/order": {
+          createOrder: async (payload) => {
+            createOrderPayload = payload;
+            return {
+              order: {
+                _id: "order-skip"
+              }
+            };
+          }
+        },
+        "../../utils/session": {
+          getAppState: () => ({
+            storeId: "default-store",
+            activeTableNo: ""
+          })
+        },
+        "../../utils/cart": {
+          loadCart: () => [],
+          summarizeCart: () => ({
+            itemCount: 0,
+            totalAmount: 0
+          }),
+          clearCart: () => undefined
+        }
+      },
+      { wx }
+    );
+
+    try {
+      const page = createPageInstance(pageModule.definition);
+      page.setData({
+        cartItems: [
+          {
+            menuItemId: "dish-1",
+            quantity: 1,
+            selectedOptions: []
+          }
+        ],
+        fulfillmentMode: "DINE_IN",
+        tableNo: "A01",
+        memberBenefitsRequiresChoice: true,
+        memberBenefitsChoice: "SKIP_THIS_ORDER"
+      });
+
+      await page.submitOrder();
+
+      assert.ok(createOrderPayload);
+      assert.equal(createOrderPayload.memberBenefitsChoice, "SKIP_THIS_ORDER");
+    } finally {
+      pageModule.restore();
+    }
+  });
+
+  await t.test("checkout page reuses the same requestId when the same order is retried after a transient failure", async () => {
+    const wx = createWxMock();
+    const requestIds = [];
+    let clearCartCount = 0;
+    let submitCount = 0;
+    const pageModule = loadPage(
+      "pages/checkout/checkout.js",
+      {
+        "../../services/order": {
+          previewOrder: async () => ({
+            preview: {
+              payableAmount: 32
+            },
+            storeConfig: {}
+          }),
+          createOrder: async (payload) => {
+            submitCount += 1;
+            requestIds.push(payload.requestId);
+            if (submitCount === 1) {
+              throw new Error("网络超时");
+            }
+
+            return {
+              order: {
+                _id: "order-retry"
+              }
+            };
+          }
+        },
+        "../../utils/session": {
+          getAppState: () => ({
+            storeId: "default-store",
+            activeTableNo: ""
+          })
+        },
+        ...verifiedMemberAccessMocks,
+        "../../utils/cart": {
+          loadCart: () => [],
+          summarizeCart: () => ({
+            itemCount: 0,
+            totalAmount: 0
+          }),
+          clearCart: () => {
+            clearCartCount += 1;
+          }
+        }
+      },
+      { wx }
+    );
+
+    try {
+      const page = createPageInstance(pageModule.definition);
+      page.setData({
+        cartItems: [
+          {
+            menuItemId: "dish-1",
+            quantity: 1,
+            selectedOptions: []
+          }
+        ],
+        fulfillmentMode: "DINE_IN",
+        tableNo: "A01"
+      });
+
+      await page.submitOrder();
+      await page.submitOrder();
+
+      assert.equal(requestIds.length, 2);
+      assert.equal(requestIds[0], requestIds[1]);
+      assert.equal(clearCartCount, 1);
+      assert.equal(wx.toastCalls[0].title, "网络超时");
+      assert.equal(wx.toastCalls[1].title, "下单成功");
+    } finally {
+      pageModule.restore();
+    }
+  });
+
   await t.test("checkout page clears stale table info when a pickup order is submitted", async () => {
     const wx = createWxMock();
     let createOrderPayload = null;
@@ -1453,6 +1877,7 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
             activeTableNo: ""
           })
         },
+        ...verifiedMemberAccessMocks,
         "../../utils/cart": {
           loadCart: () => [],
           summarizeCart: () => ({
@@ -1531,6 +1956,7 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
             activeTableNo: ""
           })
         },
+        ...verifiedMemberAccessMocks,
         "../../utils/cart": {
           loadCart: () => [],
           summarizeCart: () => ({
@@ -1608,6 +2034,7 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
             activeTableNo: ""
           })
         },
+        ...verifiedMemberAccessMocks,
         "../../utils/cart": {
           loadCart: () => [
             {
@@ -1695,6 +2122,7 @@ test("miniprogram page flows keep key feedback and guard behavior", async (t) =>
         "../../utils/session": {
           getAppState: () => appState
         },
+        ...verifiedMemberAccessMocks,
         "../../utils/cart": {
           loadCart: () => [
             {

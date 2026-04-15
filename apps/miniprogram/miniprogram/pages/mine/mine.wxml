@@ -30,6 +30,21 @@
     <button class="button-secondary" bindtap="refresh">重新加载</button>
   </view>
 
+  <view wx:if="{{inviteReminder}}" class="card card-soft home-card">
+    <view class="card-header-row">
+      <view class="card-title-wrap">
+        <view class="section-kicker">邀请</view>
+        <view class="section-title">{{inviteReminder.title}}</view>
+        <view class="card-subtitle">{{inviteReminder.copy}}</view>
+      </view>
+      <view class="tag">{{inviteReminder.statusText}}</view>
+    </view>
+    <view class="button-group-tight home-actions">
+      <button class="button-primary" bindtap="goInviteCenter">{{inviteReminder.statusText === '待绑定' ? '去绑定' : '看邀请'}}</button>
+      <button class="button-secondary" bindtap="goOrders">我的订单</button>
+    </view>
+  </view>
+
   <view wx:if="{{member}}" class="card card-soft home-card">
     <view class="card-header-row">
       <view class="card-title-wrap">
@@ -75,7 +90,7 @@
   <view class="card home-card">
     <view class="section-kicker">会员服务</view>
     <view class="section-title">常用入口</view>
-    <view class="card-subtitle">订单、邀请、券包都从这里进。</view>
+    <view class="card-subtitle">订单、邀请、积分、菜品券。</view>
 
     <view class="quick-grid home-quick-grid">
       <view class="quick-card home-quick-card" bindtap="goOrders">
@@ -87,7 +102,7 @@
       <navigator class="quick-card home-quick-card" url="/pages/vouchers/vouchers">
         <view class="quick-card-tag">积分</view>
         <view class="quick-card-title">积分和券</view>
-        <view class="quick-card-copy">查看积分，兑换菜品。</view>
+        <view class="quick-card-copy">查看积分，兑换菜品券。</view>
       </navigator>
 
       <navigator wx:if="{{showInviteEntry}}" class="quick-card home-quick-card" url="/pages/invite/invite">
@@ -111,7 +126,7 @@
       <navigator class="quick-card home-quick-card" url="/pages/rules/rules">
         <view class="quick-card-tag">规则</view>
         <view class="quick-card-title">活动规则</view>
-        <view class="quick-card-copy">注册、邀请、用券说明。</view>
+        <view class="quick-card-copy">注册、邀请、积分和用券说明。</view>
       </navigator>
 
       <view class="quick-card home-quick-card" bindtap="goFeedback">

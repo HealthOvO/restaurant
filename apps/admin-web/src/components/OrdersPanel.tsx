@@ -61,6 +61,14 @@ function getStatusClass(status: OrderStatus) {
       : "tag";
 }
 
+function getMemberBenefitsSummary(order: Pick<OrderRecord, "memberBenefitsStatus" | "memberBenefitsReason">) {
+  if (order.memberBenefitsStatus === "SKIPPED_UNVERIFIED") {
+    return order.memberBenefitsReason || "未验证手机号，本单未参与会员活动，后续不补记";
+  }
+
+  return "本单参与会员活动";
+}
+
 function getAvailableActions(status?: OrderStatus): OrderActionStatus[] {
   if (!status) {
     return [];
@@ -162,7 +170,7 @@ export function OrdersPanel({
             <div className="card-title-block">
               <div className="section-eyebrow">订单筛选</div>
               <h3 className="section-title">订单检索</h3>
-              <p className="subtle">支持订单号、会员号、联系人和桌号。</p>
+              <p className="subtle">可搜订单号、会员号、联系人和桌号。</p>
             </div>
 
             <div className="field-grid">
@@ -228,6 +236,9 @@ export function OrdersPanel({
                         <div className="tag tag-navy">{order.orderNo}</div>
                         <div className={getStatusClass(order.status)}>{STATUS_LABELS[order.status]}</div>
                         <div className="tag">{order.fulfillmentMode === "DINE_IN" ? "堂食" : "自提"}</div>
+                        {order.memberBenefitsStatus === "SKIPPED_UNVERIFIED" ? (
+                          <div className="tag">未参与会员活动</div>
+                        ) : null}
                       </div>
                       <h3 className="section-title">{order.nickname || order.memberCode || "散客下单"}</h3>
                       <p className="subtle">
@@ -332,6 +343,10 @@ export function OrdersPanel({
                   <span className="data-label">备注</span>
                   <span className="data-value order-line-summary">{selectedOrder.remark || "无备注"}</span>
                 </div>
+                <div className="data-point">
+                  <span className="data-label">会员活动</span>
+                  <span className="data-value order-line-summary">{getMemberBenefitsSummary(selectedOrder)}</span>
+                </div>
               </div>
 
               <div className="table-like order-detail-lines">
@@ -399,7 +414,7 @@ export function OrdersPanel({
               <div className="card-title-block">
                 <div className="section-eyebrow">状态时间线</div>
                 <h3 className="section-title">处理记录</h3>
-                <p className="subtle">每次改状态都会留痕，方便回看。</p>
+                <p className="subtle">每次状态变化都会记录。</p>
               </div>
 
               {orderLogs.length > 0 ? (

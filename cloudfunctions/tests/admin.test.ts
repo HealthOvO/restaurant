@@ -293,7 +293,15 @@ describe("admin staff guardrails", () => {
         activatedInviteCount: 4,
         readyVoucherCount: 1,
         todayVisitCount: 3,
-        openOpsTaskCount: 2
+        openOpsTaskCount: 2,
+        todayOrderCount: 6,
+        todayRevenueAmount: 288,
+        pendingConfirmOrderCount: 1,
+        readyOrderCount: 2,
+        todayPointsIssued: 30,
+        todayPointsRedeemed: 18,
+        todayVoucherRedeemedCount: 2,
+        memberBenefitsSkippedOrderCount: 1
       })
     };
 

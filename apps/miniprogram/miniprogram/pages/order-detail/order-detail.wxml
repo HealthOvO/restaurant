@@ -14,7 +14,7 @@
     <view class="hero hero-member">
       <view class="hero-badge">订单详情</view>
       <view class="title">{{order.statusText}}</view>
-      <view class="subtitle">{{order.orderNo}}</view>
+      <view class="subtitle">{{order.orderNo}} · {{order.statusHint}}</view>
       <view class="mini-metrics">
         <view class="mini-metric">
           <view class="mini-metric-label">方式</view>
@@ -29,6 +29,16 @@
           <view class="mini-metric-value">¥{{order.payableAmountText}}</view>
         </view>
       </view>
+    </view>
+
+    <view class="card card-soft">
+      <view class="section-kicker">会员活动</view>
+      <view class="section-title">{{order.memberBenefitsTitle}}</view>
+      <view class="card-subtitle">{{order.memberBenefitsCopy}}</view>
+      <view wx:if="{{order.primaryActionLabel}}" class="button-group-tight" style="margin-top: 20rpx;">
+        <button class="button-primary" bindtap="handlePrimaryAction">{{order.primaryActionLabel}}</button>
+      </view>
+      <view wx:if="{{order.primaryActionHelper}}" class="helper-text">{{order.primaryActionHelper}}</view>
     </view>
 
     <view class="card">
@@ -48,7 +58,7 @@
 
     <view class="card card-soft">
       <view class="section-kicker">状态时间线</view>
-      <view class="section-title">订单是怎么往前走的</view>
+      <view class="section-title">处理记录</view>
       <view wx:for="{{logs}}" wx:key="_id" class="timeline-item">
         <view class="timeline-dot"></view>
         <view class="timeline-body">

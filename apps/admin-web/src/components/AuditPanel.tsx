@@ -129,7 +129,7 @@ export function AuditPanel({ logs }: AuditPanelProps) {
       <div className="empty-state">
         <div className="tag tag-navy">暂无日志</div>
         <h3 className="section-title">最近还没有操作记录</h3>
-        <p className="subtle">保存规则、改账号、处理反馈后都会在这里留痕。</p>
+        <p className="subtle">规则、账号和反馈处理都会记在这里。</p>
       </div>
     );
   }
@@ -164,7 +164,7 @@ export function AuditPanel({ logs }: AuditPanelProps) {
           <div className="card-title-block">
             <div className="section-eyebrow">筛选日志</div>
             <h3 className="section-title">日志筛选</h3>
-            <p className="subtle">支持摘要、记录 ID 和操作人。</p>
+            <p className="subtle">可按摘要、记录 ID、操作人筛选。</p>
           </div>
 
           <div className="field-grid audit-filter-grid">

@@ -34,7 +34,7 @@
 
     <view class="card">
       <view class="section-kicker">订单信息</view>
-      <view class="section-title">订单信息</view>
+      <view class="section-title">下单信息</view>
       <view class="detail-grid">
         <view class="detail-row">
           <view class="detail-label">下单时间</view>
@@ -56,12 +56,17 @@
           <view class="detail-label">顾客备注</view>
           <view class="detail-value">{{order.remark}}</view>
         </view>
+        <view class="detail-row">
+          <view class="detail-label">会员活动</view>
+          <view class="detail-value">{{order.memberBenefitsTitle}}</view>
+        </view>
       </view>
+      <view class="helper-text">{{order.memberBenefitsCopy}}</view>
     </view>
 
     <view class="card">
       <view class="section-kicker">菜品明细</view>
-      <view class="section-title">菜品明细</view>
+      <view class="section-title">已点菜品</view>
       <view wx:for="{{order.lineItems}}" wx:for-item="lineItem" wx:key="lineId" class="checkout-item">
         <view class="checkout-item-main">
           <view class="checkout-item-name">{{lineItem.name}}</view>
@@ -77,7 +82,7 @@
     <view wx:if="{{order.availableActions.length}}" class="card card-soft">
       <view class="section-kicker">推进状态</view>
       <view class="section-title">更新状态</view>
-      <view class="section-copy">备注会一起写入状态记录。</view>
+      <view class="section-copy">备注会记到处理记录里。</view>
 
       <input class="input input-strong" value="{{note}}" placeholder="选填备注" bindinput="updateNote" />
 

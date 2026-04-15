@@ -46,7 +46,7 @@
         <view class="card-title-wrap">
           <view class="section-kicker">高频</view>
           <view class="section-title">常用操作</view>
-          <view class="card-subtitle">先做核销和消费结算。</view>
+          <view class="card-subtitle">核销、查会员、看订单。</view>
         </view>
         <view class="tag tag-success">在线</view>
       </view>
@@ -55,20 +55,20 @@
         <view class="staff-task-card staff-task-card-primary" bindtap="goVoucher">
           <view class="quick-card-tag">核销</view>
           <view class="staff-task-title">菜品券核销</view>
-          <view class="staff-task-copy">扫码优先，也能手输。</view>
+          <view class="staff-task-copy">先看券，再确认核销。</view>
         </view>
 
         <view class="staff-task-card" bindtap="goVisit">
-          <view class="quick-card-tag">消费</view>
-          <view class="staff-task-title">消费核销</view>
-          <view class="staff-task-copy">查会员后录订单号。</view>
+          <view class="quick-card-tag">补录</view>
+          <view class="staff-task-title">线下补录</view>
+          <view class="staff-task-copy">只录门店线下单，小程序订单去订单看板。</view>
         </view>
       </view>
     </view>
 
     <view class="card staff-tools-card">
-      <view class="section-kicker">其他</view>
-      <view class="section-title">更多功能</view>
+      <view class="section-kicker">工具</view>
+      <view class="section-title">常用工具</view>
 
       <view class="quick-grid staff-tools-grid">
         <view class="quick-card staff-tool-card" bindtap="goSearch">

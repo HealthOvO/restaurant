@@ -19,6 +19,9 @@ module.exports = {
   settleFirstVisit(data) {
     return callFunction("visit-settle-first-visit", data);
   },
+  previewVoucher(data) {
+    return callFunction("voucher-preview", data);
+  },
   redeemVoucher(data) {
     return callFunction("voucher-redeem", data);
   }

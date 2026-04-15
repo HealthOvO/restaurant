@@ -1,9 +1,23 @@
 const { previewOrder, createOrder, fetchMenuCatalog } = require("../../services/order");
 const { getAppState } = require("../../utils/session");
 const { loadCart, summarizeCart, clearCart } = require("../../utils/cart");
+const { refreshMemberState } = require("../../utils/member-access");
 
 function createOrderRequestId() {
   return `order_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildOrderRequestSignature(storeId, orderContext, cartItems) {
+  return JSON.stringify({
+    storeId: storeId || "default-store",
+    fulfillmentMode: orderContext.fulfillmentMode,
+    tableNo: orderContext.tableNo,
+    contactName: orderContext.contactName,
+    contactPhone: orderContext.contactPhone,
+    remark: orderContext.remark,
+    memberBenefitsChoice: orderContext.memberBenefitsChoice || "VERIFY_AND_PARTICIPATE",
+    items: buildPayloadItems(cartItems)
+  });
 }
 
 function formatAmount(value) {
@@ -45,13 +59,18 @@ function buildOrderContext(data, overrides) {
       : data.contactPhone;
   const remark =
     overrides && Object.prototype.hasOwnProperty.call(overrides, "remark") ? overrides.remark : data.remark;
+  const memberBenefitsChoice =
+    overrides && Object.prototype.hasOwnProperty.call(overrides, "memberBenefitsChoice")
+      ? overrides.memberBenefitsChoice
+      : data.memberBenefitsChoice;
 
   return {
     fulfillmentMode,
     tableNo: fulfillmentMode === "DINE_IN" ? (tableNo || "").trim() : "",
     contactName: fulfillmentMode === "PICKUP" ? (contactName || "").trim() : "",
     contactPhone: fulfillmentMode === "PICKUP" ? (contactPhone || "").trim() : "",
-    remark: (remark || "").trim()
+    remark: (remark || "").trim(),
+    memberBenefitsChoice: memberBenefitsChoice || "VERIFY_AND_PARTICIPATE"
   };
 }
 
@@ -131,6 +150,49 @@ function cacheStoreConfig(storeId, storeConfig) {
   };
 }
 
+function resolveInviterLabel(inviterSummary) {
+  if (!inviterSummary) {
+    return "";
+  }
+
+  return inviterSummary.nickname || inviterSummary.memberCode || "邀请人";
+}
+
+function buildMemberBenefitsState(memberState, currentChoice) {
+  const member = memberState && memberState.member;
+  const relation = memberState && memberState.relation;
+  const inviterLabel = resolveInviterLabel(memberState && memberState.inviterSummary);
+  const hasVerifiedPhone = !!(member && member.phone && member.phoneVerifiedAt);
+
+  if (hasVerifiedPhone) {
+    return {
+      requiresChoice: false,
+      choice: "VERIFY_AND_PARTICIPATE",
+      statusText: "已参与",
+      title: "本单会参与会员活动",
+      copy:
+        relation && relation.status === "PENDING"
+          ? "首单完成后会自动更新邀请进度和积分。"
+          : "订单完成后会正常累计积分和券。"
+    };
+  }
+
+  const choice = currentChoice === "SKIP_THIS_ORDER" ? "SKIP_THIS_ORDER" : "VERIFY_AND_PARTICIPATE";
+  const verifyCopy = inviterLabel
+    ? `${inviterLabel} 正在邀请你。想让这单计入邀请和积分，先验证手机号。`
+    : "验证手机号后，这单才会计入邀请和积分。";
+  const skipCopy = "这单不计邀请和积分，后续不补记。";
+  return {
+    requiresChoice: true,
+    choice,
+    statusText: choice === "SKIP_THIS_ORDER" ? "本单不参与" : "待验证",
+    title: choice === "SKIP_THIS_ORDER" ? "本单不参与会员活动" : "先验证手机号",
+    copy: choice === "SKIP_THIS_ORDER" ? skipCopy : verifyCopy,
+    verifyCopy,
+    skipCopy
+  };
+}
+
 Page({
   data: {
     loading: true,
@@ -147,13 +209,38 @@ Page({
     remark: "",
     storeConfig: null,
     supportDineIn: true,
-    supportPickup: true
+    supportPickup: true,
+    memberBenefitsRequiresChoice: false,
+    memberBenefitsChoice: "VERIFY_AND_PARTICIPATE",
+    memberBenefitsStatusText: "已参与",
+    memberBenefitsTitle: "本单会参与会员活动",
+    memberBenefitsCopy: "订单完成后会正常累计积分和券。",
+    memberBenefitsVerifyCopy: "",
+    memberBenefitsSkipCopy: ""
   },
   onShow() {
     this.refresh();
   },
+  resolveSubmitRequestId(orderContext) {
+    const signature = buildOrderRequestSignature(getAppState().storeId, orderContext, this.data.cartItems);
+    const pendingOrderRequest = this.pendingOrderRequest || null;
+    if (pendingOrderRequest && pendingOrderRequest.signature === signature && pendingOrderRequest.requestId) {
+      return pendingOrderRequest.requestId;
+    }
+
+    const requestId = createOrderRequestId();
+    this.pendingOrderRequest = {
+      signature,
+      requestId
+    };
+    return requestId;
+  },
+  resetPendingOrderRequest() {
+    this.pendingOrderRequest = null;
+  },
   async refreshPreview(cartItems, overrides) {
     if (!cartItems.length) {
+      this.resetPendingOrderRequest();
       this.setData({
         loading: false,
         totalAmountText: "0"
@@ -231,6 +318,13 @@ Page({
     });
 
     const appState = getAppState();
+    const memberStatePromise = refreshMemberState().catch(() => ({
+      member: null,
+      relation: null,
+      pendingInviteCode: "",
+      inviterSummary: null,
+      canBindInvite: false
+    }));
     const cartItems = decorateCartItems(loadCart(appState.storeId));
     const summary = summarizeCart(cartItems);
     const tableNo = appState.activeTableNo || "";
@@ -243,6 +337,8 @@ Page({
     const defaultMode = tableNo ? "DINE_IN" : this.data.fulfillmentMode;
     const fulfillmentMode = resolveAvailableFulfillmentMode(defaultMode, storeConfig);
     const normalizedTableNo = fulfillmentMode === "DINE_IN" ? tableNo : "";
+    const memberState = await memberStatePromise;
+    const memberBenefits = buildMemberBenefitsState(memberState, this.data.memberBenefitsChoice);
     this.setData({
       cartItems,
       itemCount: summary.itemCount,
@@ -252,7 +348,14 @@ Page({
       tableNo: normalizedTableNo,
       storeConfig,
       supportDineIn: support.dineInEnabled,
-      supportPickup: support.pickupEnabled
+      supportPickup: support.pickupEnabled,
+      memberBenefitsRequiresChoice: memberBenefits.requiresChoice,
+      memberBenefitsChoice: memberBenefits.choice,
+      memberBenefitsStatusText: memberBenefits.statusText,
+      memberBenefitsTitle: memberBenefits.title,
+      memberBenefitsCopy: memberBenefits.copy,
+      memberBenefitsVerifyCopy: memberBenefits.verifyCopy || "",
+      memberBenefitsSkipCopy: memberBenefits.skipCopy || ""
     });
 
     await this.refreshPreview(cartItems, {
@@ -284,6 +387,38 @@ Page({
       [field]: event.detail.value
     });
   },
+  selectMemberBenefitsChoice(event) {
+    const choice = event.currentTarget.dataset.choice;
+    if (!this.data.memberBenefitsRequiresChoice || !choice) {
+      return;
+    }
+    this.setData({
+      memberBenefitsChoice: choice,
+      memberBenefitsStatusText: choice === "SKIP_THIS_ORDER" ? "本单不参与" : "待验证",
+      memberBenefitsTitle: choice === "SKIP_THIS_ORDER" ? "本单不参与会员活动" : "先验证手机号",
+      memberBenefitsCopy:
+        choice === "SKIP_THIS_ORDER"
+        ? this.data.memberBenefitsSkipCopy || "这单不计邀请和积分，后续不补记。"
+        : this.data.memberBenefitsVerifyCopy || "验证手机号后，这单才会计入邀请和积分。"
+    });
+  },
+  goVerifyMemberBenefits() {
+    if (this.data.submitting) {
+      return;
+    }
+
+    if (this.data.memberBenefitsRequiresChoice) {
+      this.selectMemberBenefitsChoice({
+        currentTarget: {
+          dataset: {
+            choice: "VERIFY_AND_PARTICIPATE"
+          }
+        }
+      });
+    }
+
+    wx.navigateTo({ url: "/pages/register/register" });
+  },
   async submitOrder() {
     if (!this.data.cartItems.length) {
       wx.showToast({
@@ -303,21 +438,38 @@ Page({
       return;
     }
 
+    if (this.data.memberBenefitsRequiresChoice && this.data.memberBenefitsChoice !== "SKIP_THIS_ORDER") {
+      wx.showModal({
+        title: "先验证手机号",
+        content: "验证后，这单才能参与邀请和积分。",
+        confirmText: "去验证",
+        success: (result) => {
+          if (result.confirm) {
+            wx.navigateTo({ url: "/pages/register/register" });
+          }
+        }
+      });
+      return;
+    }
+
     this.setData({
       submitting: true
     });
 
     try {
+      const requestId = this.resolveSubmitRequestId(orderContext);
       const response = await createOrder({
-        requestId: createOrderRequestId(),
+        requestId,
         fulfillmentMode: orderContext.fulfillmentMode,
         tableNo: orderContext.tableNo,
         contactName: orderContext.contactName,
         contactPhone: orderContext.contactPhone,
         remark: orderContext.remark,
+        memberBenefitsChoice: this.data.memberBenefitsRequiresChoice ? this.data.memberBenefitsChoice : undefined,
         items: buildPayloadItems(this.data.cartItems)
       });
 
+      this.resetPendingOrderRequest();
       clearCart(getAppState().storeId);
       wx.showToast({
         title: "下单成功"

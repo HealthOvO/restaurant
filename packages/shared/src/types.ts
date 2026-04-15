@@ -19,6 +19,8 @@ export type OpsTaskResolution = "RETRY_SUCCESS" | "MANUAL_RESOLVED" | "IGNORED";
 export type MenuFulfillmentMode = "DINE_IN" | "PICKUP";
 export type OrderStatus = "PENDING_CONFIRM" | "CONFIRMED" | "PREPARING" | "READY" | "COMPLETED" | "CANCELLED";
 export type OrderSourceChannel = "MINIPROGRAM";
+export type OrderMemberBenefitsChoice = "VERIFY_AND_PARTICIPATE" | "SKIP_THIS_ORDER";
+export type OrderMemberBenefitsStatus = "ELIGIBLE" | "SKIPPED_UNVERIFIED";
 export type FeedbackCategory =
   | "BUG"
   | "POINTS"
@@ -202,6 +204,8 @@ export interface OrderRecord extends BaseRecord {
   memberOpenId: string;
   memberCode?: string;
   nickname?: string;
+  memberBenefitsStatus?: OrderMemberBenefitsStatus;
+  memberBenefitsReason?: string;
   status: OrderStatus;
   fulfillmentMode: MenuFulfillmentMode;
   sourceChannel: OrderSourceChannel;
@@ -342,6 +346,13 @@ export interface MenuCatalogPayload {
 export interface MemberState {
   member: Member | null;
   relation: InviteRelation | null;
+  pendingInviteCode?: string | null;
+  inviterSummary?: {
+    memberId: string;
+    memberCode: string;
+    nickname?: string;
+  } | null;
+  canBindInvite?: boolean;
 }
 
 export interface StaffMemberLookupRow {

@@ -60,14 +60,22 @@
       </view>
     </view>
 
+    <view wx:if="{{pendingInviteCode || relation}}" class="card card-soft">
+      <view class="section-kicker">当前关系</view>
+      <view class="section-title">{{relation ? '邀请关系已记录' : '已识别到邀请码'}}</view>
+      <view class="card-subtitle">
+        {{inviterSummary ? ((inviterSummary.nickname || inviterSummary.memberCode) + (relation ? ' 与你已建立邀请关系。' : ' 正在邀请你，首单前可绑定。')) : (pendingInviteCode ? ('邀请码 ' + pendingInviteCode + (relation ? ' 已记录。' : ' 可在首单前绑定。')) : '当前邀请关系已记录。')}}
+      </view>
+    </view>
+
     <view class="card">
       <view class="section-kicker">绑定邀请码</view>
-      <view class="section-title">手动填写</view>
+        <view class="section-title">填写邀请码</view>
       <view wx:if="{{relation}}" class="notice">
         当前状态：{{relationStatusText}}
       </view>
       <view wx:elif="{{canBindInviteCode}}">
-        <view class="section-copy">首单前可绑定一次邀请码。</view>
+        <view class="section-copy">首单前可绑定一次。</view>
         <input
           class="input input-strong"
           placeholder="请输入邀请码"

@@ -19,7 +19,7 @@ function resolveMemberSummary(member) {
     return {
       label: "未注册",
       actionTitle: "注册会员",
-      actionCopy: "积分和兑换都在我的。"
+      actionCopy: "注册后可看积分和券。"
     };
   }
 
@@ -27,23 +27,67 @@ function resolveMemberSummary(member) {
     return {
       label: "待验证",
       actionTitle: "验证手机号",
-      actionCopy: "验证后开始累计积分。"
+      actionCopy: "验证后才能累计积分。"
     };
   }
 
   if (!member.hasCompletedFirstVisit) {
     return {
       label: "待首单",
-      actionTitle: "查看积分",
-      actionCopy: "首单完成后自动更新。"
+      actionTitle: "去点餐",
+      actionCopy: "首单完成后会更新积分。"
     };
   }
 
   return {
     label: "已开通",
-    actionTitle: "我的积分",
-    actionCopy: "邀请、积分、兑换都在我的。"
+    actionTitle: "积分和券",
+    actionCopy: "邀请、积分和券都在我的。"
   };
+}
+
+function resolveInviterLabel(inviterSummary) {
+  if (!inviterSummary) {
+    return "";
+  }
+
+  return inviterSummary.nickname || inviterSummary.memberCode || "邀请人";
+}
+
+function buildInviteReminder(memberState) {
+  const member = memberState && memberState.member;
+  const relation = memberState && memberState.relation;
+  if (!member) {
+    return null;
+  }
+
+  const inviterLabel = resolveInviterLabel(memberState.inviterSummary);
+  if (relation) {
+    return {
+      statusText: relation.status === "ACTIVATED" ? "已生效" : "已绑定",
+      title: relation.status === "ACTIVATED" ? "邀请关系已生效" : "已绑定邀请人",
+      copy:
+        relation.status === "ACTIVATED"
+          ? inviterLabel
+            ? `${inviterLabel} 的邀请已计入进度。`
+            : "这次邀请已经计入进度。"
+          : inviterLabel
+            ? `当前绑定给 ${inviterLabel}，首单后生效。`
+            : "当前邀请关系已记录，首单后生效。"
+    };
+  }
+
+  if (memberState.canBindInvite && memberState.pendingInviteCode) {
+    return {
+      statusText: "待绑定",
+      title: "首单前还能绑定邀请人",
+      copy: inviterLabel
+        ? `当前识别到 ${inviterLabel} 的邀请码，想参加活动记得先绑定。`
+        : `检测到邀请码 ${memberState.pendingInviteCode}，想参加活动记得先绑定。`
+    };
+  }
+
+  return null;
 }
 
 function cacheStoreConfig(storeId, storeConfig) {
@@ -70,7 +114,8 @@ Page({
     pointsBalance: 0,
     memberStatusText: "未注册",
     memberActionTitle: "注册会员",
-    memberActionCopy: "积分和兑换都在我的。"
+    memberActionCopy: "积分和兑换都在我的。",
+    inviteReminder: null
   },
   onLoad(query) {
     const context = applyStoreLaunchContext(query);
@@ -106,7 +151,8 @@ Page({
         pointsBalance: member && Number(member.pointsBalance) ? Number(member.pointsBalance) : 0,
         memberStatusText: memberSummary.label,
         memberActionTitle: memberSummary.actionTitle,
-        memberActionCopy: memberSummary.actionCopy
+        memberActionCopy: memberSummary.actionCopy,
+        inviteReminder: buildInviteReminder(memberState)
       });
     } catch (error) {
       this.setData({
@@ -127,6 +173,9 @@ Page({
   },
   goMine() {
     wx.switchTab({ url: "/pages/mine/mine" });
+  },
+  goInviteCenter() {
+    wx.navigateTo({ url: "/pages/invite/invite" });
   },
   goRegister() {
     wx.navigateTo({ url: "/pages/register/register" });

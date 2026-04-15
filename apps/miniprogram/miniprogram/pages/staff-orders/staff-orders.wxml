@@ -2,7 +2,7 @@
   <view class="hero hero-staff">
     <view class="hero-badge">订单</view>
     <view class="title">门店订单</view>
-    <view class="subtitle">看订单并更新状态。</view>
+    <view class="subtitle">查看订单并更新状态。</view>
 
     <view class="summary-chip-grid">
       <view class="summary-chip-card">
@@ -27,7 +27,7 @@
   <view class="card">
     <view class="section-kicker">筛选</view>
     <view class="section-title">搜索订单</view>
-    <view class="section-copy">支持订单号、会员号、联系人、手机号和桌号。</view>
+    <view class="section-copy">可搜订单号、会员号、联系人、手机号和桌号。</view>
 
     <view class="search-row">
       <input class="input input-strong search-input" value="{{keyword}}" placeholder="输入订单号、会员号、桌号或手机号" bindinput="onInput" />
@@ -46,7 +46,7 @@
 
   <view wx:if="{{loading}}" class="card">
     <view class="section-title">加载中</view>
-    <view class="section-copy">正在同步订单。</view>
+    <view class="section-copy">正在刷新订单。</view>
   </view>
 
   <view wx:if="{{errorMessage}}" class="card card-accent">

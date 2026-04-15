@@ -1,8 +1,8 @@
 <view class="page page-tight">
   <view class="hero hero-member">
     <view class="hero-badge">订单</view>
-    <view class="title">这一餐点过什么，都在这里</view>
-    <view class="subtitle">进行中订单和历史订单会分开显示，状态变化会同步更新。</view>
+    <view class="title">我的订单</view>
+    <view class="subtitle">看进行中和历史订单。</view>
   </view>
 
   <view class="mode-switch-row">
@@ -24,7 +24,7 @@
 
   <view wx:if="{{!loading && !visibleOrders.length}}" class="card">
     <view class="section-title">还没有订单</view>
-    <view class="section-copy">先去点餐页选几样菜，下单后这里会显示最新状态。</view>
+    <view class="section-copy">还没下单，先去点餐。</view>
     <button class="button-primary" bindtap="goMenu">去点餐</button>
   </view>
 

@@ -34,8 +34,23 @@ function decorateLineItems(lineItems) {
   }));
 }
 
+function resolveMemberBenefitsMeta(order) {
+  if (order.memberBenefitsStatus === "SKIPPED_UNVERIFIED") {
+    return {
+      title: "本单未参与会员活动",
+      copy: order.memberBenefitsReason || "未验证手机号，本单不计邀请和积分，后续不补记。"
+    };
+  }
+
+  return {
+    title: "本单参与会员活动",
+    copy: "完成订单后会自动结算邀请和积分。"
+  };
+}
+
 function decorateOrder(order) {
   const meta = STATUS_META[order.status] || STATUS_META.CANCELLED;
+  const memberBenefits = resolveMemberBenefitsMeta(order);
   return {
     ...order,
     statusText: meta.text,
@@ -50,6 +65,8 @@ function decorateOrder(order) {
           ? `自提 · ${order.contactName}`
           : "自提",
     memberLabel: order.nickname || order.memberCode || "散客下单",
+    memberBenefitsTitle: memberBenefits.title,
+    memberBenefitsCopy: memberBenefits.copy,
     lineItems: decorateLineItems(order.lineItems),
     availableActions: (meta.nextActions || []).map((status) => ({
       status,
@@ -72,6 +89,10 @@ function buildResultMessage(response, nextStatus) {
   }
 
   if (nextStatus === "COMPLETED" && response.visitSettlement) {
+    if (response.visitSettlement.code === "ORDER_MEMBER_BENEFITS_SKIPPED") {
+      return `订单已完成，这单未参与会员活动：${response.visitSettlement.reason || "未验证手机号"}`;
+    }
+
     if (response.visitSettlement.state === "SETTLED") {
       return "订单已完成，会员首单结算也已同步完成。";
     }

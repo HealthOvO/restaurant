@@ -13,6 +13,18 @@ function decorateRow(row) {
   };
 }
 
+function looksLikeMiniProgramOrderNo(value) {
+  return /^OD\d{14}[A-Z0-9]{4,}$/i.test(`${value || ""}`.trim());
+}
+
+function resolveSelectedMemberLabel(selectedMember) {
+  if (!selectedMember || !selectedMember.member) {
+    return "这位会员";
+  }
+
+  return selectedMember.member.memberCode || selectedMember.member.phone || "这位会员";
+}
+
 Page({
   data: {
     query: "",
@@ -26,8 +38,28 @@ Page({
     hasSearched: false,
     scanning: false
   },
+  onLoad(options) {
+    const query = options && options.query ? decodeURIComponent(options.query).trim() : "";
+    this.pendingAutoSearchQuery = query;
+  },
   async onShow() {
-    await requireStaffAccess();
+    const access = await requireStaffAccess();
+    if (!access || !this.pendingAutoSearchQuery) {
+      return;
+    }
+
+    const query = this.pendingAutoSearchQuery;
+    this.pendingAutoSearchQuery = "";
+    this.setData({
+      query,
+      selectedMemberId: "",
+      selectedMember: null,
+      hasSearched: false
+    });
+    await this.search({
+      queryOverride: query,
+      autoSelectExact: true
+    });
   },
   onInput(event) {
     const field = event.currentTarget.dataset.field;
@@ -132,6 +164,17 @@ Page({
       selectedMember: this.data.rows.find((item) => item.member._id === selectedMemberId) || null
     });
   },
+  copyVerificationGuide() {
+    const memberLabel = resolveSelectedMemberLabel(this.data.selectedMember);
+    wx.setClipboardData({
+      data: `${memberLabel} 还没完成微信手机号验证。请先在顾客手机里打开小程序，进入“我的”-“注册会员”完成验证，验证完回到店员端就能继续补录这笔线下单。`,
+      success() {
+        wx.showToast({
+          title: "提示已复制"
+        });
+      }
+    });
+  },
   async settle() {
     if (this.data.loading) {
       return;
@@ -145,7 +188,11 @@ Page({
     const tableNo = (this.data.tableNo || "").trim();
     const notes = (this.data.notes || "").trim();
     if (!this.data.selectedMemberId || !orderNo) {
-      wx.showToast({ icon: "none", title: "请选择会员并填写订单号" });
+      wx.showToast({ icon: "none", title: "请选择会员并填写外部单号" });
+      return;
+    }
+    if (looksLikeMiniProgramOrderNo(orderNo)) {
+      wx.showToast({ icon: "none", title: "小程序订单请去订单看板完成" });
       return;
     }
     if (!this.data.selectedMember || !this.data.selectedMember.member.phoneVerifiedAt) {
@@ -175,12 +222,12 @@ Page({
         );
       }
       wx.showModal({
-        title: "核销成功",
+        title: "补录完成",
         content: response.settlement.isIdempotent
-          ? "该订单已核销过，本次按幂等返回。"
+          ? "这笔线下单已经补录过了。"
           : rewardSummary.length
-            ? `消费已核销，${rewardSummary.join("；")} 已自动到账。`
-            : "消费已核销，本次没有新增奖励。"
+            ? `已补录完成，${rewardSummary.join("；")} 已自动到账。`
+            : "已补录完成，本次没有新增奖励。"
       });
       this.setData({
         orderNo: "",
@@ -189,7 +236,7 @@ Page({
       });
       await this.search({ force: true });
     } catch (error) {
-      wx.showToast({ icon: "none", title: error.message || "核销失败" });
+      wx.showToast({ icon: "none", title: error.message || "补录失败" });
     } finally {
       this.setData({ loading: false });
     }

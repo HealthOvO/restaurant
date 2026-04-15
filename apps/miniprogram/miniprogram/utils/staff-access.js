@@ -5,6 +5,18 @@ function isSessionInvalidError(error) {
   return !!(error && (error.code === "UNAUTHORIZED" || error.code === "INVALID_SESSION_SCOPE"));
 }
 
+function buildQueryString(options) {
+  if (!options || typeof options !== "object") {
+    return "";
+  }
+
+  const parts = Object.keys(options)
+    .filter((key) => options[key] !== undefined && options[key] !== null && `${options[key]}` !== "")
+    .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(`${options[key]}`)}`);
+
+  return parts.length ? `?${parts.join("&")}` : "";
+}
+
 function getCurrentPagePath() {
   if (typeof getCurrentPages !== "function") {
     return "";
@@ -20,7 +32,8 @@ function getCurrentPagePath() {
     return "";
   }
 
-  return currentPage.route.startsWith("/") ? currentPage.route : `/${currentPage.route}`;
+  const route = currentPage.route.startsWith("/") ? currentPage.route : `/${currentPage.route}`;
+  return `${route}${buildQueryString(currentPage.options)}`;
 }
 
 function redirectToStaffLogin(redirectPath) {

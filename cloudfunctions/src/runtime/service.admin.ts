@@ -311,10 +311,13 @@ export async function queryMembers(repository: RestaurantRepository, input: unkn
   }
 
   const memberIds = pageMembers.map((member) => member._id);
-  const [relations, visits, rawVouchers] = await Promise.all([
+  const [relations, visits, rawVouchers, pointTransactions] = await Promise.all([
     repository.listInviteRelationsByInviteeIds(memberIds),
     repository.listVisitsByMemberIds(memberIds),
-    repository.listVouchersByMemberIds(memberIds)
+    repository.listVouchersByMemberIds(memberIds),
+    typeof repository.listPointTransactionsByMemberIds === "function"
+      ? repository.listPointTransactionsByMemberIds(memberIds)
+      : Promise.resolve([])
   ]);
   const vouchers = await syncExpiredVoucherStatuses(repository, rawVouchers, now);
 
@@ -327,11 +330,18 @@ export async function queryMembers(repository: RestaurantRepository, input: unkn
     (groups[voucher.memberId] ??= []).push(voucher);
     return groups;
   }, {});
+  const pointTransactionsByMemberId = pointTransactions.reduce<Record<string, typeof pointTransactions>>((groups, transaction) => {
+    (groups[transaction.memberId] ??= []).push(transaction);
+    return groups;
+  }, {});
   const rows = pageMembers.map((member) => ({
     member,
     relation: relationByInviteeId.get(member._id) ?? null,
     visits: (visitsByMemberId[member._id] ?? []).sort((left, right) => right.verifiedAt.localeCompare(left.verifiedAt)),
-    vouchers: (vouchersByMemberId[member._id] ?? []).sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    vouchers: (vouchersByMemberId[member._id] ?? []).sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+    pointTransactions: (pointTransactionsByMemberId[member._id] ?? [])
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(0, 20)
   }));
 
   return {

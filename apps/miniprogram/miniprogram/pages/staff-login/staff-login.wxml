@@ -2,16 +2,16 @@
   <view class="hero hero-staff">
     <view class="hero-badge">店员</view>
     <view class="title">店员登录</view>
-    <view class="subtitle">账号密码登录。</view>
+    <view class="subtitle">用店员账号登录。</view>
     <view class="hero-chips">
-      <view class="hero-chip">老板后台建号</view>
+      <view class="hero-chip">老板先建号</view>
       <view class="hero-chip">首次登录自动绑微信</view>
       <view class="hero-chip">换班时记得退出</view>
     </view>
   </view>
 
   <view class="card card-soft card-compact">
-    <view class="section-title">登录</view>
+    <view class="section-title">登录账号</view>
     <view class="section-copy">使用老板创建的账号登录。</view>
     <view wx:if="{{redirectPath}}" class="redirect-tip">{{redirectHint}}</view>
 
@@ -19,7 +19,7 @@
     <input
       class="input input-strong"
       placeholder="请输入账号"
-      placeholder-style="color:#b7aa98;font-size:26rpx;"
+      placeholder-style="color:#b7aa98;font-size:26rpx;line-height:92rpx;"
       value="{{username}}"
       data-field="username"
       bindinput="onInput"
@@ -29,13 +29,13 @@
     <input
       class="input input-strong"
       placeholder="请输入密码"
-      placeholder-style="color:#b7aa98;font-size:26rpx;"
+      placeholder-style="color:#b7aa98;font-size:26rpx;line-height:92rpx;"
       password
       value="{{password}}"
       data-field="password"
       bindinput="onInput"
     />
-    <view class="helper-text">账号有问题请找老板处理。</view>
+    <view class="helper-text">账号或密码有问题请找老板。</view>
 
     <button class="button-primary" disabled="{{loading || !username || !password}}" loading="{{loading}}" bindtap="submit">登录</button>
   </view>

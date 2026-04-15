@@ -75,6 +75,14 @@ export async function fetchDashboard(sessionToken: string, storeId?: string) {
       readyVoucherCount: number;
       todayVisitCount: number;
       openOpsTaskCount: number;
+      todayOrderCount: number;
+      todayRevenueAmount: number;
+      pendingConfirmOrderCount: number;
+      readyOrderCount: number;
+      todayPointsIssued: number;
+      todayPointsRedeemed: number;
+      todayVoucherRedeemedCount: number;
+      memberBenefitsSkippedOrderCount: number;
     };
   }>("admin-dashboard", withStoreScope({ sessionToken }, storeId));
 }
@@ -165,6 +173,7 @@ export interface MemberSearchRow {
   relation?: InviteRelation | null;
   visits: VisitRecord[];
   vouchers: DishVoucher[];
+  pointTransactions: MemberPointTransaction[];
 }
 
 export async function searchMembers(sessionToken: string, query = "", page = 1, pageSize = 8, storeId?: string) {

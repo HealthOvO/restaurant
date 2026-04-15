@@ -22,7 +22,7 @@ describe("LoginPage", () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText("门店编号"), {
+    fireEvent.change(screen.getByPlaceholderText("例如 default-store"), {
       target: { value: " branch-01 " }
     });
     fireEvent.change(screen.getByLabelText("账号"), {
@@ -55,8 +55,9 @@ describe("LoginPage", () => {
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "首次初始化" }));
+    fireEvent.click(screen.getByRole("button", { name: "展开高级设置" }));
 
-    fireEvent.change(screen.getByLabelText("门店编号"), {
+    fireEvent.change(screen.getByPlaceholderText("例如 default-store"), {
       target: { value: "hq-store" }
     });
     fireEvent.change(screen.getByLabelText("初始化口令"), {
@@ -77,7 +78,7 @@ describe("LoginPage", () => {
     fireEvent.change(screen.getByLabelText("权限范围"), {
       target: { value: "ALL_STORES" }
     });
-    fireEvent.change(screen.getByLabelText("可管理门店"), {
+    fireEvent.change(screen.getByPlaceholderText("branch-01, branch-02"), {
       target: { value: "branch-01, branch-02 branch-03" }
     });
 
@@ -94,6 +95,25 @@ describe("LoginPage", () => {
         managedStoreIds: ["branch-01", "branch-02", "branch-03"]
       });
     });
+  });
+
+  it("keeps advanced bootstrap settings collapsed by default", () => {
+    render(
+      <LoginPage
+        loginLoading={false}
+        bootstrapLoading={false}
+        loginErrorMessage=""
+        bootstrapErrorMessage=""
+        noticeMessage=""
+        onLogin={vi.fn()}
+        onBootstrap={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "首次初始化" }));
+
+    expect(screen.queryByLabelText("权限范围")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "展开高级设置" })).toBeInTheDocument();
   });
 
   it("clears bootstrap validation errors when the user edits the invalid field", async () => {

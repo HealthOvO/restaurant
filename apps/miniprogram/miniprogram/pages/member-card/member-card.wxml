@@ -3,7 +3,7 @@
     <view class="hero hero-member">
       <view class="hero-badge">会员凭证</view>
       <view class="title">到店出示会员码</view>
-      <view class="subtitle">店员输入会员号后即可查询资料并完成本次消费核销。</view>
+      <view class="subtitle">到店时出示给店员就行。</view>
       <view class="mini-metrics">
         <view class="mini-metric">
           <view class="mini-metric-label">手机号</view>
@@ -23,7 +23,7 @@
     <view class="card card-accent identity-card">
       <view class="section-kicker">本次到店出示</view>
       <view class="section-title">会员号凭证</view>
-      <view class="section-copy">店员可以直接扫码识别会员码，也可以手动输入会员号。</view>
+      <view class="section-copy">扫码或直接报会员号都可以。</view>
 
       <view class="member-qr-panel">
         <view class="qr-preview-shell member-qr-shell">
@@ -38,14 +38,14 @@
         </view>
         <view wx:if="{{qrError}}" class="notice qr-notice">{{qrError}}</view>
         <view wx:else class="helper-text member-qr-helper">
-          店员在“会员消费核销”或“会员查询”页点击“扫码识别会员码”即可带出当前会员。
+          店员可在“消费核销”或“会员查询”里扫码。
         </view>
       </view>
 
       <view class="code-panel">
         <view class="code-label">会员号</view>
         <view class="code-value">{{member.memberCode}}</view>
-        <view class="code-caption">如果现场扫码不方便，也可以直接把会员号给店员手动录入。</view>
+        <view class="code-caption">扫不了码就直接报会员号。</view>
       </view>
 
       <view class="detail-grid">
@@ -69,7 +69,7 @@
 
   <view wx:else class="card">
     <view class="section-title">还没有会员资料</view>
-    <view class="section-copy">请先在首页完成会员注册和手机号授权，注册成功后这里会显示你的会员号。</view>
+    <view class="section-copy">先完成会员注册和手机号验证，注册后这里会显示会员号。</view>
     <navigator class="link-button button-primary" url="/pages/index/index">返回首页</navigator>
   </view>
 </view>

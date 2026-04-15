@@ -1,8 +1,8 @@
 <view class="page page-tight">
   <view class="hero hero-staff">
     <view class="hero-badge">反馈</view>
-    <view class="title">门店反馈</view>
-    <view class="subtitle">现场问题直接提交给老板。</view>
+    <view class="title">问题反馈</view>
+    <view class="subtitle">现场问题直接提交。</view>
     <view class="mini-metrics">
       <view class="mini-metric">
         <view class="mini-metric-label">提交人</view>
@@ -27,7 +27,7 @@
 
   <view class="card card-soft">
     <view class="section-kicker">提交反馈</view>
-    <view class="section-title">填写问题内容</view>
+    <view class="section-title">写下问题</view>
     <view class="card-subtitle">把问题写清楚就行。</view>
 
     <view class="input-label">问题分类</view>

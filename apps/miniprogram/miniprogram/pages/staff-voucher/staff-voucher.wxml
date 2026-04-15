@@ -1,28 +1,28 @@
 <view class="page page-tight">
   <view class="hero hero-staff">
     <view class="hero-badge">核销</view>
-    <view class="title">菜品券核销</view>
-    <view class="subtitle">扫码优先，手输兜底。</view>
+    <view class="title">券核销</view>
+    <view class="subtitle">先查看，再确认核销。</view>
     <view class="mini-metrics">
       <view class="mini-metric">
-        <view class="mini-metric-label">优先</view>
-        <view class="mini-metric-value">扫码核销</view>
+        <view class="mini-metric-label">方式</view>
+        <view class="mini-metric-value">扫码查看</view>
       </view>
       <view class="mini-metric">
-        <view class="mini-metric-label">兜底</view>
+        <view class="mini-metric-label">手动</view>
         <view class="mini-metric-value">手输券号</view>
       </view>
       <view class="mini-metric">
         <view class="mini-metric-label">结果</view>
-        <view class="mini-metric-value">即时留痕</view>
+        <view class="mini-metric-value">核销留痕</view>
       </view>
     </view>
   </view>
 
   <view class="card">
     <view class="section-head">
-      <view class="section-title">录入券号</view>
-      <view class="section-copy">会员出示二维码时可直接扫码。</view>
+      <view class="section-title">先看券，再核销</view>
+      <view class="section-copy">会员出示二维码时先扫码查看。</view>
     </view>
 
     <view class="input-label">券号</view>
@@ -30,9 +30,59 @@
     <view class="helper-text">扫不到时再手动输入。</view>
 
     <view class="button-group">
-      <button class="button-secondary" disabled="{{loading || scanning}}" loading="{{scanning}}" bindtap="scanVoucher">扫码核销</button>
-      <button class="button-primary" disabled="{{loading || scanning || !voucherId}}" loading="{{loading}}" bindtap="submit">确认核销</button>
+      <button class="button-secondary" disabled="{{loading || scanning}}" loading="{{scanning}}" bindtap="scanVoucher">扫码识别</button>
+      <button class="button-secondary" disabled="{{loading || scanning || previewLoading || !voucherId}}" loading="{{previewLoading}}" bindtap="loadPreview">查看券</button>
     </view>
+  </view>
+
+  <view wx:if="{{preview}}" class="card card-soft">
+    <view class="card-header-row">
+      <view class="card-title-wrap">
+        <view class="section-kicker">核销预览</view>
+        <view class="section-title">{{preview.dishName}}</view>
+        <view class="card-subtitle">{{preview.hint}}</view>
+      </view>
+      <view class="tag">{{preview.statusText}}</view>
+    </view>
+
+    <view class="detail-grid">
+      <view class="detail-row">
+        <view class="detail-label">券号</view>
+        <view class="detail-value">{{preview._id}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">会员</view>
+        <view class="detail-value">{{preview.memberLabel}}</view>
+      </view>
+      <view wx:if="{{preview.memberCode}}" class="detail-row">
+        <view class="detail-label">会员号</view>
+        <view class="detail-value">{{preview.memberCode}}</view>
+      </view>
+      <view wx:if="{{preview.memberPhone}}" class="detail-row">
+        <view class="detail-label">手机号</view>
+        <view class="detail-value">{{preview.memberPhone}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">状态</view>
+        <view class="detail-value">{{preview.statusText}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">来源</view>
+        <view class="detail-value">{{preview.sourceText}}</view>
+      </view>
+      <view wx:if="{{preview.expiresAtText}}" class="detail-row">
+        <view class="detail-label">有效期</view>
+        <view class="detail-value">{{preview.expiresAtText}} 前</view>
+      </view>
+      <view wx:if="{{preview.usedAtText}}" class="detail-row">
+        <view class="detail-label">已核销时间</view>
+        <view class="detail-value">{{preview.usedAtText}}</view>
+      </view>
+    </view>
+
+    <button class="button-primary" disabled="{{loading || preview.status !== 'READY'}}" loading="{{loading}}" bindtap="submit">
+      {{preview.status === 'READY' ? '确认核销' : '当前不能核销'}}
+    </button>
   </view>
 
   <view wx:if="{{lastRedeemed}}" class="card card-accent">

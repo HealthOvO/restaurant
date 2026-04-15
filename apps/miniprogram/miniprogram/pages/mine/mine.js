@@ -1,5 +1,4 @@
 const { refreshMemberState } = require("../../utils/member-access");
-const { getAppState } = require("../../utils/session");
 const { formatDateTime } = require("../../utils/format");
 const { applyStoreLaunchContext } = require("../../utils/store-context");
 
@@ -45,15 +44,59 @@ function resolveInviteStatusText(member, relation, hasBoundPhone) {
   return "已绑定";
 }
 
+function resolveInviterLabel(inviterSummary) {
+  if (!inviterSummary) {
+    return "";
+  }
+
+  return inviterSummary.nickname || inviterSummary.memberCode || "邀请人";
+}
+
+function buildInviteReminder(memberState) {
+  const member = memberState && memberState.member;
+  const relation = memberState && memberState.relation;
+  if (!member) {
+    return null;
+  }
+
+  const inviterLabel = resolveInviterLabel(memberState.inviterSummary);
+  if (relation) {
+    return {
+      statusText: relation.status === "ACTIVATED" ? "已生效" : "已绑定",
+      title: relation.status === "ACTIVATED" ? "邀请关系已生效" : "已绑定邀请人",
+      copy:
+        relation.status === "ACTIVATED"
+          ? inviterLabel
+            ? `${inviterLabel} 的邀请已计入进度。`
+            : "这次邀请已经计入进度。"
+          : inviterLabel
+            ? `当前绑定给 ${inviterLabel}，首单后生效。`
+            : "当前邀请关系已记录，首单后生效。"
+    };
+  }
+
+  if (memberState.canBindInvite && memberState.pendingInviteCode) {
+    return {
+      statusText: "待绑定",
+      title: "首单前还能绑定邀请人",
+      copy: inviterLabel
+        ? `当前识别到 ${inviterLabel} 的邀请码，想参加活动记得先绑定。`
+        : `检测到邀请码 ${memberState.pendingInviteCode}，想参加活动记得先绑定。`
+    };
+  }
+
+  return null;
+}
+
 function resolveInviteDetail(member, relation, hasBoundPhone) {
   if (!hasBoundPhone) {
     return "先完成手机号验证。";
   }
   if (!relation && member && !member.hasCompletedFirstVisit) {
-    return "首单前可填写邀请码。";
+    return "首单前可填邀请码。";
   }
   if (!relation) {
-    return "可以直接分享自己的邀请码。";
+    return "可以直接分享邀请码。";
   }
   if (relation.status === "ACTIVATED") {
     return "已计入邀请进度。";
@@ -79,27 +122,27 @@ function resolveFirstVisitDetail(member) {
 
 function resolveStatusHeadline(member, relation, hasBoundPhone) {
   if (!hasBoundPhone) {
-    return "完成手机号验证";
+    return "先验证手机号";
   }
 
   if (member && !member.hasCompletedFirstVisit) {
-    return relation && relation.status === "PENDING" ? "待完成首单" : "会员已开通";
+      return relation && relation.status === "PENDING" ? "等首单完成" : "会员已开通";
   }
 
   if (relation && relation.status === "ACTIVATED") {
-    return "会员正常";
+    return "会员已开通";
   }
 
-  return "查看积分和券";
+  return "积分和券";
 }
 
 function resolveStatusSummary(member, relation, hasBoundPhone) {
   if (!hasBoundPhone) {
-    return "验证后才能正常累计积分。";
+    return "验证后才能累计积分。";
   }
 
   if (member && !member.hasCompletedFirstVisit && !relation) {
-    return "首单前可绑定邀请码。";
+    return "首单前可绑邀请码。";
   }
 
   if (member && !member.hasCompletedFirstVisit && relation && relation.status === "PENDING") {
@@ -107,14 +150,14 @@ function resolveStatusSummary(member, relation, hasBoundPhone) {
   }
 
   if (member && !member.hasCompletedFirstVisit) {
-    return "完成首单后会自动更新。";
+    return "首单后会自动更新。";
   }
 
   if (relation && relation.status === "ACTIVATED") {
     return "可以继续邀请好友。";
   }
 
-  return "订单、积分和券都在这里看。";
+  return "查订单、积分和菜品券。";
 }
 
 function resolveNextStep(member, relation, hasBoundPhone) {
@@ -196,9 +239,10 @@ Page({
     nextStepTitle: "先验证手机号",
     nextStepCopy: "验证后再累计积分。",
     statusHeadline: "完成手机号验证",
-    statusSummary: "验证后可正常累计积分。",
+    statusSummary: "验证后才能累计积分。",
     statusItems: [],
-    pointsBalance: 0
+    pointsBalance: 0,
+    inviteReminder: null
   },
   onLoad(query) {
     applyStoreLaunchContext(query);
@@ -209,7 +253,8 @@ Page({
   async refresh() {
     this.setData({ loading: true, errorMessage: "" });
     try {
-      const { member, relation } = await refreshMemberState();
+      const memberState = await refreshMemberState();
+      const { member, relation } = memberState;
       const hasBoundPhone = isPhoneVerified(member);
       const nextStep = resolveNextStep(member, relation, hasBoundPhone);
       const statusHeadline = resolveStatusHeadline(member, relation, hasBoundPhone);
@@ -230,7 +275,8 @@ Page({
         statusHeadline,
         statusSummary,
         statusItems: buildStatusItems(member, relation, hasBoundPhone),
-        pointsBalance: member && Number(member.pointsBalance) ? Number(member.pointsBalance) : 0
+        pointsBalance: member && Number(member.pointsBalance) ? Number(member.pointsBalance) : 0,
+        inviteReminder: buildInviteReminder(memberState)
       });
     } catch (error) {
       this.setData({
@@ -247,10 +293,11 @@ Page({
         firstVisitStatusText: "未完成",
         nextStepTitle: "先验证手机号",
         nextStepCopy: "验证后再累计积分。",
-        statusHeadline: "完成手机号验证",
-        statusSummary: "验证后可正常累计积分。",
+        statusHeadline: "先验证手机号",
+        statusSummary: "验证后才能累计积分。",
         statusItems: [],
-        pointsBalance: 0
+        pointsBalance: 0,
+        inviteReminder: null
       });
     } finally {
       this.setData({ loading: false });
@@ -279,10 +326,5 @@ Page({
   },
   goOrders() {
     wx.switchTab({ url: "/pages/orders/orders" });
-  },
-  goStaffEntry() {
-    const appState = getAppState();
-    const staffTarget = appState.staffSessionToken ? "/pages/staff-home/staff-home" : "/pages/staff-login/staff-login";
-    wx.navigateTo({ url: staffTarget });
   }
 });

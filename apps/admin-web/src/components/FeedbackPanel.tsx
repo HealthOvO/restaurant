@@ -159,7 +159,7 @@ export function FeedbackPanel({ feedbacks, updatingFeedbackId = null, onUpdate }
       <div className="empty-state">
         <div className="tag tag-navy">暂无反馈</div>
         <h3 className="section-title">最近还没有问题回流</h3>
-        <p className="subtle">会员和店员提的问题会统一出现在这里。</p>
+        <p className="subtle">会员和店员的反馈都会在这里。</p>
       </div>
     );
   }
@@ -193,7 +193,7 @@ export function FeedbackPanel({ feedbacks, updatingFeedbackId = null, onUpdate }
         <div className="card-title-block">
           <div className="section-eyebrow">筛选反馈</div>
           <h3 className="section-title">反馈筛选</h3>
-          <p className="subtle">支持编号、标题、内容和联系方式。</p>
+          <p className="subtle">可按编号、标题、内容和联系方式筛选。</p>
         </div>
 
         <div className="field-grid feedback-filter-grid">

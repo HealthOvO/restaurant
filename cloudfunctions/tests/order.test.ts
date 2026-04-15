@@ -25,6 +25,156 @@ const staffSessionToken = issueSessionToken({
 });
 
 describe("order service safety", () => {
+  it("rejects unverified members who submit an order without choosing to skip member benefits", async () => {
+    const repository = {
+      storeId: "default-store",
+      getStoreConfig: vi.fn().mockResolvedValue({
+        _id: "store_config_default-store",
+        storeId: "default-store",
+        storeName: "山野食堂",
+        dineInEnabled: true,
+        pickupEnabled: true,
+        minOrderAmount: 0,
+        createdAt: "2026-04-01T08:00:00.000Z",
+        updatedAt: "2026-04-01T08:00:00.000Z"
+      }),
+      listMenuCategories: vi.fn().mockResolvedValue([
+        {
+          _id: "category-1",
+          storeId: "default-store",
+          name: "热菜",
+          sortOrder: 0,
+          isEnabled: true,
+          createdAt: "2026-04-01T08:00:00.000Z",
+          updatedAt: "2026-04-01T08:00:00.000Z"
+        }
+      ]),
+      listMenuItems: vi.fn().mockResolvedValue([
+        {
+          _id: "dish-1",
+          storeId: "default-store",
+          categoryId: "category-1",
+          name: "精品肥牛",
+          price: 32,
+          isEnabled: true,
+          isRecommended: true,
+          isSoldOut: false,
+          sortOrder: 0,
+          createdAt: "2026-04-01T08:00:00.000Z",
+          updatedAt: "2026-04-01T08:00:00.000Z"
+        }
+      ]),
+      getMemberByOpenId: vi.fn().mockResolvedValue({
+        _id: "member-2",
+        storeId: "default-store",
+        memberCode: "M00000002",
+        openId: "openid-member-2",
+        pointsBalance: 0,
+        hasCompletedFirstVisit: false,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-03T08:00:00.000Z"
+      }),
+      runTransaction: vi.fn(),
+      addAuditLog: vi.fn()
+    };
+
+    await expect(
+      createMemberOrder(repository as never, "openid-member-2", {
+        requestId: "req-unverified",
+        fulfillmentMode: "DINE_IN",
+        tableNo: "A02",
+        items: [{ menuItemId: "dish-1", quantity: 1 }]
+      })
+    ).rejects.toMatchObject({
+      code: "MEMBER_PHONE_REQUIRED",
+      message: "请先完成微信手机号验证，或选择本单不参与会员活动"
+    });
+
+    expect(repository.runTransaction).not.toHaveBeenCalled();
+    expect(repository.addAuditLog).not.toHaveBeenCalled();
+  });
+
+  it("allows unverified members to submit when they explicitly skip member benefits for this order", async () => {
+    let savedOrder: Record<string, unknown> | null = null;
+    const repository = {
+      storeId: "default-store",
+      getStoreConfig: vi.fn().mockResolvedValue({
+        _id: "store_config_default-store",
+        storeId: "default-store",
+        storeName: "山野食堂",
+        dineInEnabled: true,
+        pickupEnabled: true,
+        minOrderAmount: 0,
+        createdAt: "2026-04-01T08:00:00.000Z",
+        updatedAt: "2026-04-01T08:00:00.000Z"
+      }),
+      listMenuCategories: vi.fn().mockResolvedValue([
+        {
+          _id: "category-1",
+          storeId: "default-store",
+          name: "热菜",
+          sortOrder: 0,
+          isEnabled: true,
+          createdAt: "2026-04-01T08:00:00.000Z",
+          updatedAt: "2026-04-01T08:00:00.000Z"
+        }
+      ]),
+      listMenuItems: vi.fn().mockResolvedValue([
+        {
+          _id: "dish-1",
+          storeId: "default-store",
+          categoryId: "category-1",
+          name: "精品肥牛",
+          price: 32,
+          isEnabled: true,
+          isRecommended: true,
+          isSoldOut: false,
+          sortOrder: 0,
+          createdAt: "2026-04-01T08:00:00.000Z",
+          updatedAt: "2026-04-01T08:00:00.000Z"
+        }
+      ]),
+      getMemberByOpenId: vi.fn().mockResolvedValue({
+        _id: "member-2",
+        storeId: "default-store",
+        memberCode: "M00000002",
+        openId: "openid-member-2",
+        pointsBalance: 0,
+        hasCompletedFirstVisit: false,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-03T08:00:00.000Z"
+      }),
+      runTransaction: vi.fn(async (callback) =>
+        callback({
+          getOrderById: vi.fn().mockResolvedValue(null),
+          saveOrder: vi.fn().mockImplementation(async (order) => {
+            savedOrder = order;
+            return order;
+          }),
+          saveOrderStatusLog: vi.fn().mockImplementation(async (log) => log)
+        })
+      ),
+      addAuditLog: vi.fn().mockResolvedValue(undefined)
+    };
+
+    const result = await createMemberOrder(repository as never, "openid-member-2", {
+      requestId: "req-skip-benefits",
+      fulfillmentMode: "DINE_IN",
+      tableNo: "A02",
+      memberBenefitsChoice: "SKIP_THIS_ORDER",
+      items: [{ menuItemId: "dish-1", quantity: 1 }]
+    });
+
+    expect(result.order).toMatchObject({
+      memberBenefitsStatus: "SKIPPED_UNVERIFIED",
+      memberBenefitsReason: "未验证手机号，本单未参与邀请和积分，后续不补记"
+    });
+    expect(savedOrder).toMatchObject({
+      memberBenefitsStatus: "SKIPPED_UNVERIFIED",
+      memberBenefitsReason: "未验证手机号，本单未参与邀请和积分，后续不补记"
+    });
+  });
+
   it("rejects requestId collisions across different members", async () => {
     const repository = {
       storeId: "default-store",
@@ -567,5 +717,69 @@ describe("order service safety", () => {
         memberId: "member-1"
       })
     );
+  });
+
+  it("does not create an ops task when a completed order was explicitly skipped from member benefits", async () => {
+    const repository = {
+      storeId: "default-store",
+      getStaffById: vi.fn().mockResolvedValue({
+        _id: "staff-1",
+        storeId: "default-store",
+        username: "cashier01",
+        passwordHash: "hash",
+        displayName: "前台小王",
+        role: "STAFF",
+        isEnabled: true,
+        createdAt: "2026-04-02T08:00:00.000Z",
+        updatedAt: "2026-04-02T08:00:00.000Z"
+      }),
+      saveOrder: vi.fn().mockResolvedValue(undefined),
+      saveOpsTask: vi.fn().mockResolvedValue(undefined),
+      addAuditLog: vi.fn().mockResolvedValue(undefined),
+      runTransaction: vi.fn(async (callback) =>
+        callback({
+          getOrderById: vi.fn().mockResolvedValue({
+            _id: "order-3",
+            storeId: "default-store",
+            orderNo: "OD202604140012",
+            memberId: "member-1",
+            memberOpenId: "openid-member-1",
+            memberCode: "M00000001",
+            memberBenefitsStatus: "SKIPPED_UNVERIFIED",
+            memberBenefitsReason: "未验证手机号，本单未参与邀请和积分，后续不补记",
+            status: "READY",
+            fulfillmentMode: "DINE_IN",
+            sourceChannel: "MINIPROGRAM",
+            tableNo: "A09",
+            itemCount: 1,
+            subtotalAmount: 52,
+            payableAmount: 52,
+            currency: "CNY",
+            lineItems: [],
+            submittedAt: "2026-04-14T10:00:00.000Z",
+            createdAt: "2026-04-14T10:00:00.000Z",
+            updatedAt: "2026-04-14T10:00:00.000Z",
+            statusChangedAt: "2026-04-14T10:00:00.000Z",
+            readyAt: "2026-04-14T10:10:00.000Z"
+          }),
+          saveOrder: vi.fn().mockResolvedValue(undefined),
+          saveOrderStatusLog: vi.fn().mockResolvedValue(undefined)
+        })
+      )
+    };
+
+    const result = await updateStaffOrderStatus(repository as never, {
+      sessionToken: staffSessionToken,
+      orderId: "order-3",
+      nextStatus: "COMPLETED",
+      note: "顾客已取餐"
+    });
+
+    expect(result.visitSettlement).toMatchObject({
+      state: "MANUAL_REVIEW",
+      code: "ORDER_MEMBER_BENEFITS_SKIPPED",
+      reason: "未验证手机号，本单未参与邀请和积分，后续不补记"
+    });
+    expect(repository.saveOpsTask).not.toHaveBeenCalled();
   });
 });

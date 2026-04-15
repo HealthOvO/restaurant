@@ -8,8 +8,8 @@
   <block wx:else>
     <view class="hero hero-cream">
       <view class="hero-badge">确认订单</view>
-      <view class="title">再确认一下这单</view>
-      <view class="subtitle">提交后店员会在小程序里更新订单状态。</view>
+      <view class="title">确认订单</view>
+      <view class="subtitle">下单后店员会更新订单状态。</view>
       <view class="mini-metrics">
         <view class="mini-metric">
           <view class="mini-metric-label">菜品数量</view>
@@ -30,12 +30,12 @@
 
     <view class="card">
       <view class="section-kicker">取餐方式</view>
-      <view class="section-title">这单怎么取</view>
+      <view class="section-title">取餐方式</view>
       <view class="mode-switch-row">
         <view class="mode-pill {{!supportDineIn ? 'mode-pill-disabled' : ''}} {{fulfillmentMode === 'DINE_IN' ? 'mode-pill-active' : ''}}" data-mode="DINE_IN" bindtap="changeFulfillmentMode">{{supportDineIn ? '堂食' : '堂食已关闭'}}</view>
         <view class="mode-pill {{!supportPickup ? 'mode-pill-disabled' : ''}} {{fulfillmentMode === 'PICKUP' ? 'mode-pill-active' : ''}}" data-mode="PICKUP" bindtap="changeFulfillmentMode">{{supportPickup ? '自提' : '自提已关闭'}}</view>
       </view>
-      <view class="helper-text">只显示门店当前支持的取餐方式；关闭的方式无法提交订单。</view>
+      <view class="helper-text">这里只显示当前可用的取餐方式。</view>
 
       <view wx:if="{{fulfillmentMode === 'DINE_IN'}}">
         <view class="input-label">桌号</view>
@@ -53,9 +53,39 @@
       <input class="input" data-field="remark" value="{{remark}}" placeholder="如：少辣、不要香菜" bindinput="updateField" />
     </view>
 
+    <view class="card card-soft">
+      <view class="card-header-row">
+        <view class="card-title-wrap">
+          <view class="section-kicker">会员活动</view>
+          <view class="section-title">{{memberBenefitsTitle}}</view>
+          <view class="card-subtitle">{{memberBenefitsCopy}}</view>
+        </view>
+        <view class="tag">{{memberBenefitsStatusText}}</view>
+      </view>
+
+      <view wx:if="{{memberBenefitsRequiresChoice}}">
+        <view wx:if="{{memberBenefitsChoice === 'VERIFY_AND_PARTICIPATE'}}" class="selection-card selection-card-active">
+          <view class="section-title">建议先去验证手机号</view>
+          <view class="card-subtitle">验证完会回到这里，这单就能参与邀请和积分。</view>
+          <view class="button-group-tight">
+            <button class="button-primary" bindtap="goVerifyMemberBenefits">去验证手机号</button>
+            <button class="button-secondary" data-choice="SKIP_THIS_ORDER" bindtap="selectMemberBenefitsChoice">本单先下单</button>
+          </view>
+        </view>
+
+        <view wx:else class="selection-card">
+          <view class="section-title">本单先下单</view>
+          <view class="card-subtitle">这单不计邀请和积分，后续不补记。</view>
+          <view class="button-group-tight">
+            <button class="button-secondary" data-choice="VERIFY_AND_PARTICIPATE" bindtap="selectMemberBenefitsChoice">改为先验证</button>
+          </view>
+        </view>
+      </view>
+    </view>
+
     <view class="card">
       <view class="section-kicker">订单明细</view>
-      <view class="section-title">这一单包含这些</view>
+      <view class="section-title">已选菜品</view>
       <view wx:for="{{cartItems}}" wx:for-item="cartLine" wx:key="lineId" class="checkout-item">
         <view class="checkout-item-main">
           <view class="checkout-item-name">{{cartLine.name}}</view>
@@ -69,16 +99,16 @@
     </view>
 
     <view class="card card-soft">
-      <view class="section-kicker">提交后</view>
-      <view class="section-title">接下来会发生什么</view>
+      <view class="section-kicker">下单后</view>
+      <view class="section-title">订单状态</view>
       <view class="usage-list">
         <view class="usage-item">
-          <view class="usage-title">店员确认订单</view>
-          <view class="usage-copy">店员会把订单更新成已确认、制作中、待取餐或已完成。</view>
+          <view class="usage-title">店员会更新状态</view>
+          <view class="usage-copy">接单、制作、待取餐、完成，都会同步显示。</view>
         </view>
         <view class="usage-item">
-          <view class="usage-title">订单完成后可继续看会员积分</view>
-          <view class="usage-copy">如果你已经完成会员验证，后续积分和菜品券会在“我的”里更新。</view>
+          <view class="usage-title">积分和券会同步更新</view>
+          <view class="usage-copy">{{memberBenefitsRequiresChoice && memberBenefitsChoice === 'SKIP_THIS_ORDER' ? '这单不参与会员活动，后续不补记。' : '完成会员验证后，积分和券会显示在“我的”。'}}</view>
         </view>
       </view>
     </view>

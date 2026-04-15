@@ -51,6 +51,31 @@ function formatRelationStatus(status?: string | null) {
   return status;
 }
 
+function formatPointTransactionLabel(transaction: { type: string; note?: string; changeAmount: number }) {
+  if (transaction.note?.trim()) {
+    return transaction.note.trim();
+  }
+
+  if (transaction.type === "INVITE_REWARD") {
+    return "邀请奖励";
+  }
+  if (transaction.type === "MANUAL_ADJUST") {
+    return "人工调整";
+  }
+  if (transaction.type === "POINT_EXCHANGE") {
+    return "积分兑换";
+  }
+
+  return "积分变动";
+}
+
+function maskPhone(phone?: string) {
+  if (!phone || phone.length < 7) {
+    return phone || "未留手机号";
+  }
+  return `${phone.slice(0, 3)}****${phone.slice(-4)}`;
+}
+
 function buildVisiblePages(page: number, totalPages: number): number[] {
   if (totalPages <= 5) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -87,6 +112,7 @@ export function MemberSearchPanel({
   const [pointPreview, setPointPreview] = useState<SelectionPreview | null>(null);
   const [selectionNotice, setSelectionNotice] = useState("");
   const [highlightField, setHighlightField] = useState<"invitee" | "inviter" | null>(null);
+  const [advancedToolsVisible, setAdvancedToolsVisible] = useState(false);
   const adjustFormRef = useRef<HTMLFormElement | null>(null);
   const inviteeInputRef = useRef<HTMLInputElement | null>(null);
   const inviterInputRef = useRef<HTMLInputElement | null>(null);
@@ -123,10 +149,34 @@ export function MemberSearchPanel({
   );
   const pointsTotal = rows.reduce((total, row) => total + (row.member.pointsBalance ?? 0), 0);
   const relationCount = rows.filter((row) => Boolean(row.relation)).length;
+  const memberLookup = useMemo(() => {
+    return rows.reduce<Record<string, MemberSearchRow>>((accumulator, row) => {
+      accumulator[row.member._id] = row;
+      return accumulator;
+    }, {});
+  }, [rows]);
   const pageButtons = useMemo(
     () => buildVisiblePages(pagination.page, pagination.totalPages),
     [pagination.page, pagination.totalPages]
   );
+
+  function requestConfirm(message: string) {
+    if (typeof window === "undefined" || typeof window.confirm !== "function") {
+      return true;
+    }
+    return window.confirm(message);
+  }
+
+  function describeMember(memberId: string, preview?: SelectionPreview | null) {
+    const row = memberLookup[memberId];
+    if (row) {
+      return `${getMemberDisplayName(row)}（${maskPhone(row.member.phone)}）`;
+    }
+    if (preview?.name) {
+      return `${preview.name}（${preview.memberCode || memberId}）`;
+    }
+    return memberId;
+  }
 
   async function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -151,13 +201,18 @@ export function MemberSearchPanel({
       return;
     }
 
+    const confirmMessage = `确认把 ${describeMember(normalizedInviteeMemberId, inviteePreview)} 的邀请人改成 ${describeMember(normalizedInviterMemberId, inviterPreview)}？`;
+    if (!requestConfirm(confirmMessage)) {
+      return;
+    }
+
     await onAdjust(inviteeMemberId.trim(), inviterMemberId.trim(), reason.trim());
     setInviteeMemberId("");
     setInviterMemberId("");
     setReason("");
     setInviteePreview(null);
     setInviterPreview(null);
-    setSelectionNotice("人工修正已提交，请查看页面顶部结果提示。");
+    setSelectionNotice("邀请关系已提交，请看顶部提示。");
     setHighlightField(null);
   }
 
@@ -168,12 +223,18 @@ export function MemberSearchPanel({
       return;
     }
 
+    const deltaText = delta > 0 ? `+${delta}` : `${delta}`;
+    const confirmMessage = `确认给 ${describeMember(pointMemberId.trim(), pointPreview)} 调整 ${deltaText} 积分？`;
+    if (!requestConfirm(confirmMessage)) {
+      return;
+    }
+
     await onAdjustPoints(pointMemberId.trim(), delta, pointReason.trim());
     setPointMemberId("");
     setPointDelta("");
     setPointReason("");
     setPointPreview(null);
-    setSelectionNotice("积分调整已提交，请查看页面顶部结果提示。");
+    setSelectionNotice("积分调整已提交，请看顶部提示。");
   }
 
   function getMemberDisplayName(row: MemberSearchRow) {
@@ -225,6 +286,7 @@ export function MemberSearchPanel({
       setSelectionNotice(`已带入邀请人会员：${memberName}`);
     }
 
+    setAdvancedToolsVisible(true);
     focusAdjustField(target);
   }
 
@@ -236,6 +298,7 @@ export function MemberSearchPanel({
       memberCode: row.member.memberCode,
       name: memberName
     });
+    setAdvancedToolsVisible(true);
     setSelectionNotice(`已带入积分调整会员：${memberName}`);
   }
 
@@ -246,7 +309,7 @@ export function MemberSearchPanel({
           <div className="card-title-block">
             <div className="section-eyebrow">会员列表</div>
             <h3 className="section-title">会员检索</h3>
-            <p className="subtle">支持手机号、会员号和昵称。</p>
+            <p className="subtle">可搜手机号、会员号和昵称。</p>
           </div>
 
           <label className="field-label" htmlFor="member-search-input">
@@ -278,119 +341,140 @@ export function MemberSearchPanel({
         </form>
 
         <div className="section-stack member-action-stack">
-          <form
-            ref={adjustFormRef}
-            className={`row-card stack member-adjust-card ${highlightField ? "member-adjust-card-active" : ""}`}
-            onSubmit={handleAdjustSubmit}
-          >
+          <div className="row-card stack">
             <div className="card-title-block">
-              <div className="section-eyebrow">人工修正</div>
-              <h3 className="section-title">邀请关系修正</h3>
-              <p className="subtle">只在误绑时处理，可直接从列表带入。</p>
+              <div className="section-eyebrow">高级修正</div>
+              <h3 className="section-title">人工调整</h3>
+              <p className="subtle">平时先查会员。误绑邀请关系或需要补扣积分时，再展开这里处理。</p>
             </div>
-
-            {selectionNotice ? (
-              <div className="member-selection-notice" role="status">
-                {selectionNotice}
-              </div>
-            ) : null}
-            {isSelfRelationSelection ? (
-              <div className="error" role="alert">
-                邀请人和被邀请人不能是同一会员，请重新选择。
-              </div>
-            ) : null}
-
-            <div className="selection-summary-grid">
-              <div className={`summary-card selection-summary-card ${inviteeMemberId ? "selection-summary-card-active" : ""}`}>
-                <div className="summary-kicker">被邀请会员</div>
-                <div className="summary-value summary-value-text">
-                  {inviteePreview?.name || (inviteeMemberId.trim() ? inviteeMemberId.trim() : "未选择")}
-                </div>
-                <div className="summary-footnote">
-                  {inviteePreview
-                    ? `${inviteePreview.memberCode || "无会员号"} · 已从列表带入`
-                    : "可从下方带入，也可手动输入。"}
-                </div>
-              </div>
-              <div className={`summary-card selection-summary-card ${inviterMemberId ? "selection-summary-card-active" : ""}`}>
-                <div className="summary-kicker">邀请人会员</div>
-                <div className="summary-value summary-value-text">
-                  {inviterPreview?.name || (inviterMemberId.trim() ? inviterMemberId.trim() : "未选择")}
-                </div>
-                <div className="summary-footnote">
-                  {inviterPreview
-                    ? `${inviterPreview.memberCode || "无会员号"} · 已从列表带入`
-                    : "可从下方带入，也可手动输入。"}
-                </div>
-              </div>
-            </div>
-
-            <div className="field-grid">
-              <label
-                className={`field-label ${highlightField === "invitee" ? "field-label-active" : ""}`}
-                htmlFor="invitee-member-id"
-              >
-                被邀请会员 ID
-                <input
-                  id="invitee-member-id"
-                  className="field"
-                  disabled={adjusting}
-                  placeholder="被邀请会员 ID"
-                  ref={inviteeInputRef}
-                  value={inviteeMemberId}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    setInviteeMemberId(nextValue);
-                    if (!inviteePreview || inviteePreview.memberId !== nextValue.trim()) {
-                      setInviteePreview(null);
-                    }
-                  }}
-                />
-              </label>
-
-              <label
-                className={`field-label ${highlightField === "inviter" ? "field-label-active" : ""}`}
-                htmlFor="inviter-member-id"
-              >
-                新邀请人会员 ID
-                <input
-                  id="inviter-member-id"
-                  className="field"
-                  disabled={adjusting}
-                  placeholder="新邀请人会员 ID"
-                  ref={inviterInputRef}
-                  value={inviterMemberId}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    setInviterMemberId(nextValue);
-                    if (!inviterPreview || inviterPreview.memberId !== nextValue.trim()) {
-                      setInviterPreview(null);
-                    }
-                  }}
-                />
-              </label>
-            </div>
-
-            <label className="field-label" htmlFor="adjust-reason">
-              调整原因
-              <textarea
-                id="adjust-reason"
-                className="textarea"
-                disabled={adjusting}
-                placeholder="例如：顾客提供了正确邀请人信息"
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-              />
-            </label>
 
             <div className="button-row">
-              <button className="button button-secondary" disabled={!canAdjust || adjusting} type="submit">
-                {adjusting ? "提交中..." : "保存关系修正"}
+              <button
+                className="button button-secondary"
+                onClick={() => setAdvancedToolsVisible((current) => !current)}
+                type="button"
+              >
+                {advancedToolsVisible ? "收起高级修正" : "展开高级修正"}
               </button>
             </div>
-          </form>
+          </div>
 
-          <form className="row-card stack" onSubmit={handlePointAdjustSubmit}>
+          {advancedToolsVisible ? (
+            <form
+              ref={adjustFormRef}
+              className={`row-card stack member-adjust-card ${highlightField ? "member-adjust-card-active" : ""}`}
+              onSubmit={handleAdjustSubmit}
+            >
+              <div className="card-title-block">
+                <div className="section-eyebrow">邀请关系</div>
+                <h3 className="section-title">邀请关系修正</h3>
+                <p className="subtle">只在误绑时处理，可直接从列表带入。</p>
+              </div>
+
+              {selectionNotice ? (
+                <div className="member-selection-notice" role="status">
+                  {selectionNotice}
+                </div>
+              ) : null}
+              {isSelfRelationSelection ? (
+                <div className="error" role="alert">
+                  邀请人和被邀请人不能是同一会员，请重新选择。
+                </div>
+              ) : null}
+
+              <div className="selection-summary-grid">
+                <div className={`summary-card selection-summary-card ${inviteeMemberId ? "selection-summary-card-active" : ""}`}>
+                  <div className="summary-kicker">被邀请会员</div>
+                  <div className="summary-value summary-value-text">
+                    {inviteePreview?.name || (inviteeMemberId.trim() ? inviteeMemberId.trim() : "未选择")}
+                  </div>
+                  <div className="summary-footnote">
+                    {inviteePreview
+                      ? `${inviteePreview.memberCode || "无会员号"} · 已从列表带入`
+                      : "可从下方带入，也可手动输入。"}
+                  </div>
+                </div>
+                <div className={`summary-card selection-summary-card ${inviterMemberId ? "selection-summary-card-active" : ""}`}>
+                  <div className="summary-kicker">邀请人会员</div>
+                  <div className="summary-value summary-value-text">
+                    {inviterPreview?.name || (inviterMemberId.trim() ? inviterMemberId.trim() : "未选择")}
+                  </div>
+                  <div className="summary-footnote">
+                    {inviterPreview
+                      ? `${inviterPreview.memberCode || "无会员号"} · 已从列表带入`
+                      : "可从下方带入，也可手动输入。"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="field-grid">
+                <label
+                  className={`field-label ${highlightField === "invitee" ? "field-label-active" : ""}`}
+                  htmlFor="invitee-member-id"
+                >
+                  被邀请会员 ID
+                  <input
+                    id="invitee-member-id"
+                    className="field"
+                    disabled={adjusting}
+                    placeholder="被邀请会员 ID"
+                    ref={inviteeInputRef}
+                    value={inviteeMemberId}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setInviteeMemberId(nextValue);
+                      if (!inviteePreview || inviteePreview.memberId !== nextValue.trim()) {
+                        setInviteePreview(null);
+                      }
+                    }}
+                  />
+                </label>
+
+                <label
+                  className={`field-label ${highlightField === "inviter" ? "field-label-active" : ""}`}
+                  htmlFor="inviter-member-id"
+                >
+                  新邀请人会员 ID
+                  <input
+                    id="inviter-member-id"
+                    className="field"
+                    disabled={adjusting}
+                    placeholder="新邀请人会员 ID"
+                    ref={inviterInputRef}
+                    value={inviterMemberId}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setInviterMemberId(nextValue);
+                      if (!inviterPreview || inviterPreview.memberId !== nextValue.trim()) {
+                        setInviterPreview(null);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+
+              <label className="field-label" htmlFor="adjust-reason">
+                调整原因
+                <textarea
+                  id="adjust-reason"
+                  className="textarea"
+                  disabled={adjusting}
+                  placeholder="例如：顾客提供了正确邀请人信息"
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                />
+              </label>
+
+              <div className="button-row">
+                <button className="button button-secondary" disabled={!canAdjust || adjusting} type="submit">
+                  {adjusting ? "提交中..." : "保存关系修正"}
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {advancedToolsVisible ? (
+            <form className="row-card stack" onSubmit={handlePointAdjustSubmit}>
             <div className="card-title-block">
               <div className="section-eyebrow">积分调整</div>
               <h3 className="section-title">积分补扣</h3>
@@ -468,7 +552,8 @@ export function MemberSearchPanel({
                 {adjustingPoints ? "提交中..." : "保存积分调整"}
               </button>
             </div>
-          </form>
+            </form>
+          ) : null}
         </div>
       </div>
 
@@ -568,6 +653,7 @@ export function MemberSearchPanel({
               const readyCount = row.vouchers.filter((item) => item.status === "READY").length;
               const usedCount = row.vouchers.filter((item) => item.status === "USED").length;
               const expiredCount = row.vouchers.filter((item) => item.status === "EXPIRED" || item.status === "VOID").length;
+              const recentPointTransactions = (row.pointTransactions || []).slice(0, 6);
 
               return (
                 <div className="row-card member-result-card" key={row.member._id}>
@@ -591,25 +677,33 @@ export function MemberSearchPanel({
                       </p>
                     </div>
                     <div className="inline-tags">
-                      <button
-                        aria-pressed={inviteeMemberId === row.member._id}
-                        className={`button button-secondary ${inviteeMemberId === row.member._id ? "button-selected" : ""}`}
-                        onClick={() => handleSelectMember("invitee", row)}
-                        type="button"
-                      >
-                        设为被邀请人
-                      </button>
-                      <button
-                        aria-pressed={inviterMemberId === row.member._id}
-                        className={`button button-secondary ${inviterMemberId === row.member._id ? "button-selected" : ""}`}
-                        onClick={() => handleSelectMember("inviter", row)}
-                        type="button"
-                      >
-                        设为邀请人
-                      </button>
-                      <button className="button button-secondary" onClick={() => handleSelectPointMember(row)} type="button">
-                        调整积分
-                      </button>
+                      {advancedToolsVisible ? (
+                        <>
+                          <button
+                            aria-pressed={inviteeMemberId === row.member._id}
+                            className={`button button-secondary ${inviteeMemberId === row.member._id ? "button-selected" : ""}`}
+                            onClick={() => handleSelectMember("invitee", row)}
+                            type="button"
+                          >
+                            设为被邀请人
+                          </button>
+                          <button
+                            aria-pressed={inviterMemberId === row.member._id}
+                            className={`button button-secondary ${inviterMemberId === row.member._id ? "button-selected" : ""}`}
+                            onClick={() => handleSelectMember("inviter", row)}
+                            type="button"
+                          >
+                            设为邀请人
+                          </button>
+                          <button className="button button-secondary" onClick={() => handleSelectPointMember(row)} type="button">
+                            调整积分
+                          </button>
+                        </>
+                      ) : (
+                        <button className="button button-secondary" onClick={() => setAdvancedToolsVisible(true)} type="button">
+                          高级修正
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -653,6 +747,38 @@ export function MemberSearchPanel({
                       <span className="data-label">最近更新时间</span>
                       <span className="data-value">{formatDateTime(row.member.updatedAt)}</span>
                     </div>
+                  </div>
+
+                  <div className="section-stack">
+                    <div className="card-title-block">
+                      <div className="section-eyebrow">积分流水</div>
+                      <h3 className="section-title">最近变动</h3>
+                      <p className="subtle">最近 20 条里展示前 6 条。</p>
+                    </div>
+
+                    {recentPointTransactions.length > 0 ? (
+                      <div className="table-like order-log-list">
+                        {recentPointTransactions.map((transaction) => (
+                          <div className="order-log-row" key={transaction._id}>
+                            <div className="inline-tags">
+                              <div className={transaction.changeAmount >= 0 ? "tag tag-success" : "tag"}>
+                                {transaction.changeAmount >= 0 ? `+${transaction.changeAmount}` : transaction.changeAmount}
+                              </div>
+                              <div className="tag tag-navy">余额 {transaction.balanceAfter}</div>
+                            </div>
+                            <div className="stack">
+                              <strong>{formatPointTransactionLabel(transaction)}</strong>
+                              <span className="subtle tiny">{formatDateTime(transaction.createdAt)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty-state order-logs-empty">
+                        <div className="tag">暂无流水</div>
+                        <p className="subtle">这位会员还没有积分变动记录。</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="code-stack">

@@ -103,6 +103,8 @@ const orderLineInputSchema = z.object({
   selectedOptions: z.array(orderLineOptionSchema).max(20).optional().default([])
 });
 
+const orderMemberBenefitsChoiceSchema = z.enum(["VERIFY_AND_PARTICIPATE", "SKIP_THIS_ORDER"]);
+
 const feedbackCategorySchema = z.enum([
   "BUG",
   "POINTS",
@@ -160,6 +162,11 @@ export const redeemVoucherInputSchema = z.object({
   voucherId: z.string().min(1)
 });
 
+export const previewVoucherInputSchema = z.object({
+  sessionToken: z.string().min(1),
+  voucherId: z.string().min(1)
+});
+
 export const memberQueryInputSchema = z.object({
   sessionToken: z.string().min(1),
   query: z.string().trim().max(50).optional().default(""),
@@ -210,6 +217,7 @@ export const orderPreviewInputSchema = z.object({
   contactName: z.string().trim().max(30).optional(),
   contactPhone: z.string().trim().max(30).optional(),
   remark: z.string().trim().max(120).optional(),
+  memberBenefitsChoice: orderMemberBenefitsChoiceSchema.optional(),
   items: z.array(orderLineInputSchema).min(1).max(60)
 });
 
@@ -337,6 +345,7 @@ export type BootstrapInput = z.infer<typeof bootstrapInputSchema>;
 export type BindInviteInput = z.infer<typeof bindInviteInputSchema>;
 export type SettleVisitInput = z.infer<typeof settleVisitInputSchema>;
 export type RedeemVoucherInput = z.infer<typeof redeemVoucherInputSchema>;
+export type PreviewVoucherInput = z.infer<typeof previewVoucherInputSchema>;
 export type MemberQueryInput = z.infer<typeof memberQueryInputSchema>;
 export type StaffMemberLookupInput = z.infer<typeof staffMemberLookupInputSchema>;
 export type RuleSaveInput = z.infer<typeof ruleSaveInputSchema>;

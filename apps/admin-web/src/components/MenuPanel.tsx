@@ -550,8 +550,8 @@ export function MenuPanel({ storeConfig, categories, items, saving = false, onSa
           <div className="row-card stack">
             <div className="card-title-block">
               <div className="section-eyebrow">门店展示</div>
-              <h3 className="section-title">基础信息</h3>
-              <p className="subtle">门店名称、公告、营业信息都在这里。</p>
+              <h3 className="section-title">门店信息</h3>
+              <p className="subtle">名称、公告和营业信息。</p>
             </div>
 
             <div className="field-grid">
@@ -708,8 +708,8 @@ export function MenuPanel({ storeConfig, categories, items, saving = false, onSa
             <div className="card-header">
               <div className="card-title-block">
                 <div className="section-eyebrow">菜单分类</div>
-                <h3 className="section-title">分类顺序和展示氛围</h3>
-                <p className="subtle">分类决定菜单的浏览结构，也决定首页推荐的组织方式。</p>
+                <h3 className="section-title">分类与排序</h3>
+                <p className="subtle">这里决定菜单顺序和首页推荐。</p>
               </div>
               <button
                 className="button button-secondary"

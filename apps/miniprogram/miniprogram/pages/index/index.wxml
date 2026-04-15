@@ -5,7 +5,7 @@
       <view wx:if="{{activeTableNo}}" class="hero-table-chip">桌号 {{activeTableNo}}</view>
     </view>
     <view class="title">{{storeConfig ? storeConfig.storeName : '门店点餐'}}</view>
-    <view class="subtitle">{{storeConfig && storeConfig.announcement ? storeConfig.announcement : '点餐、下单、查订单。'}}</view>
+    <view class="subtitle">{{storeConfig && storeConfig.announcement ? storeConfig.announcement : '点餐、下单、看订单。'}}</view>
 
     <view class="hero-chips">
       <view class="hero-chip">{{storeConfig && storeConfig.dineInEnabled ? '堂食' : '堂食暂停'}}</view>
@@ -29,6 +29,21 @@
     <view class="section-title">提示</view>
     <view class="notice">{{errorMessage}}</view>
     <button class="button-secondary" bindtap="refresh">重新加载</button>
+  </view>
+
+  <view wx:if="{{inviteReminder}}" class="card card-soft home-summary-card">
+    <view class="card-header-row">
+      <view class="card-title-wrap">
+        <view class="section-kicker">邀请</view>
+        <view class="section-title">{{inviteReminder.title}}</view>
+        <view class="card-subtitle">{{inviteReminder.copy}}</view>
+      </view>
+      <view class="tag">{{inviteReminder.statusText}}</view>
+    </view>
+    <view class="button-group-tight home-summary-actions">
+      <button class="button-primary" bindtap="goInviteCenter">{{inviteReminder.statusText === '待绑定' ? '去绑定' : '查看邀请'}}</button>
+      <button class="button-secondary" bindtap="goMenu">继续点餐</button>
+    </view>
   </view>
 
   <view class="card card-soft home-summary-card">
@@ -57,9 +72,9 @@
     </view>
 
     <view class="button-group-tight home-summary-actions">
-      <button wx:if="{{!hasMember || memberStatusText === '待验证'}}" class="button-primary" bindtap="goRegister">去注册</button>
-      <button wx:else class="button-primary" bindtap="goVouchers">积分换菜</button>
-      <button class="button-secondary" bindtap="goMine">打开我的</button>
+      <button wx:if="{{!hasMember || memberStatusText === '待验证'}}" class="button-primary" bindtap="goRegister">注册会员</button>
+      <button wx:else class="button-primary" bindtap="goVouchers">积分和券</button>
+      <button class="button-secondary" bindtap="goMine">会员中心</button>
     </view>
   </view>
 
@@ -67,7 +82,7 @@
     <view class="card-header-row">
       <view class="card-title-wrap">
         <view class="section-kicker">常用</view>
-        <view class="section-title">直接进入</view>
+        <view class="section-title">常用入口</view>
       </view>
       <view class="tag">快捷</view>
     </view>
@@ -76,7 +91,7 @@
       <view class="quick-card home-shortcut-card" bindtap="goMenu">
         <view class="quick-card-tag">点餐</view>
         <view class="quick-card-title">菜单</view>
-        <view class="quick-card-copy">按分类看菜。</view>
+        <view class="quick-card-copy">按分类选菜。</view>
       </view>
 
       <view class="quick-card home-shortcut-card" bindtap="goOrders">
@@ -88,7 +103,7 @@
       <view class="quick-card home-shortcut-card" bindtap="goMine">
         <view class="quick-card-tag">会员</view>
         <view class="quick-card-title">我的会员</view>
-        <view class="quick-card-copy">积分、邀请、券。</view>
+        <view class="quick-card-copy">积分、邀请、券都在这。</view>
       </view>
 
       <view class="quick-card home-shortcut-card" bindtap="goFeedback">
@@ -103,7 +118,4 @@
     </view>
   </view>
 
-  <view class="entry-footer">
-    <button class="entry-link-button" bindtap="goStaffEntry">店员入口</button>
-  </view>
 </view>

@@ -235,7 +235,15 @@ function createDashboardPayload(memberCount: number) {
       activatedInviteCount: 0,
       readyVoucherCount: 0,
       todayVisitCount: 0,
-      openOpsTaskCount: 0
+      openOpsTaskCount: 0,
+      todayOrderCount: 0,
+      todayRevenueAmount: 0,
+      pendingConfirmOrderCount: 0,
+      readyOrderCount: 0,
+      todayPointsIssued: 0,
+      todayPointsRedeemed: 0,
+      todayVoucherRedeemedCount: 0,
+      memberBenefitsSkippedOrderCount: 0
     }
   };
 }

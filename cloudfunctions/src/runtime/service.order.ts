@@ -8,6 +8,7 @@ import {
   buildMenuCatalog,
   DomainError,
   menuCatalogInputSchema,
+  type OrderMemberBenefitsChoice,
   orderCreateInputSchema,
   orderDetailInputSchema,
   orderPreviewInputSchema,
@@ -447,6 +448,28 @@ function normalizeOptionalText(value?: string): string | undefined {
   return normalized ? normalized : undefined;
 }
 
+function resolveMemberBenefitsSelection(params: {
+  member: Member;
+  requestedChoice?: OrderMemberBenefitsChoice;
+}) {
+  const hasVerifiedPhone = Boolean(params.member.phone && params.member.phoneVerifiedAt);
+  if (hasVerifiedPhone) {
+    return {
+      status: "ELIGIBLE" as const,
+      reason: undefined
+    };
+  }
+
+  if (params.requestedChoice === "SKIP_THIS_ORDER") {
+    return {
+      status: "SKIPPED_UNVERIFIED" as const,
+      reason: "未验证手机号，本单未参与邀请和积分，后续不补记"
+    };
+  }
+
+  throw new DomainError("MEMBER_PHONE_REQUIRED", "请先完成微信手机号验证，或选择本单不参与会员活动");
+}
+
 function compareOrderLogs(
   left: {
     createdAt: string;
@@ -521,6 +544,10 @@ export async function createMemberOrder(repository: RestaurantRepository, caller
   const normalizedRemark = normalizeOptionalText(parsed.remark);
   const { preview } = await loadOrderPreviewContext(repository, parsed);
   const member = await ensureMemberShell(repository, callerOpenId);
+  const benefitsSelection = resolveMemberBenefitsSelection({
+    member,
+    requestedChoice: parsed.memberBenefitsChoice
+  });
   assertOrderSubmissionReady({
     fulfillmentMode: parsed.fulfillmentMode,
     tableNo: parsed.tableNo,
@@ -558,6 +585,8 @@ export async function createMemberOrder(repository: RestaurantRepository, caller
       memberOpenId: callerOpenId,
       memberCode: member.memberCode,
       nickname: member.nickname,
+      memberBenefitsStatus: benefitsSelection.status,
+      memberBenefitsReason: benefitsSelection.reason,
       status: "PENDING_CONFIRM",
       fulfillmentMode: parsed.fulfillmentMode,
       sourceChannel: "MINIPROGRAM",
@@ -758,38 +787,46 @@ export async function updateStaffOrderStatus(repository: RestaurantRepository, i
     | undefined;
 
   if (result.order.status === "COMPLETED" && result.order.memberId && !result.order.visitRecordId) {
-    try {
-      const settlement = await settleFirstVisit(repository, {
-        sessionToken: parsed.sessionToken,
-        memberId: result.order.memberId,
-        externalOrderNo: result.order.orderNo,
-        tableNo: result.order.tableNo,
-        notes: result.order.remark,
-        operatorChannel: "MINIPROGRAM"
-      });
+    if (result.order.memberBenefitsStatus === "SKIPPED_UNVERIFIED") {
+      visitSettlement = {
+        state: "MANUAL_REVIEW",
+        code: "ORDER_MEMBER_BENEFITS_SKIPPED",
+        reason: result.order.memberBenefitsReason || "本单未参与会员活动"
+      };
+    } else {
+      try {
+        const settlement = await settleFirstVisit(repository, {
+          sessionToken: parsed.sessionToken,
+          memberId: result.order.memberId,
+          externalOrderNo: result.order.orderNo,
+          tableNo: result.order.tableNo,
+          notes: result.order.remark,
+          operatorChannel: "MINIPROGRAM"
+        });
 
-      result.order.visitRecordId = settlement.settlement.visitRecord._id;
-      result.order.updatedAt = nowIso();
-      await repository.saveOrder(result.order);
-      visitSettlement = {
-        state: "SETTLED",
-        visitRecordId: settlement.settlement.visitRecord._id
-      };
-    } catch (error) {
-      const failure = classifyVisitSettlementFailure(error);
-      await upsertOrderVisitSettlementTask(repository, {
-        orderId: result.order._id,
-        orderNo: result.order.orderNo,
-        memberId: result.order.memberId,
-        memberCode: result.order.memberCode,
-        sourceFunction: "staff.order.update",
-        failure
-      });
-      visitSettlement = {
-        state: failure.state,
-        code: failure.code,
-        reason: failure.reason
-      };
+        result.order.visitRecordId = settlement.settlement.visitRecord._id;
+        result.order.updatedAt = nowIso();
+        await repository.saveOrder(result.order);
+        visitSettlement = {
+          state: "SETTLED",
+          visitRecordId: settlement.settlement.visitRecord._id
+        };
+      } catch (error) {
+        const failure = classifyVisitSettlementFailure(error);
+        await upsertOrderVisitSettlementTask(repository, {
+          orderId: result.order._id,
+          orderNo: result.order.orderNo,
+          memberId: result.order.memberId,
+          memberCode: result.order.memberCode,
+          sourceFunction: "staff.order.update",
+          failure
+        });
+        visitSettlement = {
+          state: failure.state,
+          code: failure.code,
+          reason: failure.reason
+        };
+      }
     }
   }
 

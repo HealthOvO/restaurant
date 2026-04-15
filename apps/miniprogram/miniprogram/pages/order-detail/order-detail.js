@@ -25,6 +25,56 @@ function decorateLineItems(lineItems) {
   }));
 }
 
+function resolveOrderHint(order) {
+  if (order.status === "PENDING_CONFIRM") {
+    return "等店员确认。";
+  }
+  if (order.status === "CONFIRMED" || order.status === "PREPARING") {
+    return "正在准备，稍等一下。";
+  }
+  if (order.status === "READY") {
+    return order.fulfillmentMode === "DINE_IN" ? "可以叫店员上菜了。" : "可以去前台取餐了。";
+  }
+  if (order.status === "COMPLETED") {
+    return "这单已经完成。";
+  }
+  return "这单已经取消。";
+}
+
+function resolveMemberBenefitsMeta(order) {
+  if (order.memberBenefitsStatus === "SKIPPED_UNVERIFIED") {
+    return {
+      title: "本单未参与会员活动",
+      copy: order.memberBenefitsReason || "未验证手机号，本单不计邀请和积分，后续不补记。"
+    };
+  }
+
+  return {
+    title: "本单参与会员活动",
+    copy: "订单完成后会正常更新邀请、积分和券。"
+  };
+}
+
+function resolvePrimaryAction(order) {
+  if (order.memberBenefitsStatus === "SKIPPED_UNVERIFIED") {
+    return {
+      label: "去验证手机号",
+      helper: "验证后，后续订单会正常累计。",
+      type: "REGISTER"
+    };
+  }
+
+  if (order.status === "COMPLETED" || order.status === "CANCELLED") {
+    return {
+      label: "再来一单",
+      helper: "需要时再点。",
+      type: "MENU"
+    };
+  }
+
+  return null;
+}
+
 Page({
   data: {
     loading: true,
@@ -57,13 +107,20 @@ Page({
 
     try {
       const response = await fetchOrderDetail(this.data.orderId);
+      const primaryAction = resolvePrimaryAction(response.order);
       this.setData({
         order: {
           ...response.order,
           statusText: STATUS_META[response.order.status] || response.order.status,
           submittedAtLabel: formatDateTime(response.order.submittedAt),
           payableAmountText: formatAmount(response.order.payableAmount),
-          lineItems: decorateLineItems(response.order.lineItems)
+          lineItems: decorateLineItems(response.order.lineItems),
+          statusHint: resolveOrderHint(response.order),
+          memberBenefitsTitle: resolveMemberBenefitsMeta(response.order).title,
+          memberBenefitsCopy: resolveMemberBenefitsMeta(response.order).copy,
+          primaryActionLabel: primaryAction ? primaryAction.label : "",
+          primaryActionHelper: primaryAction ? primaryAction.helper : "",
+          primaryActionType: primaryAction ? primaryAction.type : ""
         },
         logs: (response.logs || []).map((item) => ({
           ...item,
@@ -77,6 +134,17 @@ Page({
       });
     } finally {
       this.setData({ loading: false });
+    }
+  },
+  handlePrimaryAction() {
+    const actionType = this.data.order && this.data.order.primaryActionType;
+    if (actionType === "REGISTER") {
+      wx.navigateTo({ url: "/pages/register/register" });
+      return;
+    }
+
+    if (actionType === "MENU") {
+      wx.switchTab({ url: "/pages/menu/menu" });
     }
   }
 });

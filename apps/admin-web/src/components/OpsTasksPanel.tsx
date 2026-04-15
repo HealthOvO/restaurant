@@ -101,7 +101,7 @@ export function OpsTasksPanel({
         <div className="card-title-block">
           <div className="section-eyebrow">处理方式</div>
           <h3 className="section-title">异常处理</h3>
-          <p className="subtle">先看待处理，再决定重试或关闭。</p>
+          <p className="subtle">查看异常，决定重试或关闭。</p>
         </div>
 
         <div className="field-grid">

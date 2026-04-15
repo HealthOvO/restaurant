@@ -2,12 +2,7 @@
   <view class="hero hero-staff">
     <view class="hero-badge">会员</view>
     <view class="title">会员查询</view>
-    <view class="subtitle">查看状态、积分和券。</view>
-    <view class="hero-chips">
-      <view class="hero-chip">支持手机号</view>
-      <view class="hero-chip">支持会员号</view>
-      <view class="hero-chip">支持会员码</view>
-    </view>
+    <view class="subtitle">查状态，查完就继续处理。</view>
   </view>
 
   <view class="card">
@@ -25,7 +20,7 @@
 
   <view wx:if="{{hasSearched && !rows.length && !loading}}" class="empty-state">
     <view class="tag">没有匹配结果</view>
-    <view class="empty-title">查不到这个会员</view>
+      <view class="empty-title">没找到这个会员</view>
     <view class="empty-copy">核对手机号或会员号后再试。</view>
   </view>
 
@@ -55,6 +50,16 @@
           <view class="detail-label">菜品券数量</view>
           <view class="detail-value">总计 {{item.totalVoucherCount}} 张 / 可用 {{item.readyVoucherCount}} 张</view>
         </view>
+      </view>
+
+      <view wx:if="{{!item.member.phoneVerifiedAt}}" class="notice">
+        先让顾客完成微信手机号验证，再做线下补录。
+      </view>
+
+      <view class="button-group-tight">
+        <button class="button-secondary" data-query="{{item.member.memberCode || item.member.phone}}" bindtap="openVisit">去线下补录</button>
+        <button class="button-secondary" bindtap="openVoucher">去券核销</button>
+        <button class="button-secondary" bindtap="openOrders">看订单</button>
       </view>
     </view>
   </view>

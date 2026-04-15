@@ -16,8 +16,8 @@ function resolveNextMilestoneSummary(overview) {
   const pendingReward = milestones.find((item) => item.pendingRewardCount > 0);
   if (pendingReward) {
     return {
-      title: "有积分待到账",
-      copy: `${pendingReward.title} 已满足，待补发 ${pendingReward.pendingRewardCount * pendingReward.pointsReward} 积分。`
+      title: "有积分待入账",
+      copy: `${pendingReward.title} 已达标，待补发 ${pendingReward.pendingRewardCount * pendingReward.pointsReward} 积分。`
     };
   }
 
@@ -29,7 +29,7 @@ function resolveNextMilestoneSummary(overview) {
         : `${nextMilestone.threshold} 人达标送 ${nextMilestone.pointsReward} 积分`;
     return {
       title: `下一档：${nextMilestone.threshold} 人`,
-      copy: `继续邀请，达标后送 ${targetText}。`
+      copy: `再邀请几位，达标就送 ${targetText}。`
     };
   }
 
@@ -37,7 +37,7 @@ function resolveNextMilestoneSummary(overview) {
   if (repeatableRule) {
     return {
       title: "循环积分中",
-      copy: `每满 ${repeatableRule.threshold} 人继续送 ${repeatableRule.pointsReward} 积分。`
+      copy: `每满 ${repeatableRule.threshold} 人再送 ${repeatableRule.pointsReward} 积分。`
     };
   }
 
@@ -57,6 +57,8 @@ Page({
     overview: null,
     nextMilestoneTitle: "继续邀请好友",
     nextMilestoneCopy: "好友首单后会计入进度。",
+    pendingInviteCode: "",
+    inviterSummary: null,
     inviteCodeInput: "",
     canBindInviteCode: false,
     bindingInviteCode: false,
@@ -71,7 +73,8 @@ Page({
       loadError: ""
     });
     try {
-      const { member, relation } = await refreshMemberState();
+      const memberState = await refreshMemberState();
+      const { member, relation } = memberState;
       const response = await fetchInviteOverview();
       const milestoneSummary = resolveNextMilestoneSummary(response.overview);
       this.setData({
@@ -83,6 +86,8 @@ Page({
         overview: response.overview,
         nextMilestoneTitle: milestoneSummary.title,
         nextMilestoneCopy: milestoneSummary.copy,
+        pendingInviteCode: memberState.pendingInviteCode || "",
+        inviterSummary: memberState.inviterSummary || null,
         canBindInviteCode: !relation && !!(member && member.phoneVerifiedAt && !member.hasCompletedFirstVisit)
       });
     } catch (error) {
@@ -100,6 +105,8 @@ Page({
         overview: null,
         nextMilestoneTitle: milestoneSummary.title,
         nextMilestoneCopy: milestoneSummary.copy,
+        pendingInviteCode: appState.pendingInviteCode || "",
+        inviterSummary: appState.inviterSummary || null,
         canBindInviteCode: !relation && !!(member && member.phoneVerifiedAt && !member.hasCompletedFirstVisit),
         loadError: message
       });
@@ -122,7 +129,7 @@ Page({
       query.push(`inviteCode=${encodeURIComponent(member.memberCode)}`);
     }
     return {
-      title: "来店里吃饭，注册会员还能一起拿积分换菜品",
+      title: "来店里吃饭，一起攒积分换菜",
       path: query.length > 0 ? `/pages/index/index?${query.join("&")}` : "/pages/index/index"
     };
   },
@@ -148,7 +155,7 @@ Page({
     if (!this.data.member) {
       wx.showToast({
         icon: "none",
-        title: "请先回首页完成会员初始化"
+          title: "请先回首页完成会员注册"
       });
       return;
     }
@@ -181,7 +188,7 @@ Page({
         inviteCodeInput: "",
         canBindInviteCode: false
       });
-      wx.showToast({ title: "邀请绑定成功" });
+      wx.showToast({ title: "绑定成功" });
       await this.refresh();
     } catch (error) {
       wx.showToast({

@@ -8094,6 +8094,7 @@ var orderLineInputSchema = external_exports.object({
   note: external_exports.string().trim().max(40).optional(),
   selectedOptions: external_exports.array(orderLineOptionSchema).max(20).optional().default([])
 });
+var orderMemberBenefitsChoiceSchema = external_exports.enum(["VERIFY_AND_PARTICIPATE", "SKIP_THIS_ORDER"]);
 var feedbackCategorySchema = external_exports.enum([
   "BUG",
   "POINTS",
@@ -8143,6 +8144,10 @@ var redeemVoucherInputSchema = external_exports.object({
   sessionToken: external_exports.string().min(1),
   voucherId: external_exports.string().min(1)
 });
+var previewVoucherInputSchema = external_exports.object({
+  sessionToken: external_exports.string().min(1),
+  voucherId: external_exports.string().min(1)
+});
 var memberQueryInputSchema = external_exports.object({
   sessionToken: external_exports.string().min(1),
   query: external_exports.string().trim().max(50).optional().default(""),
@@ -8186,6 +8191,7 @@ var orderPreviewInputSchema = external_exports.object({
   contactName: external_exports.string().trim().max(30).optional(),
   contactPhone: external_exports.string().trim().max(30).optional(),
   remark: external_exports.string().trim().max(120).optional(),
+  memberBenefitsChoice: orderMemberBenefitsChoiceSchema.optional(),
   items: external_exports.array(orderLineInputSchema).min(1).max(60)
 });
 var orderCreateInputSchema = orderPreviewInputSchema.extend({
@@ -8294,12 +8300,30 @@ import_wx_server_sdk.default.init({
 });
 
 // src/runtime/errors.ts
+function parseMissingCollectionName(message) {
+  const matched = message.match(/db or table not exist:\s*([a-zA-Z0-9_-]+)/i);
+  return matched?.[1];
+}
+function isMissingCollectionError(error) {
+  const errCode = `${error?.errCode ?? ""}`;
+  const message = `${error?.errMsg ?? error?.message ?? ""}`.toLowerCase();
+  return errCode === "-502005" || message.includes("database collection not exists") || message.includes("db or table not exist");
+}
 function toErrorResponse(error) {
   if (error instanceof DomainError) {
     return {
       ok: false,
       code: error.code,
       message: error.message
+    };
+  }
+  if (isMissingCollectionError(error)) {
+    const rawMessage = `${error?.errMsg ?? error?.message ?? ""}`;
+    const collectionName = parseMissingCollectionName(rawMessage);
+    return {
+      ok: false,
+      code: "DATABASE_NOT_READY",
+      message: collectionName ? `\u6570\u636E\u5E93\u672A\u521D\u59CB\u5316\uFF0C\u7F3A\u5C11\u96C6\u5408 ${collectionName}` : "\u6570\u636E\u5E93\u672A\u521D\u59CB\u5316\uFF0C\u8BF7\u5148\u5B8C\u6210\u96C6\u5408\u521B\u5EFA"
     };
   }
   console.error("[cloudfunctions] unexpected error", error);
@@ -8448,6 +8472,27 @@ async function listPageByWhere(name, where, page, pageSize, orderBy) {
 async function countByWhere(name, where) {
   const result = await dbCollection(name).where(where).count();
   return Number(result?.total) || 0;
+}
+function getShanghaiDayRange() {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const parts = formatter.formatToParts(/* @__PURE__ */ new Date());
+  const year = parts.find((item) => item.type === "year")?.value ?? "1970";
+  const month = parts.find((item) => item.type === "month")?.value ?? "01";
+  const day = parts.find((item) => item.type === "day")?.value ?? "01";
+  const dayString = `${year}-${month}-${day}`;
+  const todayStart = (/* @__PURE__ */ new Date(`${dayString}T00:00:00+08:00`)).toISOString();
+  const tomorrow = /* @__PURE__ */ new Date(`${dayString}T00:00:00+08:00`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowStart = tomorrow.toISOString();
+  return {
+    todayStart,
+    tomorrowStart
+  };
 }
 async function listByFieldIn(name, storeId, field, values) {
   if (values.length === 0) {
@@ -8957,13 +9002,24 @@ var RestaurantRepository = class {
   }
   async getDashboardStats() {
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    const today = now.slice(0, 10);
-    const todayStart = `${today}T00:00:00.000Z`;
-    const tomorrowStartDate = new Date(todayStart);
-    tomorrowStartDate.setUTCDate(tomorrowStartDate.getUTCDate() + 1);
-    const tomorrowStart = tomorrowStartDate.toISOString();
+    const { todayStart, tomorrowStart } = getShanghaiDayRange();
     const _ = dbCommand();
-    const [memberCount, activatedInviteCount, adjustedActivatedInviteCount, readyVoucherCount, todayVisitCount, openOpsTaskCount] = await Promise.all([
+    const todayRange = _.gte(todayStart).and(_.lt(tomorrowStart));
+    const [
+      memberCount,
+      activatedInviteCount,
+      adjustedActivatedInviteCount,
+      readyVoucherCount,
+      todayVisitCount,
+      openOpsTaskCount,
+      todayOrderCount,
+      pendingConfirmOrderCount,
+      readyOrderCount,
+      memberBenefitsSkippedOrderCount,
+      todayOrders,
+      todayPointTransactions,
+      todayVoucherRedemptions
+    ] = await Promise.all([
       countByWhere(COLLECTIONS.members, {
         storeId: this.storeId
       }),
@@ -8983,19 +9039,72 @@ var RestaurantRepository = class {
       }),
       countByWhere(COLLECTIONS.visitRecords, {
         storeId: this.storeId,
-        verifiedAt: _.gte(todayStart).and(_.lt(tomorrowStart))
+        verifiedAt: todayRange
       }),
       countByWhere(COLLECTIONS.opsTasks, {
         storeId: this.storeId,
         status: "OPEN"
+      }),
+      countByWhere(COLLECTIONS.orderRecords, {
+        storeId: this.storeId,
+        submittedAt: todayRange
+      }),
+      countByWhere(COLLECTIONS.orderRecords, {
+        storeId: this.storeId,
+        status: "PENDING_CONFIRM"
+      }),
+      countByWhere(COLLECTIONS.orderRecords, {
+        storeId: this.storeId,
+        status: "READY"
+      }),
+      countByWhere(COLLECTIONS.orderRecords, {
+        storeId: this.storeId,
+        memberBenefitsStatus: "SKIPPED_UNVERIFIED"
+      }),
+      listByWhere(COLLECTIONS.orderRecords, {
+        storeId: this.storeId,
+        submittedAt: todayRange
+      }),
+      listByWhere(COLLECTIONS.memberPointTransactions, {
+        storeId: this.storeId,
+        createdAt: todayRange
+      }),
+      listByWhere(COLLECTIONS.voucherRedemptions, {
+        storeId: this.storeId,
+        redeemedAt: todayRange
       })
     ]);
+    const todayRevenueAmount = todayOrders.reduce((total, order) => {
+      if (order.status === "CANCELLED") {
+        return total;
+      }
+      return total + (Number(order.payableAmount) || 0);
+    }, 0);
+    const todayPointsIssued = todayPointTransactions.reduce((total, transaction) => {
+      const delta = Number(transaction.changeAmount) || 0;
+      return delta > 0 ? total + delta : total;
+    }, 0);
+    const todayPointsRedeemed = todayPointTransactions.reduce((total, transaction) => {
+      if (transaction.type !== "POINT_EXCHANGE") {
+        return total;
+      }
+      const delta = Number(transaction.changeAmount) || 0;
+      return delta < 0 ? total + Math.abs(delta) : total;
+    }, 0);
     return {
       memberCount,
       activatedInviteCount: activatedInviteCount + adjustedActivatedInviteCount,
       readyVoucherCount,
       todayVisitCount,
-      openOpsTaskCount
+      openOpsTaskCount,
+      todayOrderCount,
+      todayRevenueAmount,
+      pendingConfirmOrderCount,
+      readyOrderCount,
+      todayPointsIssued,
+      todayPointsRedeemed,
+      todayVoucherRedeemedCount: todayVoucherRedemptions.length,
+      memberBenefitsSkippedOrderCount
     };
   }
 };
@@ -9078,6 +9187,30 @@ async function findMemberByInviteCode(repository, inviteCode) {
   }
   return (await repository.listMembers()).find((member) => member.memberCode === normalizedCode);
 }
+function canBindInvite(member, relation) {
+  return Boolean(member.phoneVerifiedAt && !member.hasCompletedFirstVisit && !relation);
+}
+async function buildInviterSummary(repository, member, relation) {
+  const inviter = relation?.inviterMemberId ? await repository.getMemberById(relation.inviterMemberId) : await findMemberByInviteCode(repository, member.pendingInviteCode ?? void 0);
+  if (!inviter) {
+    return null;
+  }
+  return {
+    memberId: inviter._id,
+    memberCode: inviter.memberCode,
+    nickname: inviter.nickname
+  };
+}
+async function buildMemberStatePayload(repository, member, relation) {
+  const normalizedRelation = relation ?? null;
+  return {
+    member,
+    relation: normalizedRelation,
+    pendingInviteCode: member.pendingInviteCode ?? null,
+    inviterSummary: await buildInviterSummary(repository, member, normalizedRelation),
+    canBindInvite: canBindInvite(member, normalizedRelation)
+  };
+}
 async function bootstrapMember(repository, callerOpenId, input) {
   const parsed = bootstrapInputSchema.parse(input);
   const now = nowIso();
@@ -9159,8 +9292,7 @@ async function bootstrapMember(repository, callerOpenId, input) {
   }
   return {
     ok: true,
-    member,
-    relation
+    ...await buildMemberStatePayload(repository, member, relation)
   };
 }
 

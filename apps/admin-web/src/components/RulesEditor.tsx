@@ -537,7 +537,9 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
           </label>
         </div>
 
-        <div className="toolbar-pill">首单后自动发券</div>
+        <div className="toolbar-pill">
+          {`首单完成后发 1 张 ${rule.voucherTemplate?.dishName || "菜品券"} · ${rule.voucherTemplate?.validDays ?? 30} 天内可用`}
+        </div>
 
         <label className="field-label">
           菜品名称
@@ -715,7 +717,9 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
           </label>
         </div>
 
-        <div className="toolbar-pill">兑换后自动发券</div>
+        <div className="toolbar-pill">
+          {`${item.pointsCost} 积分兑换 1 张 ${item.voucherTemplate.dishName || "菜品券"}`}
+        </div>
 
         <label className="field-label">
           菜品名称
@@ -778,7 +782,7 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
             <div className="stack">
               <div className="section-eyebrow">新客首单礼</div>
               <h3 className="section-title">首单发券</h3>
-              <p className="subtle">通常保留 1 条即可。</p>
+              <p className="subtle">一般保留 1 条。</p>
             </div>
             <div className="button-row">
               <button className="button button-secondary" type="button" onClick={() => addRule("WELCOME")}>
@@ -804,7 +808,7 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
             <div className="stack">
               <div className="section-eyebrow">邀请积分</div>
               <h3 className="section-title">邀请送积分</h3>
-              <p className="subtle">支持单次和循环。</p>
+              <p className="subtle">可设单次或循环。</p>
             </div>
             <div className="button-row">
               <button className="button button-secondary" type="button" onClick={() => addRule("INVITE_MILESTONE")}>
@@ -830,7 +834,7 @@ export function RulesEditor({ initialRules, initialExchangeItems, saving, onSave
             <div className="stack">
               <div className="section-eyebrow">积分兑换</div>
               <h3 className="section-title">积分换菜品</h3>
-              <p className="subtle">兑换后自动发券。</p>
+              <p className="subtle">兑换后会发券。</p>
             </div>
             <div className="button-row">
               <button className="button button-secondary" type="button" onClick={addExchangeItem}>

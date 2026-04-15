@@ -5,10 +5,12 @@ import { MemberSearchPanel } from "../components/MemberSearchPanel";
 describe("MemberSearchPanel", () => {
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
   });
 
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
   it("submits search query and manual adjustment", () => {
@@ -44,6 +46,7 @@ describe("MemberSearchPanel", () => {
     fireEvent.click(screen.getByText("搜索会员"));
     expect(onSearch).toHaveBeenCalledWith("13812345678", 1);
 
+    fireEvent.click(screen.getByRole("button", { name: "展开高级修正" }));
     fireEvent.change(screen.getByPlaceholderText("被邀请会员 ID"), {
       target: { value: "invitee-1" }
     });
@@ -82,7 +85,8 @@ describe("MemberSearchPanel", () => {
             },
             relation: null,
             visits: [],
-            vouchers: []
+            vouchers: [],
+            pointTransactions: []
           },
           {
             member: {
@@ -101,7 +105,8 @@ describe("MemberSearchPanel", () => {
             },
             relation: null,
             visits: [],
-            vouchers: []
+            vouchers: [],
+            pointTransactions: []
           }
         ]}
         loading={false}
@@ -122,6 +127,7 @@ describe("MemberSearchPanel", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "展开高级修正" }));
     fireEvent.click(screen.getAllByText("设为被邀请人")[0]);
     expect(screen.getByLabelText("被邀请会员 ID")).toHaveValue("member-1");
     expect(screen.getByRole("status")).toHaveTextContent("已带入被邀请会员：张三");
@@ -158,7 +164,8 @@ describe("MemberSearchPanel", () => {
             },
             relation: null,
             visits: [],
-            vouchers: []
+            vouchers: [],
+            pointTransactions: []
           }
         ]}
         loading={false}
@@ -179,6 +186,7 @@ describe("MemberSearchPanel", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "展开高级修正" }));
     fireEvent.click(screen.getByText("设为被邀请人"));
     fireEvent.click(screen.getByText("设为邀请人"));
 
@@ -211,6 +219,7 @@ describe("MemberSearchPanel", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "展开高级修正" }));
     expect(screen.getByLabelText("被邀请会员 ID")).toBeDisabled();
     expect(screen.getByLabelText("新邀请人会员 ID")).toBeDisabled();
     expect(screen.getByPlaceholderText("例如：顾客提供了正确邀请人信息")).toBeDisabled();

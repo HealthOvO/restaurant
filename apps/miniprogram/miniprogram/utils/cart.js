@@ -1,7 +1,17 @@
 const CART_KEY_PREFIX = "menuCart:";
+const MAX_CART_ITEM_QUANTITY = 99;
 
 function buildCartKey(storeId) {
   return `${CART_KEY_PREFIX}${storeId || "default-store"}`;
+}
+
+function normalizeQuantity(value) {
+  const quantity = Math.trunc(Number(value) || 0);
+  if (quantity <= 0) {
+    return 0;
+  }
+
+  return Math.min(MAX_CART_ITEM_QUANTITY, quantity);
 }
 
 function normalizeCartItems(items) {
@@ -17,10 +27,10 @@ function normalizeCartItems(items) {
       categoryId: item.categoryId,
       name: item.name,
       imageUrl: item.imageUrl,
-      quantity: Number(item.quantity) || 0,
+      quantity: normalizeQuantity(item.quantity),
       basePrice: Number(item.basePrice) || 0,
       unitPrice: Number(item.unitPrice) || 0,
-      lineTotal: Number(item.lineTotal) || 0,
+      lineTotal: normalizeQuantity(item.quantity) * (Number(item.unitPrice) || 0),
       selectedOptions: Array.isArray(item.selectedOptions) ? item.selectedOptions : [],
       note: item.note || ""
     }))
@@ -71,17 +81,18 @@ function addCartItem(storeId, item) {
   const existingIndex = currentItems.findIndex((current) => current.lineId === item.lineId);
   if (existingIndex >= 0) {
     const existing = currentItems[existingIndex];
-    const quantity = existing.quantity + (Number(item.quantity) || 0);
+    const quantity = normalizeQuantity(existing.quantity + (Number(item.quantity) || 0));
     currentItems[existingIndex] = {
       ...existing,
       quantity,
       lineTotal: quantity * existing.unitPrice
     };
   } else {
+    const quantity = normalizeQuantity(item.quantity || 1) || 1;
     currentItems.push({
       ...item,
-      quantity: Number(item.quantity) || 1,
-      lineTotal: (Number(item.quantity) || 1) * (Number(item.unitPrice) || 0)
+      quantity,
+      lineTotal: quantity * (Number(item.unitPrice) || 0)
     });
   }
 
@@ -96,7 +107,7 @@ function updateCartItemQuantity(storeId, lineId, nextQuantity) {
         return item;
       }
 
-      const quantity = Number(nextQuantity) || 0;
+      const quantity = normalizeQuantity(nextQuantity);
       if (quantity <= 0) {
         return null;
       }
@@ -113,6 +124,7 @@ function updateCartItemQuantity(storeId, lineId, nextQuantity) {
 }
 
 module.exports = {
+  MAX_CART_ITEM_QUANTITY,
   loadCart,
   saveCart,
   clearCart,

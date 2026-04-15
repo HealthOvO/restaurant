@@ -13,7 +13,10 @@ async function refreshMemberState() {
   let response = await fetchMemberState();
   const fallbackState = {
     member: response.member || null,
-    relation: response.relation || null
+    relation: response.relation || null,
+    pendingInviteCode: response.pendingInviteCode || "",
+    inviterSummary: response.inviterSummary || null,
+    canBindInvite: !!response.canBindInvite
   };
 
   try {
@@ -27,6 +30,9 @@ async function refreshMemberState() {
       appState.inviteCode = "";
       appState.member = fallbackState.member;
       appState.relation = fallbackState.relation;
+      appState.pendingInviteCode = fallbackState.pendingInviteCode;
+      appState.inviterSummary = fallbackState.inviterSummary;
+      appState.canBindInvite = fallbackState.canBindInvite;
       throw createInviteStateError("不能填写自己的邀请码，请换一个邀请码", "SELF_INVITE_FORBIDDEN");
     }
 
@@ -35,6 +41,9 @@ async function refreshMemberState() {
 
   appState.member = response.member;
   appState.relation = response.relation || null;
+  appState.pendingInviteCode = response.pendingInviteCode || "";
+  appState.inviterSummary = response.inviterSummary || null;
+  appState.canBindInvite = !!response.canBindInvite;
   if (
     appState.inviteCode &&
     (response.relation || (response.member && response.member.memberCode === appState.inviteCode))
@@ -44,7 +53,10 @@ async function refreshMemberState() {
 
   return {
     member: response.member,
-    relation: response.relation || null
+    relation: response.relation || null,
+    pendingInviteCode: response.pendingInviteCode || "",
+    inviterSummary: response.inviterSummary || null,
+    canBindInvite: !!response.canBindInvite
   };
 }
 

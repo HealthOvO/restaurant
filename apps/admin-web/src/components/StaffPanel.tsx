@@ -193,15 +193,15 @@ export function StaffPanel({
             <div className="tag">网页后台</div>
             <div className="tag">店员小程序</div>
           </div>
-          <h3 className="section-title">后台和门店分开</h3>
-          <p className="subtle">老板走网页，店员走小程序。</p>
+          <h3 className="section-title">登录说明</h3>
+          <p className="subtle">老板用网页，店员用小程序。</p>
         </div>
         <div className="guide-list">
           <div className="guide-item">
             <div className="guide-index">01</div>
             <div className="stack">
               <strong>先创建店员账号</strong>
-              <p className="subtle tiny">建议一人一号。</p>
+                <p className="subtle tiny">建议单人单号。</p>
             </div>
           </div>
           <div className="guide-item">
@@ -230,7 +230,7 @@ export function StaffPanel({
                 <div className="tag">店员专用</div>
               </div>
               <h3 className="section-title">新增店员账号</h3>
-              <p className="subtle">只给店员小程序用。</p>
+              <p className="subtle">供店员登录小程序。</p>
             </div>
 
             <div className="field-grid">
@@ -287,7 +287,7 @@ export function StaffPanel({
                 {usernameError || createPasswordError}
               </div>
             ) : (
-              <div className="notice">建议一人一号</div>
+              <div className="notice">建议单人单号</div>
             )}
 
             <div className="button-row">
@@ -299,9 +299,9 @@ export function StaffPanel({
 
           <div className="row-card stack">
             <div className="card-title-block">
-              <div className="tag">创建后这样交付给店员</div>
-              <h3 className="section-title">开通流程</h3>
-              <p className="subtle">按这个顺序就行。</p>
+              <div className="tag">交接给店员</div>
+              <h3 className="section-title">使用流程</h3>
+              <p className="subtle">按下面做就行。</p>
             </div>
 
             <div className="guide-list">
@@ -336,7 +336,7 @@ export function StaffPanel({
               <div className="card-title-block">
                 <div className="section-eyebrow">网页登录账号</div>
                 <h3 className="section-title">当前后台账号</h3>
-                <p className="subtle">用于网页后台登录。</p>
+                  <p className="subtle">用于网页登录。</p>
               </div>
             </div>
 
@@ -420,8 +420,8 @@ export function StaffPanel({
             <div className="account-section-header">
               <div className="card-title-block">
                 <div className="section-eyebrow">店员账号</div>
-                <h3 className="section-title">小程序核销与查询账号</h3>
-                <p className="subtle">可随时重置或停用。</p>
+                  <h3 className="section-title">店员账号</h3>
+                  <p className="subtle">可重置密码或停用。</p>
               </div>
               <div className="inline-tags">
                 <div className="tag">{cashierUsers.length} 个账号</div>

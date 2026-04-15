@@ -226,6 +226,29 @@ async function countByWhere(name: string, where: Record<string, unknown>): Promi
   return Number(result?.total) || 0;
 }
 
+function getShanghaiDayRange() {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const parts = formatter.formatToParts(new Date());
+  const year = parts.find((item) => item.type === "year")?.value ?? "1970";
+  const month = parts.find((item) => item.type === "month")?.value ?? "01";
+  const day = parts.find((item) => item.type === "day")?.value ?? "01";
+  const dayString = `${year}-${month}-${day}`;
+  const todayStart = new Date(`${dayString}T00:00:00+08:00`).toISOString();
+  const tomorrow = new Date(`${dayString}T00:00:00+08:00`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowStart = tomorrow.toISOString();
+
+  return {
+    todayStart,
+    tomorrowStart
+  };
+}
+
 async function listByFieldIn<T>(
   name: string,
   storeId: string,
@@ -903,16 +926,35 @@ export class RestaurantRepository {
     readyVoucherCount: number;
     todayVisitCount: number;
     openOpsTaskCount: number;
+    todayOrderCount: number;
+    todayRevenueAmount: number;
+    pendingConfirmOrderCount: number;
+    readyOrderCount: number;
+    todayPointsIssued: number;
+    todayPointsRedeemed: number;
+    todayVoucherRedeemedCount: number;
+    memberBenefitsSkippedOrderCount: number;
   }> {
     const now = new Date().toISOString();
-    const today = now.slice(0, 10);
-    const todayStart = `${today}T00:00:00.000Z`;
-    const tomorrowStartDate = new Date(todayStart);
-    tomorrowStartDate.setUTCDate(tomorrowStartDate.getUTCDate() + 1);
-    const tomorrowStart = tomorrowStartDate.toISOString();
+    const { todayStart, tomorrowStart } = getShanghaiDayRange();
     const _ = dbCommand();
+    const todayRange = _.gte(todayStart).and(_.lt(tomorrowStart));
 
-    const [memberCount, activatedInviteCount, adjustedActivatedInviteCount, readyVoucherCount, todayVisitCount, openOpsTaskCount] =
+    const [
+      memberCount,
+      activatedInviteCount,
+      adjustedActivatedInviteCount,
+      readyVoucherCount,
+      todayVisitCount,
+      openOpsTaskCount,
+      todayOrderCount,
+      pendingConfirmOrderCount,
+      readyOrderCount,
+      memberBenefitsSkippedOrderCount,
+      todayOrders,
+      todayPointTransactions,
+      todayVoucherRedemptions
+    ] =
       await Promise.all([
         countByWhere(COLLECTIONS.members, {
           storeId: this.storeId
@@ -933,20 +975,76 @@ export class RestaurantRepository {
         }),
         countByWhere(COLLECTIONS.visitRecords, {
           storeId: this.storeId,
-          verifiedAt: _.gte(todayStart).and(_.lt(tomorrowStart))
+          verifiedAt: todayRange
         }),
         countByWhere(COLLECTIONS.opsTasks, {
           storeId: this.storeId,
           status: "OPEN"
+        }),
+        countByWhere(COLLECTIONS.orderRecords, {
+          storeId: this.storeId,
+          submittedAt: todayRange
+        }),
+        countByWhere(COLLECTIONS.orderRecords, {
+          storeId: this.storeId,
+          status: "PENDING_CONFIRM"
+        }),
+        countByWhere(COLLECTIONS.orderRecords, {
+          storeId: this.storeId,
+          status: "READY"
+        }),
+        countByWhere(COLLECTIONS.orderRecords, {
+          storeId: this.storeId,
+          memberBenefitsStatus: "SKIPPED_UNVERIFIED"
+        }),
+        listByWhere<OrderRecord>(COLLECTIONS.orderRecords, {
+          storeId: this.storeId,
+          submittedAt: todayRange
+        }),
+        listByWhere<MemberPointTransaction>(COLLECTIONS.memberPointTransactions, {
+          storeId: this.storeId,
+          createdAt: todayRange
+        }),
+        listByWhere<VoucherRedemption>(COLLECTIONS.voucherRedemptions, {
+          storeId: this.storeId,
+          redeemedAt: todayRange
         })
       ]);
+
+    const todayRevenueAmount = todayOrders.reduce((total, order) => {
+      if (order.status === "CANCELLED") {
+        return total;
+      }
+
+      return total + (Number(order.payableAmount) || 0);
+    }, 0);
+    const todayPointsIssued = todayPointTransactions.reduce((total, transaction) => {
+      const delta = Number(transaction.changeAmount) || 0;
+      return delta > 0 ? total + delta : total;
+    }, 0);
+    const todayPointsRedeemed = todayPointTransactions.reduce((total, transaction) => {
+      if (transaction.type !== "POINT_EXCHANGE") {
+        return total;
+      }
+
+      const delta = Number(transaction.changeAmount) || 0;
+      return delta < 0 ? total + Math.abs(delta) : total;
+    }, 0);
 
     return {
       memberCount,
       activatedInviteCount: activatedInviteCount + adjustedActivatedInviteCount,
       readyVoucherCount,
       todayVisitCount,
-      openOpsTaskCount
+      openOpsTaskCount,
+      todayOrderCount,
+      todayRevenueAmount,
+      pendingConfirmOrderCount,
+      readyOrderCount,
+      todayPointsIssued,
+      todayPointsRedeemed,
+      todayVoucherRedeemedCount: todayVoucherRedemptions.length,
+      memberBenefitsSkippedOrderCount
     };
   }
 }

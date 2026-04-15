@@ -45,7 +45,8 @@ const entries = [
   { source: "admin.binding.adjust", deployName: "admin-binding-adjust" },
   { source: "admin.points.adjust", deployName: "admin-points-adjust" },
   { source: "admin.staff.manage", deployName: "admin-staff-manage" },
-  { source: "admin.audit.list", deployName: "admin-audit-list" }
+  { source: "admin.audit.list", deployName: "admin-audit-list" },
+  { source: "ops.initDatabase", deployName: "ops-init-database" }
 ];
 
 await rm(OUTPUT_DIR, {

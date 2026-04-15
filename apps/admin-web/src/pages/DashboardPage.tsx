@@ -78,7 +78,15 @@ const EMPTY_STATS = {
   activatedInviteCount: 0,
   readyVoucherCount: 0,
   todayVisitCount: 0,
-  openOpsTaskCount: 0
+  openOpsTaskCount: 0,
+  todayOrderCount: 0,
+  todayRevenueAmount: 0,
+  pendingConfirmOrderCount: 0,
+  readyOrderCount: 0,
+  todayPointsIssued: 0,
+  todayPointsRedeemed: 0,
+  todayVoucherRedeemedCount: 0,
+  memberBenefitsSkippedOrderCount: 0
 };
 const EMPTY_TAB_FLAGS: Record<TabKey, boolean> = {
   overview: false,
@@ -124,16 +132,36 @@ const EMPTY_STORE_CONFIG: StoreConfig = {
   updatedAt: ""
 };
 
+function formatCurrencyAmount(value: number) {
+  return `¥${Number(value || 0).toFixed(0)}`;
+}
+
+function buildRulesSavedNotice(summary: {
+  enabledWelcomeRuleCount: number;
+  enabledMilestoneRuleCount: number;
+  repeatableMilestoneRuleCount: number;
+  enabledExchangeItemCount: number;
+}) {
+  const milestoneText =
+    summary.enabledMilestoneRuleCount > 0
+      ? `邀请积分 ${summary.enabledMilestoneRuleCount} 条${
+          summary.repeatableMilestoneRuleCount > 0 ? `（循环 ${summary.repeatableMilestoneRuleCount} 条）` : ""
+        }`
+      : "邀请积分 0 条";
+
+  return `已保存：首单礼 ${summary.enabledWelcomeRuleCount} 条，${milestoneText}，兑换菜品 ${summary.enabledExchangeItemCount} 条`;
+}
+
 const TABS: Array<{ key: TabKey; label: string; summary: string }> = [
-  { key: "overview", label: "数据概览", summary: "今天经营" },
-  { key: "ops", label: "异常处理", summary: "失败任务和异常单" },
-  { key: "menu", label: "点餐菜单", summary: "分类、菜品、规格" },
-  { key: "orders", label: "订单工作台", summary: "查单和改状态" },
-  { key: "members", label: "会员管理", summary: "查会员、调积分" },
+  { key: "overview", label: "数据概览", summary: "今天情况" },
+  { key: "ops", label: "异常处理", summary: "异常和补单" },
+  { key: "menu", label: "点餐菜单", summary: "菜单和规格" },
+  { key: "orders", label: "订单工作台", summary: "查单改状态" },
+  { key: "members", label: "会员管理", summary: "会员和积分" },
   { key: "rules", label: "奖励规则", summary: "积分和兑换" },
-  { key: "staff", label: "员工账号", summary: "管理后台和店员账号" },
-  { key: "feedback", label: "用户反馈", summary: "会员和店员反馈" },
-  { key: "audit", label: "审计日志", summary: "关键操作记录" }
+  { key: "staff", label: "员工账号", summary: "员工账号" },
+  { key: "feedback", label: "用户反馈", summary: "问题回流" },
+  { key: "audit", label: "审计日志", summary: "操作记录" }
 ];
 
 export function DashboardPage({ session, onLogout }: { session: AdminSession; onLogout: () => void }) {
@@ -358,7 +386,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       if (handleSessionFailure(error)) {
         return;
       }
-      setErrorMessage(error instanceof Error ? error.message : "后台数据读取失败，请稍后重试。");
+      setErrorMessage(error instanceof Error ? error.message : "数据读取失败，请稍后重试。");
     } finally {
       if (isLatestRequest(request)) {
         markTabLoading("overview", false);
@@ -422,7 +450,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       if (handleSessionFailure(error)) {
         return;
       }
-      setErrorMessage(error instanceof Error ? error.message : "待处理事项读取失败");
+      setErrorMessage(error instanceof Error ? error.message : "异常事项读取失败");
     } finally {
       if (isLatestRequest(request)) {
         markTabLoading("ops", false);
@@ -854,7 +882,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       setRulesState(response.rules);
       setExchangeItems(response.exchangeItems);
       markTabLoaded("rules");
-      setNotice("规则已保存");
+      setNotice(buildRulesSavedNotice(response.summary));
       await loadAuditLogs(true);
     } catch (error) {
       if (!isLatestRequest(request)) {
@@ -1085,36 +1113,36 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
 
   const operationFocus = [
     {
-      title: "今日核销",
-      value: `${stats.todayVisitCount} 笔`,
+      title: "今日订单",
+      value: `${stats.todayOrderCount} 单`,
       detail:
-        stats.todayVisitCount > 0
-          ? "继续盯首单、积分和券。"
-          : "今天还没开单。"
+        stats.todayOrderCount > 0
+          ? `营业额 ${formatCurrencyAmount(stats.todayRevenueAmount)}`
+          : "今天还没有订单。"
     },
     {
-      title: "邀请激活",
-      value: `${stats.activatedInviteCount} 人`,
+      title: "待确认",
+      value: `${stats.pendingConfirmOrderCount} 单`,
       detail:
-        stats.activatedInviteCount > 0
-          ? "邀请链路正常。"
-          : "先验证首位被邀请人。"
+        stats.pendingConfirmOrderCount > 0
+          ? "优先确认新订单。"
+          : "当前没有待确认订单。"
     },
     {
-      title: "待核销券",
-      value: `${stats.readyVoucherCount} 张`,
+      title: "待取餐",
+      value: `${stats.readyOrderCount} 单`,
       detail:
-        stats.readyVoucherCount > 0
-          ? "留意店员端核销。"
-          : "看下活动是否开启。"
+        stats.readyOrderCount > 0
+          ? "留意出餐和叫号。"
+          : "当前没有待取餐订单。"
     },
     {
-      title: "异常事项",
-      value: `${stats.openOpsTaskCount} 条`,
+      title: "未参与会员活动",
+      value: `${stats.memberBenefitsSkippedOrderCount} 单`,
       detail:
-        stats.openOpsTaskCount > 0
-          ? "建议尽快处理。"
-          : "当前正常。"
+        stats.memberBenefitsSkippedOrderCount > 0
+          ? "重点关注未验证手机号订单。"
+          : "近期没有跳过会员活动的订单。"
     }
   ];
 
@@ -1149,39 +1177,39 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
     storeConfig.storeName && storeConfig.storeName !== EMPTY_STORE_CONFIG.storeName ? storeConfig.storeName : currentStoreId;
   const heroStats = [
     {
-      label: "会员总数",
-      value: stats.memberCount,
-      copy: "已注册会员"
+      label: "今日订单",
+      value: stats.todayOrderCount,
+      copy: "今天下单"
     },
     {
-      label: "待处理事项",
-      value: stats.openOpsTaskCount,
-      copy: "待处理异常"
+      label: "今日营业额",
+      value: formatCurrencyAmount(stats.todayRevenueAmount),
+      copy: "未含已取消"
     },
     {
-      label: "可用员工",
-      value: tabLoaded.staff ? `${enabledStaffCount}/${staffUsers.length}` : "--",
-      copy: "当前可登录"
+      label: "待确认",
+      value: stats.pendingConfirmOrderCount,
+      copy: "优先处理"
     }
   ];
   const sidebarSnapshot = [
     {
-      label: "今日核销",
-      value: `${stats.todayVisitCount} 笔`
+      label: "今日订单",
+      value: `${stats.todayOrderCount} 单`
     },
     {
-      label: "待处理事项",
-      value: `${stats.openOpsTaskCount} 条`
+      label: "今日营业额",
+      value: formatCurrencyAmount(stats.todayRevenueAmount)
     },
     {
-      label: "可用员工",
-      value: tabLoaded.staff ? `${enabledStaffCount}/${staffUsers.length}` : "--"
+      label: "待确认",
+      value: `${stats.pendingConfirmOrderCount} 单`
     }
   ];
   const tabBadges: Record<TabKey, { text: string; tone: "default" | "success" | "navy" }> = {
     overview: {
-      text: `${stats.todayVisitCount} 笔核销`,
-      tone: stats.todayVisitCount > 0 ? "success" : "navy"
+      text: `${stats.todayOrderCount} 单`,
+      tone: stats.todayOrderCount > 0 ? "success" : "navy"
     },
     ops: {
       text: tabLoaded.ops ? `${stats.openOpsTaskCount} 条待处理` : "待加载",
@@ -1216,9 +1244,8 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
       tone: tabLoaded.audit ? "success" : "navy"
     }
   };
-  const heroTitle = activeTab === "overview" ? `${storeLabel} 今日经营` : `${activeTabConfig.label}工作区`;
-  const heroSummary =
-    activeTab === "overview" ? "先看核销、异常和开店准备，再去下面对应工作区处理。" : activeTabConfig.summary;
+  const heroTitle = activeTab === "overview" ? `${storeLabel} 概况` : activeTabConfig.label;
+  const heroSummary = activeTab === "overview" ? "先看订单、出餐和异常。" : activeTabConfig.summary;
 
   function renderDeferredPanel(tab: TabKey, title: string, copy: string) {
     return (
@@ -1238,7 +1265,7 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
             <div className="brand-mark">门店后台</div>
             <div className="stack">
               <h1 className="brand-title">店长后台</h1>
-              <p className="subtle">经营、订单、会员都在这。</p>
+              <p className="subtle">订单、会员、设置。</p>
             </div>
             <div className="sidebar-meta stack">
               <div className="section-eyebrow">账号</div>
@@ -1365,9 +1392,14 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
             <div className="section-stack">
               <div className="metric-grid">
                 <MetricCard label="会员总数" value={stats.memberCount} footnote="已注册会员" />
-                <MetricCard label="有效邀请数" value={stats.activatedInviteCount} footnote="已激活邀请" />
-                <MetricCard label="待使用菜品券" value={stats.readyVoucherCount} footnote="可继续核销" />
-                <MetricCard label="今日核销" value={stats.todayVisitCount} footnote="今日已录入" />
+                <MetricCard label="今日订单" value={stats.todayOrderCount} footnote="今天下单" />
+                <MetricCard label="今日营业额" value={formatCurrencyAmount(stats.todayRevenueAmount)} footnote="未含已取消" />
+                <MetricCard label="待确认订单" value={stats.pendingConfirmOrderCount} footnote="优先处理" />
+                <MetricCard label="待取餐订单" value={stats.readyOrderCount} footnote="留意出餐" />
+                <MetricCard label="今日发放积分" value={stats.todayPointsIssued} footnote="正向入账" />
+                <MetricCard label="今日积分兑换" value={stats.todayPointsRedeemed} footnote="已消耗积分" />
+                <MetricCard label="今日核销券" value={stats.todayVoucherRedeemedCount} footnote="已用菜品券" />
+                <MetricCard label="未参与会员活动订单" value={stats.memberBenefitsSkippedOrderCount} footnote="需关注" />
                 <MetricCard label="待处理事项" value={stats.openOpsTaskCount} footnote="待处理异常" />
               </div>
 
@@ -1406,9 +1438,9 @@ export function DashboardPage({ session, onLogout }: { session: AdminSession; on
 
                 <div className="row-card stack">
                   <div className="card-title-block">
-                    <div className="tag">开店前</div>
-                    <h3 className="section-title">规则与账号</h3>
-                    <p className="subtle">开店前先过一遍。</p>
+                    <div className="tag">检查</div>
+                    <h3 className="section-title">开店检查</h3>
+                    <p className="subtle">开店前过一遍。</p>
                   </div>
 
                   <div className="status-list">

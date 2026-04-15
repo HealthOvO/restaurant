@@ -14,6 +14,7 @@ import {
   isInviteRelationPending,
   normalizePhone,
   pointRedeemInputSchema,
+  previewVoucherInputSchema,
   redeemVoucherInputSchema,
   resolveInvitePointsReward,
   resolveInviteRewardMode,
@@ -257,6 +258,59 @@ async function findMemberByInviteCode(
   return (await repository.listMembers()).find((member) => member.memberCode === normalizedCode);
 }
 
+function canBindInvite(member: Member, relation: InviteRelation | null | undefined): boolean {
+  return Boolean(member.phoneVerifiedAt && !member.hasCompletedFirstVisit && !relation);
+}
+
+async function buildInviterSummary(
+  repository: RestaurantRepository,
+  member: Member,
+  relation?: InviteRelation | null
+): Promise<{
+  memberId: string;
+  memberCode: string;
+  nickname?: string;
+} | null> {
+  const inviter = relation?.inviterMemberId
+    ? await repository.getMemberById(relation.inviterMemberId)
+    : await findMemberByInviteCode(repository, member.pendingInviteCode ?? undefined);
+
+  if (!inviter) {
+    return null;
+  }
+
+  return {
+    memberId: inviter._id,
+    memberCode: inviter.memberCode,
+    nickname: inviter.nickname
+  };
+}
+
+async function buildMemberStatePayload(
+  repository: RestaurantRepository,
+  member: Member,
+  relation?: InviteRelation | null
+): Promise<{
+  member: Member;
+  relation: InviteRelation | null;
+  pendingInviteCode: string | null;
+  inviterSummary: {
+    memberId: string;
+    memberCode: string;
+    nickname?: string;
+  } | null;
+  canBindInvite: boolean;
+}> {
+  const normalizedRelation = relation ?? null;
+  return {
+    member,
+    relation: normalizedRelation,
+    pendingInviteCode: member.pendingInviteCode ?? null,
+    inviterSummary: await buildInviterSummary(repository, member, normalizedRelation),
+    canBindInvite: canBindInvite(member, normalizedRelation)
+  };
+}
+
 function assertMemberPhoneVerified(member: Pick<Member, "phone" | "phoneVerifiedAt">, message: string): void {
   if (!member.phone || !member.phoneVerifiedAt) {
     throw new DomainError("MEMBER_PHONE_REQUIRED", message);
@@ -339,7 +393,14 @@ export async function bootstrapMember(
 ): Promise<{
   ok: true;
   member: Member;
-  relation?: InviteRelation | null;
+  relation: InviteRelation | null;
+  pendingInviteCode: string | null;
+  inviterSummary: {
+    memberId: string;
+    memberCode: string;
+    nickname?: string;
+  } | null;
+  canBindInvite: boolean;
 }> {
   const parsed = bootstrapInputSchema.parse(input);
   const now = nowIso();
@@ -429,8 +490,7 @@ export async function bootstrapMember(
 
   return {
     ok: true,
-    member,
-    relation
+    ...(await buildMemberStatePayload(repository, member, relation))
   };
 }
 
@@ -440,15 +500,17 @@ export async function getMemberState(repository: RestaurantRepository, callerOpe
     return {
       ok: true,
       member: null,
-      relation: null
+      relation: null,
+      pendingInviteCode: null,
+      inviterSummary: null,
+      canBindInvite: false
     };
   }
 
   const relation = await repository.getInviteRelationByInviteeId(member._id);
   return {
     ok: true,
-    member,
-    relation: relation ?? null
+    ...(await buildMemberStatePayload(repository, member, relation))
   };
 }
 
@@ -973,5 +1035,36 @@ export async function redeemVoucher(repository: RestaurantRepository, input: unk
     ok: true,
     voucher: redemptionResult.voucher,
     isIdempotent: redemptionResult.isIdempotent
+  };
+}
+
+export async function previewVoucherRedemption(repository: RestaurantRepository, input: unknown) {
+  const parsed = previewVoucherInputSchema.parse(input);
+  const { staff } = await requireActiveStaffSession(repository, parsed.sessionToken);
+  if (staff.role !== "OWNER" && staff.role !== "STAFF") {
+    throw new DomainError("FORBIDDEN", "当前账号没有核销权限");
+  }
+
+  const voucher = await repository.getVoucherById(parsed.voucherId);
+  if (!voucher) {
+    throw new DomainError("VOUCHER_NOT_FOUND", "菜品券不存在");
+  }
+
+  const [normalizedVoucher, member] = await Promise.all([
+    syncExpiredVoucherStatuses(repository, [voucher], nowIso()).then((rows) => rows[0]),
+    repository.getMemberById(voucher.memberId)
+  ]);
+
+  return {
+    ok: true,
+    voucher: normalizedVoucher,
+    member: member
+      ? {
+          _id: member._id,
+          memberCode: member.memberCode,
+          nickname: member.nickname,
+          phone: member.phone
+        }
+      : null
   };
 }
