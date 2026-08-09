@@ -3,7 +3,7 @@ import type { V2ExchangeItem, V2Member, V2OwnerAccount, V2Product, V2StoreConfig
 import { V2Application, type V2Clock } from "../src/v2/application";
 import { loginV2Owner, hashV2OwnerPassword, requireV2Owner } from "../src/v2/owner-auth";
 import { MockV2PaymentProvider } from "../src/v2/payment";
-import { InMemoryV2Repository } from "../src/v2/repository";
+import { InMemoryV2Repository, withoutV2DocumentId } from "../src/v2/repository";
 import { initializeV2Store, resetV2Owner } from "../src/v2/setup";
 
 const nowIso = "2026-08-09T10:00:00.000Z";
@@ -297,5 +297,14 @@ describe("V2 store setup", () => {
     await resetV2Owner(repository, { username: "new-owner", password: "new-strong-password", displayName: "新老板" }, new Date(nowIso));
     await expect(requireV2Owner(repository, session.token)).rejects.toThrow("登录已失效");
     await expect(loginV2Owner(repository, { username: "new-owner", password: "new-strong-password" }, new Date(nowIso))).resolves.toBeTruthy();
+  });
+});
+
+describe("V2 CloudBase document writes", () => {
+  it("uses the document path as the id and never writes _id into document data", () => {
+    expect(withoutV2DocumentId({ _id: "member-1", storeId: "store-main", pointsBalance: 10 })).toEqual({
+      storeId: "store-main",
+      pointsBalance: 10
+    });
   });
 });

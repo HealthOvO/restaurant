@@ -340,8 +340,13 @@ async function cloudList<T>(name: string, where: Record<string, unknown>): Promi
   }
 }
 
+export function withoutV2DocumentId<T extends { _id: string }>(row: T): Omit<T, "_id"> {
+  const { _id: _documentId, ...data } = row;
+  return data;
+}
+
 async function cloudSave<T extends { _id: string }>(name: string, row: T): Promise<void> {
-  await collection(name).doc(row._id).set({ data: row });
+  await collection(name).doc(row._id).set({ data: withoutV2DocumentId(row) });
 }
 
 async function txGet<T extends { storeId: string }>(tx: CloudTransaction, name: string, id: string, storeId: string): Promise<T | null> {
@@ -352,8 +357,9 @@ async function txGet<T extends { storeId: string }>(tx: CloudTransaction, name: 
 
 async function txSave<T extends { _id: string; storeId: string }>(tx: CloudTransaction, name: string, row: T, storeId: string): Promise<void> {
   const existing = await txGet<T>(tx, name, row._id, storeId);
-  if (existing) await tx.collection(name).doc(row._id).set(row);
-  else await tx.collection(name).doc(row._id).create(row);
+  const data = withoutV2DocumentId(row);
+  if (existing) await tx.collection(name).doc(row._id).set(data);
+  else await tx.collection(name).doc(row._id).create(data);
 }
 
 export class CloudV2Repository implements V2Repository {
