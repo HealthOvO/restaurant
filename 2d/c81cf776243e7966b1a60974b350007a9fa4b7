@@ -1,0 +1,23 @@
+cloudfunctions/src/v2/repository.ts
+  s_8f688ecc677e50::t_9919745c428df3 343-347,349,360-362
+cloudfunctions/tests/v2-application.test.ts
+  s_8f688ecc677e50::t_0fecc46686ab8d 6,302-310
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2dc81cf776243e7966b1a60974b350007a9fa4b7",
+  "prompts": {},
+  "sessions": {
+    "s_8f688ecc677e50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe272-c5ca-7303-80b2-161652f0c965",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
