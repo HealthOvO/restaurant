@@ -1,0 +1,35 @@
+<view class="page profile-page">
+  <view wx:if="{{loading}}" class="loading-state"><view class="loading-dot"></view><text>正在加载个人信息</text></view>
+  <view wx:elif="{{error}}" class="error-state"><view class="state-mark">!</view><text class="state-title">个人信息暂时没加载出来</text><text class="state-copy">{{error}}</text><button class="secondary-button" bindtap="loadProfile">重新加载</button></view>
+
+  <block wx:elif="{{home && overview}}">
+    <view class="profile-card">
+      <view class="profile-avatar">福</view>
+      <view class="profile-main"><text class="profile-name">微信顾客</text><text>账号已绑定当前微信</text></view>
+      <view class="profile-points"><strong>{{home.member.pointsBalance}}</strong><text>积分</text></view>
+    </view>
+
+    <view class="section-heading"><text class="section-heading-title">我的邀请码</text><text class="section-heading-copy">邀请关系绑定后不可更改</text></view>
+    <view class="invite-card surface">
+      <view><text class="invite-label">专属邀请码</text><strong>{{overview.inviteCode}}</strong></view>
+      <button class="secondary-button" bindtap="copyInviteCode">复制</button>
+    </view>
+
+    <view class="section-heading"><text class="section-heading-title">我的邀请人</text></view>
+    <view wx:if="{{overview.inviter}}" class="bound-card surface">
+      <view class="bound-mark">✓</view><view><text>已永久绑定</text><strong>{{overview.inviter.nickname || overview.inviter.memberCode}}</strong></view>
+    </view>
+    <view wx:else class="bind-card surface">
+      <text class="bind-title">输入朋友的邀请码</text>
+      <text class="bind-copy">每个账号只能绑定一次，请确认无误后提交。</text>
+      <input class="text-input" maxlength="16" value="{{inviteInput}}" placeholder="请输入邀请码" bindinput="onInviteInput" />
+      <button class="primary-button" disabled="{{!inviteInput || binding}}" loading="{{binding}}" bindtap="bindInvite">确认绑定</button>
+    </view>
+
+    <view class="section-heading"><text class="section-heading-title">我邀请的人</text><text class="section-heading-copy">{{overview.invitees.length}} 人</text></view>
+    <view wx:if="{{overview.invitees.length}}" class="invitee-list surface">
+      <view wx:for="{{overview.invitees}}" wx:key="memberCode" class="invitee-row"><view><text>{{item.nickname || item.memberCode}}</text><small>{{item.boundText}} 绑定</small></view><strong>贡献 {{item.contributedPoints}} 积分</strong></view>
+    </view>
+    <view wx:else class="small-empty">还没有邀请记录</view>
+  </block>
+</view>

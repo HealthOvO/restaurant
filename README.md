@@ -1,35 +1,32 @@
-# 餐饮点餐与会员增长小程序
+# 阿福肉片点餐积分系统 V2
 
-面向餐饮门店的微信小程序与老板后台，覆盖点餐下单、会员注册、邀请得积分、积分换菜品、店员核销、反馈处理与审计日志。
+顾客使用原生微信小程序点餐、支付、取号、赚积分和使用商品券；老板使用独立 Web 后台收单并配置商品、规格和积分。V1 的店员端、手工录单和扫码核销流程已移除。
 
-## 仓库结构
+## 目录
 
-- `apps/miniprogram`: 原生微信小程序，包含顾客端与店员核销入口
-- `apps/admin-web`: 老板后台 Web 控制台
-- `packages/shared`: 共享领域模型、校验规则与奖励结算逻辑
-- `cloudfunctions`: 微信云开发函数
-- `docs`: 部署、索引、评审与上线资料
+- `apps/miniprogram`：顾客微信小程序
+- `apps/admin-web`：商家 Web 后台
+- `packages/shared/src/v2`：领域类型、校验、计价和状态机
+- `cloudfunctions/src/v2`：订单、积分、邀请、商品券、支付和老板认证
+- `docs/deployment.md`：上线配置
 
-## 本地命令
+## 本地运行
 
 ```bash
 npm install
-npm run check:todo
-npm run build:shared
-npm run test
-npm run build:cloudfunctions
-npm run build:admin
+npm run review
+npm run build:release
+VITE_API_MODE=mock npm run dev --workspace @restaurant/admin-web
 ```
 
-## 首次初始化
+本地商家后台账号：`owner` / `demo12345`。模拟支付只在非生产环境且 `PAYMENT_PROVIDER=mock` 时可用。
 
-- 老板后台不再内置默认账号。
-- 新环境第一次使用时，需要先配置云函数环境变量 `BOOTSTRAP_SECRET`。
-- 然后在老板后台登录页切到“首次初始化”，输入：
-  - 门店编号
-  - 初始化口令
-  - 老板账号
-  - 老板密码
-- 初始化完成后会自动尝试登录。
+## 核心约束
 
-也可以按 [store-bootstrap.md](/C:/workspace/zxf/docs/store-bootstrap.md) 里的脚本方式初始化老板账号。
+- 金额和积分全部使用整数；金额单位为分。
+- 商品单价、辣度、小料、本人积分、邀请奖励积分均由商家配置，订单保存配置快照。
+- 一个微信 OpenID 对应一个用户；每人只能永久绑定一个直接邀请人，服务端阻止邀请环。
+- 微信支付回调、主动查单和定时对账共用同一幂等结算入口。
+- 商品券只能用于配置的指定商品，用券下单实付 0 元并正常生成取餐号。
+
+上线步骤见 [部署说明](docs/deployment.md)。

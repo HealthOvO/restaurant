@@ -1,0 +1,43 @@
+<view class="page benefits-page">
+  <view class="benefit-hero">
+    <text class="eyebrow">我的权益</text>
+    <view class="benefit-balance"><strong>{{pointsBalance}}</strong><text>可用积分</text></view>
+    <text>积分为整数，可兑换商家配置的指定商品券。</text>
+  </view>
+
+  <view class="segment-control">
+    <button class="{{activeTab === 'coupon' ? 'is-active' : ''}}" data-tab="coupon" bindtap="switchTab">商品券</button>
+    <button class="{{activeTab === 'points' ? 'is-active' : ''}}" data-tab="points" bindtap="switchTab">积分明细</button>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-state"><view class="loading-dot"></view><text>正在加载权益</text></view>
+  <view wx:elif="{{error}}" class="error-state"><view class="state-mark">!</view><text class="state-title">权益暂时没加载出来</text><text class="state-copy">{{error}}</text><button class="secondary-button" bindtap="loadBenefits">重新加载</button></view>
+
+  <block wx:elif="{{activeTab === 'coupon'}}">
+    <view class="section-heading"><text class="section-heading-title">可兑换</text><text class="section-heading-copy">兑换后再免费下单</text></view>
+    <view wx:if="{{exchangeItems.length}}" class="exchange-list">
+      <view wx:for="{{exchangeItems}}" wx:key="_id" class="exchange-card surface">
+        <view><text class="exchange-name">{{item.name}}</text><text class="exchange-copy">指定商品：{{item.productName}} · {{item.validDays}} 天有效</text></view>
+        <button class="exchange-button" disabled="{{!item.canExchange || exchangingId}}" loading="{{exchangingId === item._id}}" data-id="{{item._id}}" bindtap="exchange">{{item.pointsCost}} 积分</button>
+      </view>
+    </view>
+    <view wx:else class="small-empty">商家暂未开放积分兑换</view>
+
+    <view class="section-heading"><text class="section-heading-title">我的商品券</text><text class="section-heading-copy">下单后照常取号</text></view>
+    <view wx:if="{{coupons.length}}" class="coupon-list">
+      <view wx:for="{{coupons}}" wx:key="_id" class="coupon-card {{item.canUse ? 'is-available' : ''}}">
+        <view class="coupon-main"><text class="coupon-kicker">指定商品券</text><text class="coupon-name">{{item.name}}</text><text class="coupon-product">可兑换 {{item.productName}}</text><text class="coupon-expiry">有效期至 {{item.expiresText}}</text></view>
+        <view class="coupon-side"><text>{{item.pointsCost}}</text><small>积分兑换</small><button wx:if="{{item.canUse}}" data-id="{{item._id}}" bindtap="useCoupon">去使用</button><text wx:else class="coupon-status">{{item.statusText}}</text></view>
+      </view>
+    </view>
+    <view wx:else class="small-empty">还没有商品券，积分够了就来兑换吧</view>
+  </block>
+
+  <block wx:elif="{{activeTab === 'points'}}">
+    <view class="section-heading"><text class="section-heading-title">积分明细</text><text class="section-heading-copy">每一笔都可追溯</text></view>
+    <view wx:if="{{pointRows.length}}" class="points-list surface">
+      <view wx:for="{{pointRows}}" wx:key="_id" class="point-row"><view><text>{{item.titleText}}</text><small>{{item.timeText}} · 余额 {{item.balanceAfter}}</small></view><strong class="{{item.amountClass}}">{{item.amountText}}</strong></view>
+    </view>
+    <view wx:else class="small-empty">还没有积分记录</view>
+  </block>
+</view>

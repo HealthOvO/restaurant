@@ -1,97 +1,46 @@
 [
-  {
-    "collection": "members",
-    "indexes": [
-      {
-        "name": "idx_store_phone_unique",
-        "fields": [
-          { "name": "storeId", "direction": 1 },
-          { "name": "phone", "direction": 1 }
-        ],
-        "unique": true
-      },
-      {
-        "name": "idx_store_openid",
-        "fields": [
-          { "name": "storeId", "direction": 1 },
-          { "name": "openId", "direction": 1 }
-        ],
-        "unique": true
-      }
-    ]
-  },
-  {
-    "collection": "invite_relations",
-    "indexes": [
-      {
-        "name": "idx_store_invitee_unique",
-        "fields": [
-          { "name": "storeId", "direction": 1 },
-          { "name": "inviteeMemberId", "direction": 1 }
-        ],
-        "unique": true
-      },
-      {
-        "name": "idx_store_inviter_status",
-        "fields": [
-          { "name": "storeId", "direction": 1 },
-          { "name": "inviterMemberId", "direction": 1 },
-          { "name": "status", "direction": 1 }
-        ]
-      }
-    ]
-  },
-  {
-    "collection": "visit_records",
-    "indexes": [
-      {
-        "name": "idx_store_member_order_unique",
-        "fields": [
-          { "name": "storeId", "direction": 1 },
-          { "name": "memberId", "direction": 1 },
-          { "name": "externalOrderNo", "direction": 1 }
-        ],
-        "unique": true
-      }
-    ]
-  },
-  {
-    "collection": "dish_vouchers",
-    "indexes": [
-      {
-        "name": "idx_store_member_status",
-        "fields": [
-          { "name": "storeId", "direction": 1 },
-          { "name": "memberId", "direction": 1 },
-          { "name": "status", "direction": 1 }
-        ]
-      }
-    ]
-  },
-  {
-    "collection": "voucher_redemptions",
-    "indexes": [
-      {
-        "name": "idx_store_voucher_unique",
-        "fields": [
-          { "name": "storeId", "direction": 1 },
-          { "name": "voucherId", "direction": 1 }
-        ],
-        "unique": true
-      }
-    ]
-  },
-  {
-    "collection": "staff_users",
-    "indexes": [
-      {
-        "name": "idx_store_username_unique",
-        "fields": [
-          { "name": "storeId", "direction": 1 },
-          { "name": "username", "direction": 1 }
-        ],
-        "unique": true
-      }
-    ]
-  }
+  {"collection":"v2_members","indexes":[
+    {"name":"idx_store_openid_unique","fields":[{"name":"storeId","direction":1},{"name":"openId","direction":1}],"unique":true},
+    {"name":"idx_store_invite_code_unique","fields":[{"name":"storeId","direction":1},{"name":"inviteCode","direction":1}],"unique":true},
+    {"name":"idx_store_member_code_unique","fields":[{"name":"storeId","direction":1},{"name":"memberCode","direction":1}],"unique":true}
+  ]},
+  {"collection":"v2_invite_relations","indexes":[
+    {"name":"idx_store_invitee_unique","fields":[{"name":"storeId","direction":1},{"name":"inviteeMemberId","direction":1}],"unique":true},
+    {"name":"idx_store_inviter","fields":[{"name":"storeId","direction":1},{"name":"inviterMemberId","direction":1}]}
+  ]},
+  {"collection":"v2_products","indexes":[
+    {"name":"idx_store_enabled_sort","fields":[{"name":"storeId","direction":1},{"name":"enabled","direction":1},{"name":"sortOrder","direction":1}]}
+  ]},
+  {"collection":"v2_exchange_items","indexes":[
+    {"name":"idx_store_enabled_sort","fields":[{"name":"storeId","direction":1},{"name":"enabled","direction":1},{"name":"sortOrder","direction":1}]}
+  ]},
+  {"collection":"v2_coupons","indexes":[
+    {"name":"idx_store_member_created","fields":[{"name":"storeId","direction":1},{"name":"memberId","direction":1},{"name":"createdAt","direction":-1}]},
+    {"name":"idx_store_member_status_expiry","fields":[{"name":"storeId","direction":1},{"name":"memberId","direction":1},{"name":"status","direction":1},{"name":"expiresAt","direction":1}]}
+  ]},
+  {"collection":"v2_orders","indexes":[
+    {"name":"idx_store_status_created","fields":[{"name":"storeId","direction":1},{"name":"status","direction":1},{"name":"createdAt","direction":-1}]},
+    {"name":"idx_store_member_created","fields":[{"name":"storeId","direction":1},{"name":"memberId","direction":1},{"name":"createdAt","direction":-1}]},
+    {"name":"idx_store_business_date","fields":[{"name":"storeId","direction":1},{"name":"businessDate","direction":1}]}
+  ]},
+  {"collection":"v2_payments","indexes":[
+    {"name":"idx_store_out_trade_no_unique","fields":[{"name":"storeId","direction":1},{"name":"outTradeNo","direction":1}],"unique":true},
+    {"name":"idx_store_status_next_query","fields":[{"name":"storeId","direction":1},{"name":"status","direction":1},{"name":"nextQueryAt","direction":1}]}
+  ]},
+  {"collection":"v2_refunds","indexes":[
+    {"name":"idx_store_out_refund_no_unique","fields":[{"name":"storeId","direction":1},{"name":"outRefundNo","direction":1}],"unique":true},
+    {"name":"idx_store_status_next_query","fields":[{"name":"storeId","direction":1},{"name":"status","direction":1},{"name":"nextQueryAt","direction":1}]}
+  ]},
+  {"collection":"v2_point_ledger","indexes":[
+    {"name":"idx_store_member_created","fields":[{"name":"storeId","direction":1},{"name":"memberId","direction":1},{"name":"createdAt","direction":-1}]},
+    {"name":"idx_store_business_date","fields":[{"name":"storeId","direction":1},{"name":"businessDate","direction":1}]}
+  ]},
+  {"collection":"v2_owner_accounts","indexes":[
+    {"name":"idx_store_username_unique","fields":[{"name":"storeId","direction":1},{"name":"username","direction":1}],"unique":true}
+  ]},
+  {"collection":"v2_store_config","indexes":[
+    {"name":"idx_store_unique","fields":[{"name":"storeId","direction":1}],"unique":true}
+  ]},
+  {"collection":"v2_pickup_counters","indexes":[]},
+  {"collection":"v2_locks","indexes":[]}
 ]

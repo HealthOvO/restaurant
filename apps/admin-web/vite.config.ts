@@ -1,28 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-function resolvePackageChunkName(id: string) {
-  const [modulePath] = id.split("?");
-  const marker = "node_modules/";
-  const normalized = modulePath.replace(/\\/g, "/");
-  const nodeModuleIndex = normalized.lastIndexOf(marker);
-  if (nodeModuleIndex === -1) {
-    return undefined;
-  }
-
-  const packagePath = normalized.slice(nodeModuleIndex + marker.length);
-  const segments = packagePath.split("/");
-  const packageName = segments[0].startsWith("@") ? `${segments[0]}/${segments[1]}` : segments[0];
-
-  if (["react", "react-dom", "scheduler"].includes(packageName)) {
+function resolveVendorChunk(id: string) {
+  const normalized = id.replace(/\\/g, "/");
+  if (["/react/", "/react-dom/", "/scheduler/"].some((part) => normalized.includes(`/node_modules${part}`))) {
     return "react-vendor";
   }
-
-  if (["react-router", "react-router-dom"].includes(packageName)) {
+  if (["/react-router/", "/react-router-dom/"].some((part) => normalized.includes(`/node_modules${part}`))) {
     return "router-vendor";
   }
-
-  return `vendor-${packageName.replace("@", "").replace("/", "-")}`;
+  return undefined;
 }
 
 export default defineConfig({
@@ -31,7 +18,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          return resolvePackageChunkName(id);
+          return resolveVendorChunk(id);
         }
       }
     }

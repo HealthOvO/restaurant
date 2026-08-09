@@ -1,107 +1,45 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 
-const loginMock = vi.fn();
-const bootstrapStoreOwnerMock = vi.fn();
+vi.stubEnv("VITE_API_MODE", "mock");
 
-vi.mock("../lib/api", () => ({
-  login: (...args: unknown[]) => loginMock(...args),
-  bootstrapStoreOwner: (...args: unknown[]) => bootstrapStoreOwnerMock(...args)
-}));
-
-vi.mock("../pages/LoginPage", () => ({
-  LoginPage: (props: {
-    loginErrorMessage: string;
-    bootstrapErrorMessage: string;
-    noticeMessage: string;
-    onBootstrap: (payload: {
-      storeId: string;
-      secret: string;
-      ownerUsername: string;
-      ownerPassword: string;
-    }) => Promise<void>;
-  }) => (
-    <div>
-      <div>mock-login-page</div>
-      <div data-testid="login-error">{props.loginErrorMessage}</div>
-      <div data-testid="bootstrap-error">{props.bootstrapErrorMessage}</div>
-      <div data-testid="notice">{props.noticeMessage}</div>
-      <button
-        type="button"
-        onClick={() =>
-          props.onBootstrap({
-            storeId: "default-store",
-            secret: "bootstrap-secret",
-            ownerUsername: "owner",
-            ownerPassword: "owner-pass-01"
-          })
-        }
-      >
-        run-bootstrap
-      </button>
-    </div>
-  )
-}));
-
-vi.mock("../pages/DashboardPage", () => ({
-  DashboardPage: () => <div>mock-dashboard-page</div>
-}));
-
-describe("App guard", () => {
-  afterEach(() => {
-    cleanup();
-  });
-
+describe("merchant V2 app", () => {
   beforeEach(() => {
-    window.localStorage.clear();
-    loginMock.mockReset();
-    bootstrapStoreOwnerMock.mockReset();
+    window.sessionStorage.clear();
+    window.location.hash = "";
   });
 
-  it("shows login page when no session exists", () => {
+  it("logs in with the only owner account and opens today's dashboard", async () => {
     render(<App />);
-    expect(screen.getByText("mock-login-page")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "欢迎回来" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "进入后台" }));
+    expect(await screen.findByRole("heading", { name: "今天的生意" })).toBeInTheDocument();
+    expect(screen.getByText("支付金额")).toBeInTheDocument();
+    expect(screen.queryByText(/员工/)).not.toBeInTheDocument();
   });
 
-  it("shows dashboard when session exists", () => {
-    window.localStorage.setItem(
-      "restaurant-admin-session",
-      JSON.stringify({
-        sessionToken: "token",
-        staff: {
-          _id: "staff-1",
-          displayName: "老板",
-          role: "OWNER",
-          username: "owner"
-        }
-      })
-    );
-
+  it("completes a waiting order through an explicit confirmation", async () => {
     render(<App />);
-    expect(screen.getByText("mock-dashboard-page")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "进入后台" }));
+    fireEvent.click(await screen.findByRole("link", { name: "订单" }));
+    const completeButtons = await screen.findAllByRole("button", { name: /完成出餐/ });
+    fireEvent.click(completeButtons[0]);
+    expect(screen.getByRole("dialog", { name: "确认完成订单？" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "确认" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await screen.findByText("订单已完成")).toBeInTheDocument();
   });
 
-  it("keeps the user on login and shows a manual-login notice when bootstrap succeeds but auto-login fails", async () => {
-    bootstrapStoreOwnerMock.mockResolvedValue({ created: true });
-    loginMock.mockRejectedValue(new Error("自动登录失败"));
-
+  it("edits product points and keeps them as integers", async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "run-bootstrap" }));
-
-    await waitFor(() => {
-      expect(bootstrapStoreOwnerMock).toHaveBeenCalledWith({
-        storeId: "default-store",
-        secret: "bootstrap-secret",
-        ownerUsername: "owner",
-        ownerPassword: "owner-pass-01"
-      });
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("notice")).toHaveTextContent("老板账号已创建，请手动登录。");
-      expect(screen.getByTestId("login-error")).toHaveTextContent("自动登录失败");
-      expect(screen.getByText("mock-login-page")).toBeInTheDocument();
-    });
+    fireEvent.click(await screen.findByRole("button", { name: "进入后台" }));
+    fireEvent.click(await screen.findByRole("link", { name: "商品" }));
+    fireEvent.click((await screen.findAllByRole("button", { name: "编辑" }))[0]);
+    const points = screen.getByLabelText("顾客每份积分") as HTMLInputElement;
+    fireEvent.change(points, { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存商品" }));
+    expect(await screen.findByText("商品已保存")).toBeInTheDocument();
+    expect(await screen.findByText("本人 +12")).toBeInTheDocument();
   });
 });

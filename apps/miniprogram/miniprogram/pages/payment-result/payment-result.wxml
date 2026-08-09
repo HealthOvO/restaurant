@@ -1,0 +1,25 @@
+<view class="page result-page">
+  <view wx:if="{{loading}}" class="result-card surface">
+    <view class="result-loader"><view class="loading-dot"></view></view>
+    <text class="result-title">正在确认支付结果</text>
+    <text class="result-copy">请稍等，不要重复支付。</text>
+  </view>
+
+  <view wx:elif="{{order && order.pickupNumber}}" class="result-card surface is-success">
+    <text class="result-kicker">下单成功</text>
+    <text class="pickup-label">取餐号</text>
+    <text class="pickup-number">{{order.pickupNumber}}</text>
+    <text class="result-copy">请留意摊主叫号，订单正在准备中。</text>
+    <view class="result-points" wx:if="{{order.buyerPoints > 0}}">本次已获得 +{{order.buyerPoints}} 积分</view>
+    <button class="primary-button" bindtap="goOrders">查看订单</button>
+    <button class="quiet-button" bindtap="goHome">继续点餐</button>
+  </view>
+
+  <view wx:else class="result-card surface">
+    <view class="state-mark">!</view>
+    <text class="result-title">结果暂未确认</text>
+    <text class="result-copy">{{error}}</text>
+    <button class="primary-button" bindtap="query">重新查询</button>
+    <button class="quiet-button" bindtap="goOrders">去订单页看看</button>
+  </view>
+</view>

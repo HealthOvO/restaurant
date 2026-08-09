@@ -1,96 +1,27 @@
-const { fetchMyOrders } = require("../../services/order");
-const { formatDateTime } = require("../../utils/format");
-
-const STATUS_META = {
-  PENDING_CONFIRM: { text: "待确认", className: "status-pill-warning" },
-  CONFIRMED: { text: "已确认", className: "status-pill-success" },
-  PREPARING: { text: "制作中", className: "status-pill-warning" },
-  READY: { text: "待取餐", className: "status-pill-success" },
-  COMPLETED: { text: "已完成", className: "status-pill-neutral" },
-  CANCELLED: { text: "已取消", className: "status-pill-neutral" }
-};
-
-function decorateOrders(orders) {
-  return (orders || []).map((order) => ({
-    ...order,
-    statusText: (STATUS_META[order.status] || STATUS_META.CANCELLED).text,
-    statusClass: (STATUS_META[order.status] || STATUS_META.CANCELLED).className,
-    submittedAtLabel: formatDateTime(order.submittedAt),
-    payableAmountText: Number(order.payableAmount || 0).toFixed(0),
-    itemSummary: (() => {
-      const lineItems = order.lineItems || [];
-      const summary = lineItems
-        .slice(0, 2)
-        .map((item) => item.name)
-        .join(" / ");
-      if (!summary) {
-        return "";
-      }
-      return lineItems.length > 2 ? `${summary} 等${lineItems.length}样` : summary;
-    })()
-  }));
-}
+const api = require("../../services/v2");
+const { prepareOrder } = require("../../utils/v2-format");
 
 Page({
-  data: {
-    loading: true,
-    errorMessage: "",
-    orders: [],
-    visibleOrders: [],
-    activeFilter: "ALL"
-  },
+  data: { loading: true, error: "", orders: [] },
+
   onShow() {
-    this.refresh();
+    this.loadOrders();
   },
-  applyFilter() {
-    const filter = this.data.activeFilter;
-    const visibleOrders = this.data.orders.filter((order) => {
-      if (filter === "ACTIVE") {
-        return !["COMPLETED", "CANCELLED"].includes(order.status);
-      }
-      if (filter === "DONE") {
-        return ["COMPLETED", "CANCELLED"].includes(order.status);
-      }
-      return true;
-    });
 
-    this.setData({
-      visibleOrders
-    });
+  onPullDownRefresh() {
+    this.loadOrders().finally(() => wx.stopPullDownRefresh());
   },
-  async refresh() {
-    this.setData({
-      loading: true,
-      errorMessage: ""
-    });
 
-    try {
-      const response = await fetchMyOrders();
-      this.setData({
-        orders: decorateOrders(response.orders || [])
-      });
-      this.applyFilter();
-    } catch (error) {
-      this.setData({
-        errorMessage: error.message || "订单加载失败"
-      });
-    } finally {
-      this.setData({ loading: false });
-    }
-  },
-  setFilter(event) {
-    this.setData({
-      activeFilter: event.currentTarget.dataset.filter
-    });
-    this.applyFilter();
-  },
-  goDetail(event) {
-    const orderId = event.currentTarget.dataset.orderId;
-    wx.navigateTo({
-      url: `/pages/order-detail/order-detail?orderId=${orderId}`
+  loadOrders() {
+    this.setData({ loading: true, error: "" });
+    return api.listOrders().then((orders) => {
+      this.setData({ loading: false, orders: (orders || []).map(prepareOrder) });
+    }).catch((error) => {
+      this.setData({ loading: false, error: error.message || "订单加载失败" });
     });
   },
-  goMenu() {
-    wx.switchTab({ url: "/pages/menu/menu" });
+
+  goHome() {
+    wx.switchTab({ url: "/pages/home/home" });
   }
 });

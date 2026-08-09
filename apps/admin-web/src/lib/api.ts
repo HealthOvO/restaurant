@@ -1,433 +1,105 @@
 import type {
-  AccessScope,
-  AuditLog,
-  DishVoucher,
-  FeedbackTicket,
-  InviteRelation,
-  Member,
-  MemberPointTransaction,
-  MenuCategory,
-  MenuItem,
-  OpsTask,
-  OrderRecord,
-  OrderStatus,
-  OrderStatusLog,
-  PaginationMeta,
-  PointExchangeItem,
-  RewardRule,
-  RewardRuleSaveSummary,
-  StaffUser,
-  StoreConfig,
-  VisitRecord
+  V2DashboardStats,
+  V2ExchangeItem,
+  V2ExchangeItemSaveInput,
+  V2Member,
+  V2MemberDetail,
+  V2Order,
+  V2OwnerSession,
+  V2Product,
+  V2ProductSaveInput,
+  V2StoreConfig,
+  V2StoreConfigSaveInput
 } from "@restaurant/shared";
-import { callFunction } from "./cloudbase";
 
-function withStoreScope<T extends Record<string, unknown>>(payload: T, storeId?: string) {
-  if (!storeId) {
-    return payload;
+export interface MerchantApi {
+  login(username: string, password: string): Promise<V2OwnerSession>;
+  profile(token: string): Promise<V2OwnerSession["owner"]>;
+  getDashboard(token: string): Promise<V2DashboardStats>;
+  listOrders(token: string, status?: V2Order["status"]): Promise<V2Order[]>;
+  completeOrder(token: string, orderId: string): Promise<V2Order>;
+  cancelCouponOrder(token: string, orderId: string): Promise<V2Order>;
+  refundOrder(token: string, orderId: string): Promise<V2Order>;
+  listProducts(token: string): Promise<V2Product[]>;
+  saveProduct(token: string, input: V2ProductSaveInput): Promise<V2Product>;
+  listExchangeItems(token: string): Promise<V2ExchangeItem[]>;
+  saveExchangeItem(token: string, input: V2ExchangeItemSaveInput): Promise<V2ExchangeItem>;
+  searchMembers(token: string, query: string): Promise<V2Member[]>;
+  getMemberDetail(token: string, memberId: string): Promise<V2MemberDetail>;
+  getStoreConfig(token: string): Promise<V2StoreConfig>;
+  saveStoreConfig(token: string, input: V2StoreConfigSaveInput): Promise<V2StoreConfig>;
+}
+
+export class MerchantApiError extends Error {
+  constructor(message: string, readonly code = "API_ERROR", readonly requestId?: string) {
+    super(message);
+    this.name = "MerchantApiError";
   }
-
-  return {
-    ...payload,
-    storeId
-  };
 }
 
-export async function login(username: string, password: string, storeId: string) {
-  return callFunction<{
-    ok: true;
-    sessionToken: string;
-    staff: {
-      _id: string;
-      displayName: string;
-      role: "OWNER" | "STAFF";
-      username: string;
-      miniOpenId?: string;
-      storeId: string;
-      accessScope: "STORE_ONLY" | "ALL_STORES";
-      managedStoreIds: string[];
-    };
-  }>("auth-login", { username, password, storeId });
+interface ApiResponse<T> {
+  ok: boolean;
+  data?: T;
+  code?: string;
+  message?: string;
+  requestId?: string;
 }
 
-export async function bootstrapStoreOwner(payload: {
-  storeId: string;
-  secret: string;
-  ownerUsername: string;
-  ownerPassword: string;
-  ownerDisplayName?: string;
-  accessScope?: AccessScope;
-  managedStoreIds?: string[];
-}) {
-  return callFunction<{
-    ok: true;
-    created: boolean;
-    owner: Pick<StaffUser, "_id" | "storeId" | "username" | "displayName" | "role" | "isEnabled" | "accessScope" | "managedStoreIds">;
-  }>("bootstrap-store-owner", payload);
+const cloudEnv = import.meta.env.VITE_TCB_ENV_ID?.trim();
+let cloudAppPromise: Promise<any> | undefined;
+let anonymousReady = false;
+
+async function cloudApp() {
+  if (!cloudEnv) throw new MerchantApiError("后台尚未配置云开发环境", "SYSTEM_NOT_READY");
+  cloudAppPromise ??= import("@cloudbase/js-sdk").then(({ default: cloudbase }) => cloudbase.init({ env: cloudEnv }));
+  const app = await cloudAppPromise;
+  if (!anonymousReady) {
+    const auth = app.auth({ persistence: "session" });
+    const state = await auth.getLoginState?.();
+    if (!state) await auth.anonymousAuthProvider().signIn();
+    anonymousReady = true;
+  }
+  return app;
 }
 
-export async function fetchDashboard(sessionToken: string, storeId?: string) {
-  return callFunction<{
-    ok: true;
-    stats: {
-      memberCount: number;
-      activatedInviteCount: number;
-      readyVoucherCount: number;
-      todayVisitCount: number;
-      openOpsTaskCount: number;
-    };
-  }>("admin-dashboard", withStoreScope({ sessionToken }, storeId));
+async function callOwner<T>(action: string, payload: Record<string, unknown>): Promise<T> {
+  try {
+    const app = await cloudApp();
+    const response = await app.callFunction({ name: "v2-owner-api", data: { action, payload } });
+    const result = response?.result as ApiResponse<T> | undefined;
+    if (!result) throw new MerchantApiError("服务没有返回结果", "EMPTY_RESPONSE");
+    if (!result.ok || result.data === undefined) {
+      throw new MerchantApiError(result.message || "操作失败", result.code, result.requestId);
+    }
+    return result.data;
+  } catch (error) {
+    if (error instanceof MerchantApiError) throw error;
+    throw new MerchantApiError(error instanceof Error ? error.message : "网络连接失败");
+  }
 }
 
-export async function fetchOpsTasks(
-  sessionToken: string,
-  status: OpsTask["status"] = "OPEN",
-  limit = 50,
-  storeId?: string
-) {
-  return callFunction<{ ok: true; tasks: OpsTask[] }>(
-    "admin-ops-tasks-list",
-    withStoreScope(
-      {
-        sessionToken,
-        status,
-        limit
-      },
-      storeId
-    )
-  );
-}
+const cloudApi: MerchantApi = {
+  login: (username, password) => callOwner("auth.login", { username, password }),
+  profile: (sessionToken) => callOwner("auth.profile", { sessionToken }),
+  getDashboard: (sessionToken) => callOwner("dashboard.get", { sessionToken }),
+  listOrders: (sessionToken, status) => callOwner("orders.list", { sessionToken, status }),
+  completeOrder: (sessionToken, orderId) => callOwner("orders.complete", { sessionToken, orderId }),
+  cancelCouponOrder: (sessionToken, orderId) => callOwner("orders.cancelCoupon", { sessionToken, orderId }),
+  refundOrder: (sessionToken, orderId) => callOwner("orders.refund", { sessionToken, orderId }),
+  listProducts: (sessionToken) => callOwner("products.list", { sessionToken }),
+  saveProduct: (sessionToken, input) => callOwner("products.save", { sessionToken, ...input }),
+  listExchangeItems: (sessionToken) => callOwner("exchange.list", { sessionToken }),
+  saveExchangeItem: (sessionToken, input) => callOwner("exchange.save", { sessionToken, ...input }),
+  searchMembers: (sessionToken, query) => callOwner("members.search", { sessionToken, query }),
+  getMemberDetail: (sessionToken, memberId) => callOwner("members.detail", { sessionToken, memberId }),
+  getStoreConfig: (sessionToken) => callOwner("config.get", { sessionToken }),
+  saveStoreConfig: (sessionToken, input) => callOwner("config.save", { sessionToken, ...input })
+};
 
-export async function retryOpsTask(sessionToken: string, taskId: string, storeId?: string) {
-  return callFunction<{
-    ok: true;
-    task: OpsTask;
-    settlement: {
-      state: "SETTLED" | "RETRYABLE" | "MANUAL_REVIEW";
-      code?: string;
-      reason?: string;
-      visitRecordId?: string;
-    };
-  }>("admin-ops-tasks-retry", withStoreScope({ sessionToken, taskId }, storeId));
-}
-
-export async function resolveOpsTask(
-  sessionToken: string,
-  payload: {
-    taskId: string;
-    action: "RESOLVE" | "IGNORE";
-    note?: string;
-  },
-  storeId?: string
-) {
-  return callFunction<{ ok: true; task: OpsTask }>(
-    "admin-ops-tasks-resolve",
-    withStoreScope(
-      {
-        sessionToken,
-        ...payload
-      },
-      storeId
-    )
-  );
-}
-
-export async function fetchRules(sessionToken: string, storeId?: string) {
-  return callFunction<{ ok: true; rules: RewardRule[]; exchangeItems: PointExchangeItem[] }>(
-    "admin-rules-list",
-    withStoreScope({ sessionToken }, storeId)
-  );
-}
-
-export async function saveRules(
-  sessionToken: string,
-  rules: RewardRule[],
-  exchangeItems: PointExchangeItem[],
-  storeId?: string
-) {
-  return callFunction<{
-    ok: true;
-    rules: RewardRule[];
-    exchangeItems: PointExchangeItem[];
-    summary: RewardRuleSaveSummary & {
-      createdCount: number;
-      updatedCount: number;
-      deletedCount: number;
-      exchangeCreatedCount: number;
-      exchangeUpdatedCount: number;
-      exchangeDeletedCount: number;
-    };
-  }>("admin-rules-save", withStoreScope({ sessionToken, rules, exchangeItems }, storeId));
-}
-
-export interface MemberSearchRow {
-  member: Member;
-  relation?: InviteRelation | null;
-  visits: VisitRecord[];
-  vouchers: DishVoucher[];
-}
-
-export async function searchMembers(sessionToken: string, query = "", page = 1, pageSize = 8, storeId?: string) {
-  return callFunction<{ ok: true; rows: MemberSearchRow[]; pagination: PaginationMeta }>(
-    "admin-members-query",
-    withStoreScope(
-      {
-        sessionToken,
-        query,
-        page,
-        pageSize
-      },
-      storeId
-    )
-  );
-}
-
-export async function adjustBinding(
-  sessionToken: string,
-  inviteeMemberId: string,
-  inviterMemberId: string,
-  reason: string,
-  storeId?: string
-) {
-  return callFunction<{ ok: true; relation: InviteRelation }>(
-    "admin-binding-adjust",
-    withStoreScope(
-      {
-        sessionToken,
-        inviteeMemberId,
-        inviterMemberId,
-        reason
-      },
-      storeId
-    )
-  );
-}
-
-export async function adjustMemberPoints(
-  sessionToken: string,
-  memberId: string,
-  delta: number,
-  reason: string,
-  storeId?: string
-) {
-  return callFunction<{
-    ok: true;
-    member: Member;
-    pointTransaction: MemberPointTransaction;
-  }>("admin-points-adjust", withStoreScope({ sessionToken, memberId, delta, reason }, storeId));
-}
-
-export async function listStaff(sessionToken: string, storeId?: string) {
-  return callFunction<{ ok: true; staffUsers: Array<Omit<StaffUser, "passwordHash">> }>(
-    "admin-staff-manage",
-    withStoreScope(
-      {
-        sessionToken,
-        action: "LIST"
-      },
-      storeId
-    )
-  );
-}
-
-export async function createStaff(
-  sessionToken: string,
-  user: {
-    username: string;
-    password: string;
-    displayName: string;
-    isEnabled: boolean;
-  },
-  storeId?: string
-) {
-  return callFunction<{ ok: true; staff: Omit<StaffUser, "passwordHash"> }>(
-    "admin-staff-manage",
-    withStoreScope(
-      {
-        sessionToken,
-        action: "CREATE",
-        user: {
-          ...user,
-          role: "STAFF"
-        }
-      },
-      storeId
-    )
-  );
-}
-
-export async function updateStaff(
-  sessionToken: string,
-  user: {
-    _id: string;
-    displayName: string;
-    role: "OWNER" | "STAFF";
-    isEnabled: boolean;
-    username: string;
-  },
-  storeId?: string
-) {
-  return callFunction<{ ok: true; staff: Omit<StaffUser, "passwordHash"> }>(
-    "admin-staff-manage",
-    withStoreScope(
-      {
-        sessionToken,
-        action: "UPDATE_STATUS",
-        user
-      },
-      storeId
-    )
-  );
-}
-
-export async function updateStaffPassword(
-  sessionToken: string,
-  user: {
-    _id: string;
-    username: string;
-    password: string;
-    displayName: string;
-    role: "OWNER" | "STAFF";
-  },
-  storeId?: string
-) {
-  return callFunction<{ ok: true; staff: Omit<StaffUser, "passwordHash"> }>(
-    "admin-staff-manage",
-    withStoreScope(
-      {
-        sessionToken,
-        action: "UPDATE_PASSWORD",
-        user
-      },
-      storeId
-    )
-  );
-}
-
-export async function fetchAuditLogs(sessionToken: string, storeId?: string) {
-  return callFunction<{ ok: true; logs: AuditLog[] }>("admin-audit-list", withStoreScope({ sessionToken }, storeId));
-}
-
-export async function fetchMenuConfig(sessionToken: string, storeId?: string) {
-  return callFunction<{ ok: true; storeConfig: StoreConfig; categories: MenuCategory[]; items: MenuItem[] }>(
-    "admin-menu-list",
-    withStoreScope({ sessionToken }, storeId)
-  );
-}
-
-export async function saveMenuConfig(
-  sessionToken: string,
-  payload: {
-    storeConfig: StoreConfig;
-    categories: MenuCategory[];
-    items: MenuItem[];
-  },
-  storeId?: string
-) {
-  return callFunction<{ ok: true; storeConfig: StoreConfig; categories: MenuCategory[]; items: MenuItem[] }>(
-    "admin-menu-save",
-    withStoreScope(
-      {
-        sessionToken,
-        ...payload
-      },
-      storeId
-    )
-  );
-}
-
-export async function fetchOrders(
-  sessionToken: string,
-  query = "",
-  status?: OrderStatus,
-  page = 1,
-  pageSize = 8,
-  storeId?: string
-) {
-  return callFunction<{ ok: true; rows: OrderRecord[]; pagination: PaginationMeta }>(
-    "admin-orders-query",
-    withStoreScope(
-      {
-        sessionToken,
-        query,
-        status,
-        page,
-        pageSize
-      },
-      storeId
-    )
-  );
-}
-
-export async function fetchOrderWorkbenchDetail(sessionToken: string, orderId: string, storeId?: string) {
-  return callFunction<{ ok: true; order: OrderRecord; logs: OrderStatusLog[] }>(
-    "staff-order-detail",
-    withStoreScope(
-      {
-        sessionToken,
-        orderId
-      },
-      storeId
-    )
-  );
-}
-
-export async function updateOrderWorkbenchStatus(
-  sessionToken: string,
-  payload: {
-    orderId: string;
-    nextStatus: "CONFIRMED" | "PREPARING" | "READY" | "COMPLETED" | "CANCELLED";
-    note?: string;
-  },
-  storeId?: string
-) {
-  return callFunction<{
-    ok: true;
-    isIdempotent?: boolean;
-    order: OrderRecord;
-    visitSettlement?: {
-      state: "SETTLED" | "RETRYABLE" | "MANUAL_REVIEW";
-      code?: string;
-      reason?: string;
-      visitRecordId?: string;
-    };
-  }>(
-    "staff-order-update",
-    withStoreScope(
-      {
-        sessionToken,
-        ...payload
-      },
-      storeId
-    )
-  );
-}
-
-export async function fetchFeedbackTickets(sessionToken: string, storeId?: string) {
-  return callFunction<{ ok: true; tickets: FeedbackTicket[] }>(
-    "admin-feedback-list",
-    withStoreScope({ sessionToken }, storeId)
-  );
-}
-
-export async function updateFeedbackTicket(
-  sessionToken: string,
-  payload: {
-    feedbackId: string;
-    status: "OPEN" | "PROCESSING" | "RESOLVED";
-    priority: "NORMAL" | "HIGH" | "URGENT";
-    ownerReply: string;
-  },
-  storeId?: string
-) {
-  return callFunction<{ ok: true; ticket: FeedbackTicket }>(
-    "admin-feedback-update",
-    withStoreScope(
-      {
-        sessionToken,
-        ...payload
-      },
-      storeId
-    )
-  );
+export async function createMerchantApi(): Promise<MerchantApi> {
+  if (import.meta.env.DEV && import.meta.env.VITE_API_MODE === "mock") {
+    const { mockMerchantApi } = await import("../mocks/mockApi");
+    return mockMerchantApi;
+  }
+  return cloudApi;
 }

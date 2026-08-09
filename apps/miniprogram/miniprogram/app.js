@@ -1,54 +1,35 @@
-const { CLOUD_ENV_ID, STORE_ID } = require("./config");
-const { applyStoreLaunchContext } = require("./utils/store-context");
+const { CLOUD_ENV_ID } = require("./config");
+const { loadCart } = require("./utils/v2-cart");
 
 App({
   globalData: {
     envId: CLOUD_ENV_ID,
-    storeId: STORE_ID,
-    storeConfigCache: {},
-    activeTableNo: "",
-    member: null,
-    relation: null,
-    staffProfile: null,
-    staffSessionToken: "",
-    staffRedirectPath: "",
-    inviteCode: ""
+    source: "direct",
+    home: null,
+    cart: []
   },
+
   onLaunch(options) {
     if (!wx.cloud) {
-      throw new Error("请使用 2.2.3 或以上的基础库以支持云能力");
+      throw new Error("当前微信版本不支持云开发，请升级微信后重试");
     }
-
-    wx.cloud.init({
-      env: CLOUD_ENV_ID,
-      traceUser: true
-    });
-
-    const cachedStoreId = wx.getStorageSync("storeId");
-    if (cachedStoreId) {
-      this.globalData.storeId = cachedStoreId;
-    }
-    const cachedTableNo = wx.getStorageSync("activeTableNo");
-    if (cachedTableNo) {
-      this.globalData.activeTableNo = cachedTableNo;
-    }
-
-    const cachedToken = wx.getStorageSync("staffSessionToken");
-    const cachedStaffProfile = wx.getStorageSync("staffProfile");
-    if (cachedToken) {
-      this.globalData.staffSessionToken = cachedToken;
-    }
-    if (cachedStaffProfile) {
-      this.globalData.staffProfile = cachedStaffProfile;
-    }
-    const cachedStaffRedirectPath = wx.getStorageSync("staffRedirectPath");
-    if (cachedStaffRedirectPath) {
-      this.globalData.staffRedirectPath = cachedStaffRedirectPath;
-    }
-
-    applyStoreLaunchContext(options && options.query ? options.query : {});
+    wx.cloud.init({ env: CLOUD_ENV_ID, traceUser: true });
+    this.globalData.cart = loadCart();
+    this.captureSource(options);
   },
+
   onShow(options) {
-    applyStoreLaunchContext(options && options.query ? options.query : {});
+    this.captureSource(options);
+  },
+
+  captureSource(options) {
+    const query = options && options.query ? options.query : {};
+    const source = typeof query.source === "string" && query.source.trim() ? query.source.trim() : "";
+    if (source) {
+      this.globalData.source = source;
+      wx.setStorageSync("v2-entry-source", source);
+    } else {
+      this.globalData.source = wx.getStorageSync("v2-entry-source") || "direct";
+    }
   }
 });

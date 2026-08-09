@@ -1,114 +1,116 @@
-# 部署与上线说明
+# V2 部署说明
 
-## 1. 准备事项
+## 1. 准备
 
-- 已认证微信小程序 AppID
-- 微信开发者工具
-- Node.js 18+
-- CloudBase CLI
-- 小程序主体资料、门店 logo、客服手机号、隐私政策文本
+- 已认证的小程序 AppID 与 CloudBase 环境
+- CloudBase CLI、Node.js 18+
+- 正式收款前准备微信支付普通商户号、API 证书私钥、微信支付公钥和 32 字节 APIv3 密钥
 
-## 2. 云开发环境
+建议开发、体验、生产使用不同 CloudBase 环境和不同密钥。
 
-在微信开发者工具内创建三套环境：
-
-- `dev`
-- `staging`
-- `prod`
-
-小程序配置文件 `apps/miniprogram/miniprogram/config.js` 和后台 `.env` 里都填对应环境 ID。
-
-如需多门店动态切换，小程序无需为每个门店单独改包；只需要保证分享链接或二维码中带上 `storeId`。
-
-## 3. 安装与构建
+## 2. 构建与数据库
 
 ```bash
 npm install
-npm run build:shared
-npm run build:cloudfunctions
-npm run build:admin
+npm run review
+npm run build:release
 ```
 
-构建完成后：
+在 CloudBase 创建 `docs/cloudbase-indexes.json` 中列出的 `v2_` 集合和索引。所有集合关闭客户端直接读写，只允许云函数访问。
 
-- 云函数产物在 `cloudfunctions/release`
-- 后台静态站点产物在 `apps/admin-web/dist`
+## 3. 云函数
 
-## 4. 创建集合与索引
+构建后部署 `cloudfunctions/release` 中的五个函数：
 
-在云开发控制台创建以下集合：
+- `v2-customer-api`
+- `v2-owner-api`
+- `v2-system-api`
+- `v2-payment-notify`
+- `v2-refund-notify`
 
-- `members`
-- `invite_relations`
-- `visit_records`
-- `reward_rules`
-- `point_exchange_items`
-- `member_point_transactions`
-- `dish_vouchers`
-- `voucher_redemptions`
-- `staff_users`
-- `audit_logs`
+所有函数配置：
 
-索引配置参考 [cloudbase-indexes.json](/C:/workspace/zxf/docs/cloudbase-indexes.json)。
+```text
+NODE_ENV=production
+STORE_ID=store-main
+SESSION_SECRET=<至少 32 字节随机值>
+BOOTSTRAP_SECRET=<独立随机值，仅初始化和账号恢复使用>
+SYSTEM_JOB_SECRET=<独立随机值，仅定时任务使用>
+PAYMENT_PROVIDER=wechat
+```
 
-## 5. 初始化奖励规则
+给 `v2-payment-notify`、`v2-refund-notify` 开通公网 HTTP 访问，将所得 HTTPS 地址分别填入以下变量，并同步到需要调用支付的函数：
 
-将 [seed-reward-rules.json](/C:/workspace/zxf/docs/seed-reward-rules.json) 中的规则通过后台导入，或先手动创建同等规则。
+```text
+WECHAT_PAY_APP_ID=<小程序 AppID>
+WECHAT_PAY_MCH_ID=<普通商户号>
+WECHAT_PAY_CERT_SERIAL=<商户 API 证书序列号>
+WECHAT_PAY_PRIVATE_KEY=<PEM 原文或 PEM 的 Base64>
+WECHAT_PAY_PUBLIC_KEY_ID=<PUB_KEY_ID_xxx>
+WECHAT_PAY_PUBLIC_KEY=<微信支付公钥 PEM 原文或 Base64>
+WECHAT_PAY_API_V3_KEY=<32 字节 APIv3 密钥>
+WECHAT_PAY_NOTIFY_URL=<v2-payment-notify HTTPS 地址>
+WECHAT_REFUND_NOTIFY_URL=<v2-refund-notify HTTPS 地址>
+```
 
-## 6. 部署云函数
+定时器每分钟调用 `v2-system-api` 两次，事件分别为：
 
-在 CloudBase CLI 登录后部署 `cloudfunctions/release` 下的函数目录，函数名与目录名保持一致：
+```json
+{"action":"payments.reconcile","secret":"<SYSTEM_JOB_SECRET>","payload":{}}
+```
 
-- `auth-login`
-- `bootstrap-store-owner`
-- `member-bootstrap`
-- `member-state`
-- `member-records`
-- `invite-bind`
-- `invite-overview`
-- `staff-profile`
-- `visit-settle-first-visit`
-- `voucher-list-mine`
-- `voucher-redeem`
-- `staff-member-search`
-- `admin-dashboard`
-- `admin-rules-list`
-- `admin-members-query`
-- `admin-rules-save`
-- `admin-binding-adjust`
-- `admin-staff-manage`
-- `admin-audit-list`
+```json
+{"action":"refunds.reconcile","secret":"<SYSTEM_JOB_SECRET>","payload":{}}
+```
 
-同时在云函数环境变量中配置：
+回调与主动查询都会进入相同幂等事务；定时任务用于处理回调延迟或丢失。
 
-- `SESSION_SECRET`
-- `BOOTSTRAP_SECRET`
+## 4. 首次初始化与账号恢复
 
-首次初始化老板账号有两种方式：
+在 CloudBase 控制台调用一次 `v2-system-api`：
 
-- 打开老板后台登录页，切到“首次初始化”，输入门店编号、初始化口令和老板账号密码
-- 按 [store-bootstrap.md](/C:/workspace/zxf/docs/store-bootstrap.md) 用脚本初始化
+```json
+{
+  "action": "setup.initialize",
+  "secret": "<BOOTSTRAP_SECRET>",
+  "payload": {
+    "storeName": "阿福肉片",
+    "announcement": "新鲜现做，叫号取餐",
+    "username": "owner",
+    "password": "<至少 8 位强密码>",
+    "displayName": "老板"
+  }
+}
+```
 
-其中 `-ManagedStoreIds` 支持逗号分隔和空格分隔两种写法。
+初始化后默认暂停营业，并生成一份福鼎肉片、辣度、小料以及一项 100 积分商品券。老板登录后台检查价格和积分后再开启营业。
 
-## 7. 部署后台
+忘记密码或更换老板微信不影响后台账号。使用 `setup.resetOwner` 和 `BOOTSTRAP_SECRET` 重设账号，旧登录会立即失效：
 
-将 `apps/admin-web/dist` 发布到 CloudBase 静态托管，并在后台环境变量中配置：
+```json
+{"action":"setup.resetOwner","secret":"<BOOTSTRAP_SECRET>","payload":{"username":"owner","password":"<新强密码>","displayName":"老板"}}
+```
 
-- `VITE_TCB_ENV_ID`
+## 5. 商家网站
 
-## 8. 小程序提审前检查
+构建前设置：
 
-- `apps/miniprogram/project.config.json` 里替换正式 AppID
-- `apps/miniprogram/miniprogram/config.js` 填入正式环境 ID
-- 开发版联调通过
-- 体验版给老板和店员验收
-- 隐私保护指引、活动规则、客服入口都已配置
-- 多门店场景下，确认门店二维码或分享链接都带有正确的 `storeId`
+```text
+VITE_TCB_ENV_ID=<CloudBase 环境 ID>
+```
 
-## 9. 回滚策略
+运行 `npm run build:admin`，把 `apps/admin-web/dist` 发布到 CloudBase 静态托管，并在 CloudBase 开启匿名登录。匿名身份只负责调用云函数，后台业务仍要求 8 小时老板会话令牌。
 
-- 如规则异常，老板先在后台关闭对应规则
-- 静态后台回滚到上一个托管版本
-- 小程序保留上一个稳定包，必要时重新提交前一版本
-- 保留 `audit_logs` 与 `visit_records`，不做破坏性回滚
+## 6. 顾客小程序与摊位二维码
+
+- 在 `apps/miniprogram/project.config.json` 填正式 AppID。
+- 在 `apps/miniprogram/miniprogram/config.js` 填生产 CloudBase 环境 ID。
+- 微信开发者工具导入 `apps/miniprogram`，上传体验版并完成真实支付与退款联调。
+- 在微信公众平台生成指向 `pages/home/home?source=stall` 的小程序码，下载后印在摊位。扫码会直接进入点餐首页，不需要维护普通网址二维码。
+
+## 7. 上线门槛
+
+- 支付、查单、回调、退款和退款回调在真实商户环境各完成至少一笔。
+- 重复回调不重复加积分，退款重复通知不重复扣积分。
+- 商家网站在桌面和手机浏览器完成订单、商品、兑换、用户和设置点击验收。
+- 小程序体验版完成点餐、商品券下单、取餐号、邀请绑定和积分明细验收。
