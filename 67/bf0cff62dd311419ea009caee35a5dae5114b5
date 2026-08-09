@@ -1,0 +1,147 @@
+apps/admin-web/src/app/MerchantContext.tsx
+  s_8f688ecc677e50::t_c9967d6bf93633 1-2,4-5,7,10-14,23-26,36-39,53,63-113,123,130,132-134,137-144,147,149
+apps/admin-web/src/app/MerchantShell.tsx
+  s_8f688ecc677e50::t_5e7756701867c7 2,4,6,29,74-84
+apps/admin-web/src/components/Button.tsx
+  s_8f688ecc677e50::t_6ac1bafecaefb4 16
+apps/admin-web/src/components/StatusBadge.tsx
+  s_8f688ecc677e50::t_f38c4e6873c4b0 9-10
+apps/admin-web/src/lib/api.ts
+  s_8f688ecc677e50::t_487ed348d6cb99 3-4,27-28,55,62-73,104-105,119
+apps/admin-web/src/lib/new-order-alert.ts
+  s_8f688ecc677e50::t_03f0942ab94eff 1-36
+apps/admin-web/src/lib/preferences.ts
+  s_8f688ecc677e50::t_06e2f879a77f29 1-17
+apps/admin-web/src/lib/resource-cache.ts
+  s_8f688ecc677e50::t_f3491cfa05310d 1-18
+apps/admin-web/src/mocks/mockApi.ts
+  s_8f688ecc677e50::t_a2c9c927d72a4a 2-3,35-39,43-44,87,89,124,137,141,154,162-177,185,201-203,245-251,268,279,291-307
+apps/admin-web/src/pages/DashboardPage.tsx
+  s_8f688ecc677e50::t_9a7c2a100e446b 10-12,16-17,19,30
+apps/admin-web/src/pages/ExchangePage.tsx
+  s_8f688ecc677e50::t_502596003287bb 2,8-10,17-18,20,27,30,64,71
+apps/admin-web/src/pages/MembersPage.tsx
+  s_8f688ecc677e50::t_d63916627c4ab2 9-11,16,18,24-29
+apps/admin-web/src/pages/OrdersPage.tsx
+  s_8f688ecc677e50::t_4c6004c3cdbfab 1-2,7,10,24-27,37-56,60,62-63,73-75,77-78,88,92-124,131,138-149,158,174,180,182-183,194,200,205-206,220,227-229,234,241
+apps/admin-web/src/pages/ProductsPage.tsx
+  s_8f688ecc677e50::t_f4a113be3e933f 2-3,9,11-15,32,53,67-69,74-76,80-89,119-141,149,152-170,180,187,194,198-207,215,223,245-246
+apps/admin-web/src/pages/SettingsPage.tsx
+  s_8f688ecc677e50::t_70cdfc0fec5407 7-9,13-14,20,23-25,37-42,59
+apps/admin-web/src/styles/global.css
+  s_8f688ecc677e50::t_625a3e7fafc22f 19,26-27,49-51,120,127-138,151,153,163-164,169,676-678,697-700,729,736-738,751-764,830,832,840-894,897,905,934-935,984-991,1138-1139,1222-1236,1287-1334,1345,1482-1483,1496,1554-1675,1690-1693,1724-1725,1738,1805-1806,1822-1831,1874-1877,1886-1889,2104,2648-2649,2659-2661,2669-2672,2676,2741-2742,2753
+apps/admin-web/src/test/App.test.tsx
+  s_8f688ecc677e50::t_f034a269785a38 4-6,12,14-15,53-94
+apps/admin-web/src/test/deploy.test.ts
+  s_8f688ecc677e50::t_8eefd24cb56da8 1-19
+apps/miniprogram/miniprogram/app.js
+  s_8f688ecc677e50::t_370b51cfa5f29d 2,4,21-24
+apps/miniprogram/miniprogram/app.json
+  s_8f688ecc677e50::t_8928f94f8084f8 8,30
+apps/miniprogram/miniprogram/app.wxss
+  s_8f688ecc677e50::t_82c8a2365674e0 228-232
+apps/miniprogram/miniprogram/pages/benefits/benefits.js
+  s_8f688ecc677e50::t_81b831c40b918c 3,6-8,22,26-34,41-48,52-71,73,76,78-83,94-96,99-106,110-114,122-123
+apps/miniprogram/miniprogram/pages/benefits/benefits.wxml
+  s_8f688ecc677e50::t_73067d7ac1c0af 17-20,22-34,39-41,44-52
+apps/miniprogram/miniprogram/pages/benefits/benefits.wxss
+  s_8f688ecc677e50::t_59b7305511cd04 1-208,212,214
+apps/miniprogram/miniprogram/pages/checkout/checkout.js
+  s_8f688ecc677e50::t_6a9e90448cbc5a 2,11-14,22-25,34-45,50-54,57-67,74,76,78-81,83-94,114-125,128-146
+apps/miniprogram/miniprogram/pages/checkout/checkout.wxml
+  s_8f688ecc677e50::t_0b191d3439d79b 3-5,11-14,16-19,23,28,34-37,40,42,50-51
+apps/miniprogram/miniprogram/pages/checkout/checkout.wxss
+  s_8f688ecc677e50::t_8ddbaff5242215 2-3,8-9,12-14,20-22,24-27,30,34-35
+apps/miniprogram/miniprogram/pages/coupon-use/coupon-use.js
+  s_8f688ecc677e50::t_9b74d127b9be4f 18-20,22
+apps/miniprogram/miniprogram/pages/coupon-use/coupon-use.wxml
+  s_8f688ecc677e50::t_e6aed3c4b9f345 6,19-20
+apps/miniprogram/miniprogram/pages/home/home.js
+  s_8f688ecc677e50::t_95b4ac32e0a03c 2-17,23-28,33,37-73,79-83,85-87,89-90,93,100-101,106-119,127-130,132-133,135-138,140-189,195-199,206-227,231,237-238,240,243,258,260,267-268,270-273,289-314,316,322-367,371-374
+apps/miniprogram/miniprogram/pages/home/home.wxml
+  s_8f688ecc677e50::t_fbd9681fb3d619 1,6,14-16,18-19,26-27,29-32,35-47,49-53,55-81,84,86-98,100-102,105-106,111-121,124-152,154,157-207
+apps/miniprogram/miniprogram/pages/home/home.wxss
+  s_8f688ecc677e50::t_d6ac5d2109f5ab 1-19,21-53,55-69,71-78,80-110,112-136,138-139
+apps/miniprogram/miniprogram/pages/orders/orders.js
+  s_8f688ecc677e50::t_47e55541677f74 3-6,11-15,17,25-30,32-35,37-42
+apps/miniprogram/miniprogram/pages/orders/orders.wxml
+  s_8f688ecc677e50::t_2be69e6c5ec4cb 14,31-33
+apps/miniprogram/miniprogram/pages/payment-result/payment-result.js
+  s_8f688ecc677e50::t_d3379a40b2600f 2,31-33,38,42-49
+apps/miniprogram/miniprogram/pages/payment-result/payment-result.wxml
+  s_8f688ecc677e50::t_460286cf24b2f3 8,18-35
+apps/miniprogram/miniprogram/pages/payment-result/payment-result.wxss
+  s_8f688ecc677e50::t_3fefd6d75b01a6 10-11
+apps/miniprogram/miniprogram/pages/profile/profile.js
+  s_8f688ecc677e50::t_9f6c7d2cc3fbe6 2,5-7,11-18,22-41,44,58
+apps/miniprogram/miniprogram/services/v2.js
+  s_8f688ecc677e50::t_db28110719f807 9-10,26-34,36-37,39-40,42-43,45,48
+apps/miniprogram/miniprogram/utils/v2-cache.js
+  s_8f688ecc677e50::t_1cb4265b4a89cc 1-29
+apps/miniprogram/miniprogram/utils/v2-cart.js
+  s_8f688ecc677e50::t_6e3c535ce13a9b 22-25,27-38,46-171,182,185,188-222,229-242
+apps/miniprogram/miniprogram/utils/v2-format.js
+  s_8f688ecc677e50::t_9d8db1720b30ad 33-34,39-40,42
+apps/miniprogram/tests/v2-architecture.test.cjs
+  s_8f688ecc677e50::t_22c0dc59daa4f9 16,20,51-56,59-103
+apps/miniprogram/tests/v2-cart-format.test.cjs
+  s_8f688ecc677e50::t_f088941b266dbc 17,23,34-69,76,79,83-85
+apps/miniprogram/tests/v2-page-flows.test.cjs
+  s_8f688ecc677e50::t_20bc46efc0c7d9 46,51-52,56-176,180,183,188,195,198-199,204-335,348,357-378,394,404,408-422
+cloudfunctions/src/handlers/v2.customer-api.ts
+  s_8f688ecc677e50::t_3923c7ae904973 11,34
+cloudfunctions/src/handlers/v2.owner-api.ts
+  s_8f688ecc677e50::t_6f9908f5aabdd0 17-18,58-59
+cloudfunctions/src/handlers/v2.system-api.ts
+  s_8f688ecc677e50::t_ac0172282d036a 9,13-23,33,36-38
+cloudfunctions/src/v2/application.ts
+  s_8f688ecc677e50::t_421033c815c742 12,21-22,34,67-93,119-151,169-207,229,233-234,237-242,244,248-249,251-252,266-309,318-321,323-330,334-338,344,355-388,390,393,404-406,411-425,484,495,525-540,544-547,550-552,555,570,588-593,595,660-664,668,688-709,754-759,809-810,813-828,837,888-895,925-938,944-946,988,990-1013,1015-1019,1026-1028,1030-1039
+cloudfunctions/src/v2/owner-auth.ts
+  s_8f688ecc677e50::t_024db2456aadf9 1-2,8-12,22,28-78,80,85,87-89,92,99-102
+cloudfunctions/src/v2/repository.ts
+  s_8f688ecc677e50::t_dd29d75297afae 3,24,34,38-49,83-84,92-94,121-122,134,145,160,171,179,190,208-217,234-235,272-276,300,310-311,350,354,424-430,458,469-470,507-508
+cloudfunctions/src/v2/setup.ts
+  s_8f688ecc677e50::t_040d68d33b557a 1-2,22,46-55,59-60,103,127-128,132,150-151
+cloudfunctions/tests/v2-application.test.ts
+  s_8f688ecc677e50::t_fa7e9d29489add 1-2,27,67,114-163,165-176,181-182,196-197,221-282,287-288,302,309-310,326-387,402-403,432-433,455-556,562-564,569-594,598-605,650-676,712,719-739
+cloudfunctions/tests/v2-system-handler.test.ts
+  s_8f688ecc677e50::t_ff95a2e8ccdd52 1-24
+cloudfunctions/tests/wechat-payment.test.ts
+  s_8f688ecc677e50::t_b38dbe7018bcea 92
+docs/cloudbase-indexes.json
+  s_8f688ecc677e50::t_3bf82cb243e0c8 12-15,26,46
+docs/deployment.md
+  s_8f688ecc677e50::t_94e9a92873aed8 31-32,45-46,64-66,76-77,98,122-123
+packages/shared/src/v2/pricing.ts
+  s_8f688ecc677e50::t_526e38e684ec3a 89,97-99
+packages/shared/src/v2/schemas.ts
+  s_8f688ecc677e50::t_b7e6b55f56f5dc 42,86-109,113-115,128,143-149,160
+packages/shared/src/v2/state-machines.ts
+  s_8f688ecc677e50::t_f40d22613063d4 29-30
+packages/shared/src/v2/types.ts
+  s_8f688ecc677e50::t_876b14f1b56665 1,11,44-50,52-53,103-107,132-143,172-173,227,231-232
+packages/shared/tests/v2-domain.test.ts
+  s_8f688ecc677e50::t_83a11f4386c2ab 7,9-10,20,97-122,140-145,151,166-172
+scripts/deploy-admin-web.mjs
+  s_8f688ecc677e50::t_aa466791d292a9 14-26,28
+scripts/deploy-cloudfunctions.mjs
+  s_8f688ecc677e50::t_a203439de369b0 31-38,42,55-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "67bf0cff62dd311419ea009caee35a5dae5114b5",
+  "prompts": {},
+  "sessions": {
+    "s_8f688ecc677e50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe272-c5ca-7303-80b2-161652f0c965",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
