@@ -28,10 +28,18 @@ if (!functionDirs.length) {
 
 console.log(`准备部署 ${functionDirs.length} 个云函数到环境 ${envId}`);
 const executable = process.platform === "win32" ? "tcb.cmd" : "tcb";
+const region = process.env.TCB_REGION?.trim() || "ap-shanghai";
+const functionTimeouts = new Map([
+  ["v2-customer-api", 10],
+  ["v2-owner-api", 10],
+  ["v2-system-api", 60],
+  ["v2-payment-notify", 10],
+  ["v2-refund-notify", 10]
+]);
 for (const functionDir of functionDirs) {
   console.log(`\n==> 部署云函数 ${functionDir.name}`);
   const result = spawnSync(executable, [
-    "fn", "deploy", functionDir.name,
+    "--yes", "fn", "deploy", functionDir.name,
     "-e", envId,
     "--force",
     "--deployMode", "zip"
@@ -43,6 +51,21 @@ for (const functionDir of functionDirs) {
   if (result.error || result.status !== 0) {
     console.error(`云函数 ${functionDir.name} 部署失败，请确认 tcb 登录状态和环境权限。`);
     process.exit(result.status || 1);
+  }
+
+  const timeout = functionTimeouts.get(functionDir.name);
+  if (timeout) {
+    console.log(`==> 设置 ${functionDir.name} 超时为 ${timeout} 秒`);
+    const configResult = spawnSync(executable, [
+      "-r", region,
+      "api", "scf", "UpdateFunctionConfiguration",
+      "--body", JSON.stringify({ FunctionName: functionDir.name, Namespace: envId, Timeout: timeout }),
+      "--json"
+    ], { cwd: root, stdio: "inherit" });
+    if (configResult.error || configResult.status !== 0) {
+      console.error(`云函数 ${functionDir.name} 超时配置失败。可通过 TCB_REGION 指定环境地域后重试。`);
+      process.exit(configResult.status || 1);
+    }
   }
 }
 

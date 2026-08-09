@@ -15,9 +15,11 @@ Page({
       return Promise.resolve();
     }
     this.setData({ loading: true, error: "" });
-    return Promise.all([api.getHome(), api.listCoupons()]).then(([home, coupons]) => {
+    return Promise.all([api.getHome(), api.listCoupons()]).then((results) => {
+      const home = results[0];
+      const coupons = results[1];
       const coupon = (coupons || []).find((item) => item._id === this.data.couponId);
-      const source = coupon && (home.products || []).find((item) => item._id === coupon.productId);
+      const source = coupon && (coupon.productSnapshot || (home.products || []).find((item) => item._id === coupon.productId));
       if (!coupon || coupon.status !== "AVAILABLE") throw new Error("这张商品券当前不能使用");
       if (!source) throw new Error("指定商品暂时不可下单");
       const product = JSON.parse(JSON.stringify(source));

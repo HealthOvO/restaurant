@@ -1,5 +1,7 @@
 import type {
   V2DashboardStats,
+  V2Category,
+  V2CategorySaveInput,
   V2ExchangeItem,
   V2ExchangeItemSaveInput,
   V2Member,
@@ -22,6 +24,8 @@ export interface MerchantApi {
   refundOrder(token: string, orderId: string): Promise<V2Order>;
   listProducts(token: string): Promise<V2Product[]>;
   saveProduct(token: string, input: V2ProductSaveInput): Promise<V2Product>;
+  listCategories(token: string): Promise<V2Category[]>;
+  saveCategory(token: string, input: V2CategorySaveInput): Promise<V2Category>;
   listExchangeItems(token: string): Promise<V2ExchangeItem[]>;
   saveExchangeItem(token: string, input: V2ExchangeItemSaveInput): Promise<V2ExchangeItem>;
   searchMembers(token: string, query: string): Promise<V2Member[]>;
@@ -48,16 +52,25 @@ interface ApiResponse<T> {
 const cloudEnv = import.meta.env.VITE_TCB_ENV_ID?.trim();
 let cloudAppPromise: Promise<any> | undefined;
 let anonymousReady = false;
+let anonymousReadyPromise: Promise<void> | undefined;
 
 async function cloudApp() {
   if (!cloudEnv) throw new MerchantApiError("后台尚未配置云开发环境", "SYSTEM_NOT_READY");
   cloudAppPromise ??= import("@cloudbase/js-sdk").then(({ default: cloudbase }) => cloudbase.init({ env: cloudEnv }));
   const app = await cloudAppPromise;
   if (!anonymousReady) {
-    const auth = app.auth({ persistence: "session" });
-    const state = await auth.getLoginState?.();
-    if (!state) await auth.anonymousAuthProvider().signIn();
-    anonymousReady = true;
+    anonymousReadyPromise ??= (async () => {
+      const auth = app.auth({ persistence: "session" });
+      const state = await auth.getLoginState?.();
+      if (!state) await auth.anonymousAuthProvider().signIn();
+      anonymousReady = true;
+    })();
+    try {
+      await anonymousReadyPromise;
+    } catch (error) {
+      anonymousReadyPromise = undefined;
+      throw error;
+    }
   }
   return app;
 }
@@ -88,6 +101,8 @@ const cloudApi: MerchantApi = {
   refundOrder: (sessionToken, orderId) => callOwner("orders.refund", { sessionToken, orderId }),
   listProducts: (sessionToken) => callOwner("products.list", { sessionToken }),
   saveProduct: (sessionToken, input) => callOwner("products.save", { sessionToken, ...input }),
+  listCategories: (sessionToken) => callOwner("categories.list", { sessionToken }),
+  saveCategory: (sessionToken, input) => callOwner("categories.save", { sessionToken, ...input }),
   listExchangeItems: (sessionToken) => callOwner("exchange.list", { sessionToken }),
   saveExchangeItem: (sessionToken, input) => callOwner("exchange.save", { sessionToken, ...input }),
   searchMembers: (sessionToken, query) => callOwner("members.search", { sessionToken, query }),
@@ -101,5 +116,6 @@ export async function createMerchantApi(): Promise<MerchantApi> {
     const { mockMerchantApi } = await import("../mocks/mockApi");
     return mockMerchantApi;
   }
+  void cloudApp().catch(() => undefined);
   return cloudApi;
 }

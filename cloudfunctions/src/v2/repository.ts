@@ -1,5 +1,6 @@
 import {
   businessDateAt,
+  type V2Category,
   type V2Coupon,
   type V2DashboardStats,
   type V2ExchangeItem,
@@ -20,6 +21,7 @@ export const V2_COLLECTIONS = {
   members: "v2_members",
   inviteRelations: "v2_invite_relations",
   products: "v2_products",
+  categories: "v2_categories",
   exchangeItems: "v2_exchange_items",
   coupons: "v2_coupons",
   orders: "v2_orders",
@@ -29,8 +31,21 @@ export const V2_COLLECTIONS = {
   pickupCounters: "v2_pickup_counters",
   storeConfig: "v2_store_config",
   ownerAccounts: "v2_owner_accounts",
+  ownerLoginAttempts: "v2_owner_login_attempts",
   locks: "v2_locks"
 } as const;
+
+export interface V2OwnerLoginAttempt {
+  _id: string;
+  storeId: string;
+  usernameKey: string;
+  attemptCount: number;
+  windowStartedAt: string;
+  lastAttemptAt: string;
+  lockedUntil?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface V2PickupCounter {
   _id: string;
@@ -65,6 +80,8 @@ export interface V2Transaction {
   saveCoupon(coupon: V2Coupon): Promise<void>;
   getPointLedger(id: string): Promise<V2PointLedger | null>;
   savePointLedger(ledger: V2PointLedger): Promise<void>;
+  getOwnerLoginAttempt(id: string): Promise<V2OwnerLoginAttempt | null>;
+  saveOwnerLoginAttempt(attempt: V2OwnerLoginAttempt): Promise<void>;
   nextPickupNumber(businessDate: string, now: string): Promise<number>;
 }
 
@@ -72,6 +89,9 @@ export interface V2Repository {
   readonly storeId: string;
   getStoreConfig(): Promise<V2StoreConfig | null>;
   saveStoreConfig(config: V2StoreConfig): Promise<void>;
+  listCategories(includeDisabled?: boolean): Promise<V2Category[]>;
+  getCategory(id: string): Promise<V2Category | null>;
+  saveCategory(category: V2Category): Promise<void>;
   listProducts(includeDisabled?: boolean): Promise<V2Product[]>;
   getProduct(id: string): Promise<V2Product | null>;
   saveProduct(product: V2Product): Promise<void>;
@@ -98,6 +118,8 @@ export interface V2Repository {
   getOwnerByUsername(username: string): Promise<V2OwnerAccount | null>;
   getOwnerById(id: string): Promise<V2OwnerAccount | null>;
   saveOwner(owner: V2OwnerAccount): Promise<void>;
+  getOwnerLoginAttempt(id: string): Promise<V2OwnerLoginAttempt | null>;
+  saveOwnerLoginAttempt(attempt: V2OwnerLoginAttempt): Promise<void>;
   dashboard(now: Date, dayBoundaryTime: string): Promise<V2DashboardStats>;
   listPaymentsDue(nowIso: string, limit: number): Promise<V2Payment[]>;
   listRefundsDue(nowIso: string, limit: number): Promise<V2Refund[]>;
@@ -109,6 +131,7 @@ type RecordMap<T extends { _id: string }> = Map<string, T>;
 
 interface InMemoryData {
   storeConfig: RecordMap<V2StoreConfig>;
+  categories: RecordMap<V2Category>;
   products: RecordMap<V2Product>;
   exchangeItems: RecordMap<V2ExchangeItem>;
   members: RecordMap<V2Member>;
@@ -119,6 +142,7 @@ interface InMemoryData {
   coupons: RecordMap<V2Coupon>;
   pointLedger: RecordMap<V2PointLedger>;
   ownerAccounts: RecordMap<V2OwnerAccount>;
+  ownerLoginAttempts: RecordMap<V2OwnerLoginAttempt>;
   pickupCounters: RecordMap<V2PickupCounter>;
 }
 
@@ -133,6 +157,7 @@ function cloneMap<T extends { _id: string }>(source: RecordMap<T>): RecordMap<T>
 function emptyInMemoryData(): InMemoryData {
   return {
     storeConfig: new Map(),
+    categories: new Map(),
     products: new Map(),
     exchangeItems: new Map(),
     members: new Map(),
@@ -143,6 +168,7 @@ function emptyInMemoryData(): InMemoryData {
     coupons: new Map(),
     pointLedger: new Map(),
     ownerAccounts: new Map(),
+    ownerLoginAttempts: new Map(),
     pickupCounters: new Map()
   };
 }
@@ -150,6 +176,7 @@ function emptyInMemoryData(): InMemoryData {
 function cloneData(source: InMemoryData): InMemoryData {
   return {
     storeConfig: cloneMap(source.storeConfig),
+    categories: cloneMap(source.categories),
     products: cloneMap(source.products),
     exchangeItems: cloneMap(source.exchangeItems),
     members: cloneMap(source.members),
@@ -160,6 +187,7 @@ function cloneData(source: InMemoryData): InMemoryData {
     coupons: cloneMap(source.coupons),
     pointLedger: cloneMap(source.pointLedger),
     ownerAccounts: cloneMap(source.ownerAccounts),
+    ownerLoginAttempts: cloneMap(source.ownerLoginAttempts),
     pickupCounters: cloneMap(source.pickupCounters)
   };
 }
@@ -175,6 +203,16 @@ function mapSet<T extends { _id: string }>(map: RecordMap<T>, value: T): void {
 
 function values<T extends { _id: string }>(map: RecordMap<T>): T[] {
   return Array.from(map.values(), cloneValue);
+}
+
+function sortOwnerOrders(rows: V2Order[], status?: V2Order["status"]): V2Order[] {
+  const oldestFirst = status === "WAITING_FULFILLMENT";
+  return rows.sort((left, right) => {
+    const byTime = left.createdAt.localeCompare(right.createdAt);
+    if (byTime !== 0) return oldestFirst ? byTime : -byTime;
+    const byNumber = left.orderNo.localeCompare(right.orderNo);
+    return oldestFirst ? byNumber : -byNumber;
+  });
 }
 
 function createMemoryTransaction(data: InMemoryData, storeId: string): V2Transaction {
@@ -193,6 +231,8 @@ function createMemoryTransaction(data: InMemoryData, storeId: string): V2Transac
     saveCoupon: async (coupon) => mapSet(data.coupons, coupon),
     getPointLedger: async (id) => mapGet(data.pointLedger, id),
     savePointLedger: async (ledger) => mapSet(data.pointLedger, ledger),
+    getOwnerLoginAttempt: async (id) => mapGet(data.ownerLoginAttempts, id),
+    saveOwnerLoginAttempt: async (attempt) => mapSet(data.ownerLoginAttempts, attempt),
     nextPickupNumber: async (businessDate, now) => {
       const id = `${storeId}:${businessDate}`;
       const current = data.pickupCounters.get(id);
@@ -229,6 +269,11 @@ export class InMemoryV2Repository implements V2Repository {
 
   async getStoreConfig() { return values(this.data.storeConfig).find((item) => item.storeId === this.storeId) ?? null; }
   async saveStoreConfig(config: V2StoreConfig) { mapSet(this.data.storeConfig, config); }
+  async listCategories(includeDisabled = false) {
+    return values(this.data.categories).filter((item) => item.storeId === this.storeId && (includeDisabled || item.enabled)).sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  async getCategory(id: string) { return mapGet(this.data.categories, id); }
+  async saveCategory(category: V2Category) { mapSet(this.data.categories, category); }
   async listProducts(includeDisabled = false) {
     return values(this.data.products).filter((item) => item.storeId === this.storeId && (includeDisabled || item.enabled)).sort((a, b) => a.sortOrder - b.sortOrder);
   }
@@ -252,7 +297,7 @@ export class InMemoryV2Repository implements V2Repository {
   async getRefundByOutRefundNo(outRefundNo: string) { return values(this.data.refunds).find((item) => item.outRefundNo === outRefundNo) ?? null; }
   async getCoupon(id: string) { return mapGet(this.data.coupons, id); }
   async listOrdersByMember(memberId: string) { return values(this.data.orders).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
-  async listOwnerOrders(status?: V2Order["status"]) { return values(this.data.orders).filter((item) => !status || item.status === status).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
+  async listOwnerOrders(status?: V2Order["status"]) { return sortOwnerOrders(values(this.data.orders).filter((item) => !status || item.status === status), status); }
   async listCouponsByMember(memberId: string) { return values(this.data.coupons).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   async listPointLedgerByMember(memberId: string) { return values(this.data.pointLedger).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   async searchMembers(query: string) {
@@ -262,6 +307,8 @@ export class InMemoryV2Repository implements V2Repository {
   async getOwnerByUsername(username: string) { return values(this.data.ownerAccounts).find((item) => item.username === username) ?? null; }
   async getOwnerById(id: string) { return mapGet(this.data.ownerAccounts, id); }
   async saveOwner(owner: V2OwnerAccount) { mapSet(this.data.ownerAccounts, owner); }
+  async getOwnerLoginAttempt(id: string) { return mapGet(this.data.ownerLoginAttempts, id); }
+  async saveOwnerLoginAttempt(attempt: V2OwnerLoginAttempt) { mapSet(this.data.ownerLoginAttempts, attempt); }
   async listPaymentsDue(nowIso: string, limit: number) { return values(this.data.payments).filter((item) => ["INIT", "NOTPAY"].includes(item.status) && item.nextQueryAt <= nowIso).slice(0, limit); }
   async listRefundsDue(nowIso: string, limit: number) { return values(this.data.refunds).filter((item) => ["PROCESSING", "ABNORMAL"].includes(item.status) && item.nextQueryAt <= nowIso).slice(0, limit); }
 
@@ -300,11 +347,11 @@ export class InMemoryV2Repository implements V2Repository {
 }
 
 function dashboardFromRows(date: string, orders: V2Order[], ledger: V2PointLedger[], newMemberCount: number): V2DashboardStats {
-  const paymentOrders = orders.filter((order) => order.source === "WECHAT_PAY" && Boolean(order.settledAt) && order.status !== "CANCELLED");
+  const paymentOrders = orders.filter((order) => order.paidAmount > 0 && Boolean(order.settledAt) && order.status !== "CANCELLED");
   return {
     businessDate: date,
     paymentOrderCount: paymentOrders.length,
-    couponOrderCount: orders.filter((order) => order.source === "COUPON" && order.status !== "CANCELLED").length,
+    couponOrderCount: orders.filter((order) => (order.source === "COUPON" || order.source === "MIXED" || (order.couponApplications?.length ?? 0) > 0) && order.status !== "CANCELLED").length,
     paymentAmount: paymentOrders.reduce((total, order) => total + order.paidAmount, 0),
     completedOrderCount: orders.filter((order) => order.status === "COMPLETED").length,
     refundCount: orders.filter((order) => order.status === "REFUNDED").length,
@@ -374,6 +421,13 @@ export class CloudV2Repository implements V2Repository {
 
   async getStoreConfig() { return (await cloudList<V2StoreConfig>(V2_COLLECTIONS.storeConfig, { storeId: this.storeId }))[0] ?? null; }
   async saveStoreConfig(config: V2StoreConfig) { await cloudSave(V2_COLLECTIONS.storeConfig, config); }
+  async listCategories(includeDisabled = false) {
+    const where: Record<string, unknown> = { storeId: this.storeId };
+    if (!includeDisabled) where.enabled = true;
+    return (await cloudList<V2Category>(V2_COLLECTIONS.categories, where)).sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  async getCategory(id: string) { return cloudGet<V2Category>(V2_COLLECTIONS.categories, id, this.storeId); }
+  async saveCategory(category: V2Category) { await cloudSave(V2_COLLECTIONS.categories, category); }
   async listProducts(includeDisabled = false) {
     const where: Record<string, unknown> = { storeId: this.storeId };
     if (!includeDisabled) where.enabled = true;
@@ -401,7 +455,7 @@ export class CloudV2Repository implements V2Repository {
   async getRefundByOutRefundNo(outRefundNo: string) { return (await cloudList<V2Refund>(V2_COLLECTIONS.refunds, { storeId: this.storeId, outRefundNo }))[0] ?? null; }
   async getCoupon(id: string) { return cloudGet<V2Coupon>(V2_COLLECTIONS.coupons, id, this.storeId); }
   async listOrdersByMember(memberId: string) { return (await cloudList<V2Order>(V2_COLLECTIONS.orders, { storeId: this.storeId, memberId })).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
-  async listOwnerOrders(status?: V2Order["status"]) { return (await cloudList<V2Order>(V2_COLLECTIONS.orders, { storeId: this.storeId, ...(status ? { status } : {}) })).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
+  async listOwnerOrders(status?: V2Order["status"]) { return sortOwnerOrders(await cloudList<V2Order>(V2_COLLECTIONS.orders, { storeId: this.storeId, ...(status ? { status } : {}) }), status); }
   async listCouponsByMember(memberId: string) { return (await cloudList<V2Coupon>(V2_COLLECTIONS.coupons, { storeId: this.storeId, memberId })).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   async listPointLedgerByMember(memberId: string) { return (await cloudList<V2PointLedger>(V2_COLLECTIONS.pointLedger, { storeId: this.storeId, memberId })).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   async searchMembers(query: string) {
@@ -412,6 +466,8 @@ export class CloudV2Repository implements V2Repository {
   async getOwnerByUsername(username: string) { return (await cloudList<V2OwnerAccount>(V2_COLLECTIONS.ownerAccounts, { storeId: this.storeId, username }))[0] ?? null; }
   async getOwnerById(id: string) { return cloudGet<V2OwnerAccount>(V2_COLLECTIONS.ownerAccounts, id, this.storeId); }
   async saveOwner(owner: V2OwnerAccount) { await cloudSave(V2_COLLECTIONS.ownerAccounts, owner); }
+  async getOwnerLoginAttempt(id: string) { return cloudGet<V2OwnerLoginAttempt>(V2_COLLECTIONS.ownerLoginAttempts, id, this.storeId); }
+  async saveOwnerLoginAttempt(attempt: V2OwnerLoginAttempt) { await cloudSave(V2_COLLECTIONS.ownerLoginAttempts, attempt); }
   async listPaymentsDue(nowIso: string, limit: number) {
     const _ = command();
     const result = await collection(V2_COLLECTIONS.payments).where({ storeId: this.storeId, status: _.in(["INIT", "NOTPAY"]), nextQueryAt: _.lte(nowIso) }).limit(limit).get();
@@ -448,6 +504,8 @@ export class CloudV2Repository implements V2Repository {
       saveCoupon: (row) => txSave(tx, V2_COLLECTIONS.coupons, row, this.storeId),
       getPointLedger: (id) => txGet<V2PointLedger>(tx, V2_COLLECTIONS.pointLedger, id, this.storeId),
       savePointLedger: (row) => txSave(tx, V2_COLLECTIONS.pointLedger, row, this.storeId),
+      getOwnerLoginAttempt: (id) => txGet<V2OwnerLoginAttempt>(tx, V2_COLLECTIONS.ownerLoginAttempts, id, this.storeId),
+      saveOwnerLoginAttempt: (row) => txSave(tx, V2_COLLECTIONS.ownerLoginAttempts, row, this.storeId),
       nextPickupNumber: async (businessDate, now) => {
         const id = `${this.storeId}:${businessDate}`;
         const current = await txGet<V2PickupCounter>(tx, V2_COLLECTIONS.pickupCounters, id, this.storeId);

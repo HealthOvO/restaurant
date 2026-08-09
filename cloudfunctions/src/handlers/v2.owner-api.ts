@@ -14,6 +14,8 @@ const eventSchema = z.object({
     "orders.refund",
     "products.list",
     "products.save",
+    "categories.list",
+    "categories.save",
     "exchange.list",
     "exchange.save",
     "members.search",
@@ -53,6 +55,8 @@ export async function main(event: unknown) {
       case "orders.refund": return application.refundOrder(String(body.orderId ?? ""));
       case "products.list": return application.ownerProducts();
       case "products.save": return application.saveProduct(body);
+      case "categories.list": return application.ownerCategories();
+      case "categories.save": return application.saveCategory(body);
       case "exchange.list": return application.ownerExchangeItems();
       case "exchange.save": return application.saveExchangeItem(body);
       case "members.search": return application.searchMembers(String(body.query ?? ""));

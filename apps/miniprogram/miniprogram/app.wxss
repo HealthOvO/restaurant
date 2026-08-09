@@ -225,6 +225,11 @@ button {
   background: #f6eacb;
 }
 
+.source-mixed {
+  color: #8b3d2a;
+  background: #f6e3dc;
+}
+
 .sheet-mask {
   position: fixed;
   z-index: 90;

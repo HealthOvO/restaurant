@@ -13,11 +13,11 @@ test("V2 manifest exposes only customer ordering pages", () => {
     "pages/benefits/benefits",
     "pages/profile/profile",
     "pages/checkout/checkout",
-    "pages/payment-result/payment-result",
-    "pages/coupon-use/coupon-use"
+    "pages/payment-result/payment-result"
   ]);
   assert.equal(JSON.stringify(manifest).includes("staff"), false);
   assert.equal(JSON.stringify(manifest).includes("店员"), false);
+  assert.equal(manifest.lazyCodeLoading, "requiredComponents");
 });
 
 test("V2 customer API uses one trusted cloud function and never submits storeId", () => {
@@ -48,12 +48,57 @@ test("customer app uses the current Xiongfei brand and CloudBase project config"
 });
 
 test("refunded orders do not claim that points are still earned", () => {
-  const source = fs.readFileSync(path.join(root, "pages", "orders", "orders.wxml"), "utf8");
-  assert.match(source, /item\.status !== 'REFUNDED'/);
-  assert.match(source, /本单积分已退回/);
+  const orders = fs.readFileSync(path.join(root, "pages", "orders", "orders.wxml"), "utf8");
+  const result = fs.readFileSync(path.join(root, "pages", "payment-result", "payment-result.wxml"), "utf8");
+  assert.match(orders, /item\.status !== 'REFUNDED'/);
+  assert.match(orders, /本单积分已回收/);
+  assert.match(result, /order\.status === 'WAITING_FULFILLMENT'.*order\.status === 'COMPLETED'/);
+  assert.match(result, /本单.*积分已回收/);
 });
 
-test("home refreshes points whenever the tab becomes visible", () => {
-  const source = fs.readFileSync(path.join(root, "pages", "home", "home.js"), "utf8");
-  assert.match(source, /onShow\(\)\s*\{[\s\S]*?this\.loadHome\(\);[\s\S]*?\}/);
+test("all tab pages reuse fresh data instead of showing a loader on every switch", () => {
+  for (const page of ["home", "orders", "benefits", "profile"]) {
+    const source = fs.readFileSync(path.join(root, "pages", page, `${page}.js`), "utf8");
+    assert.match(source, /isCacheFresh/);
+    assert.match(source, /onShow\(\)/);
+  }
+});
+
+test("tab pages avoid array destructuring helpers missing from the mini-program runtime", () => {
+  for (const page of ["benefits", "profile", "home"]) {
+    const source = fs.readFileSync(path.join(root, "pages", page, `${page}.js`), "utf8");
+    assert.doesNotMatch(source, /then\s*\(\s*\(\s*\[/);
+  }
+});
+
+test("checkout copy stays concise and does not promise a future pickup number", () => {
+  const checkout = fs.readFileSync(path.join(root, "pages", "checkout", "checkout.wxml"), "utf8");
+  const home = fs.readFileSync(path.join(root, "pages", "home", "home.wxml"), "utf8");
+  assert.doesNotMatch(checkout, /生成取餐号|请留意取餐号|这单吃什么/);
+  assert.doesNotMatch(`${checkout}\n${home}`, /预计/);
+});
+
+test("ordering page exposes merchant categories, coupons and an expandable cart", () => {
+  const home = fs.readFileSync(path.join(root, "pages", "home", "home.wxml"), "utf8");
+  const cart = fs.readFileSync(path.join(root, "utils", "v2-cart.js"), "utf8");
+  assert.match(home, /category-rail/);
+  assert.match(home, /商品券/);
+  assert.match(home, /cart-sheet/);
+  assert.match(cart, /COUPON_ALREADY_IN_CART/);
+});
+
+test("benefits coupon actions use a full-width layout without the clipped side rail", () => {
+  const markup = fs.readFileSync(path.join(root, "pages", "benefits", "benefits.wxml"), "utf8");
+  const styles = fs.readFileSync(path.join(root, "pages", "benefits", "benefits.wxss"), "utf8");
+  assert.match(markup, /coupon-use-button/);
+  assert.match(markup, /还差.*pointsGap.*积分/);
+  assert.doesNotMatch(`${markup}\n${styles}`, /coupon-side/);
+});
+
+test("closing paid ordering does not disable issued coupons", () => {
+  const benefits = fs.readFileSync(path.join(root, "pages", "benefits", "benefits.wxml"), "utf8");
+  const couponUse = fs.readFileSync(path.join(root, "pages", "coupon-use", "coupon-use.wxml"), "utf8");
+  assert.doesNotMatch(`${benefits}\n${couponUse}`, /businessOpen|暂停接单|恢复营业后可使用商品券/);
+  assert.match(benefits, />使用商品券<\/button>/);
+  assert.match(couponUse, />确认使用<\/button>/);
 });

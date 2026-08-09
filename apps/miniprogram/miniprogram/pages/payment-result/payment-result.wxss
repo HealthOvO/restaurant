@@ -7,5 +7,7 @@
 .pickup-label { margin-top: 10rpx; color: #8d8177; font-size: 23rpx; }
 .pickup-number { color: #a44732; font-size: 116rpx; font-weight: 820; line-height: 1; letter-spacing: -4rpx; }
 .result-points { margin: 8rpx 0 12rpx; padding: 12rpx 18rpx; color: #7b4b14; background: #faead5; border-radius: 999rpx; font-size: 23rpx; font-weight: 650; }
+.result-points.is-returned { color: #756a61; background: #f1ebe3; }
+.result-card.is-terminal .state-mark { width: 92rpx; height: 92rpx; font-size: 34rpx; }
 .result-card .primary-button,
 .result-card .quiet-button { width: 100%; margin-top: 8rpx; }

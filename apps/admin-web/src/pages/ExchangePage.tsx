@@ -1,29 +1,33 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Edit3, Plus, TicketPercent } from "lucide-react";
+import { Pencil, Plus, TicketPercent } from "lucide-react";
 import type { V2ExchangeItem, V2ExchangeItemSaveInput, V2Product } from "@restaurant/shared";
 import { useMerchant } from "../app/MerchantContext";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState, PageError, PageLoading } from "../components/PageState";
+import { readResourceCache, writeResourceCache } from "../lib/resource-cache";
+
+const EXCHANGE_CACHE_KEY = "exchange";
 
 const blank = (productId = ""): V2ExchangeItemSaveInput => ({ name: "", productId, pointsCost: 100, validDays: 30, enabled: true, sortOrder: 1 });
 const toInput = (item: V2ExchangeItem): V2ExchangeItemSaveInput => ({ id: item._id, name: item.name, productId: item.productId, pointsCost: item.pointsCost, validDays: item.validDays, enabled: item.enabled, sortOrder: item.sortOrder });
 
 export function ExchangePage() {
   const { api, session, notify } = useMerchant();
-  const [items, setItems] = useState<V2ExchangeItem[]>([]);
-  const [products, setProducts] = useState<V2Product[]>([]);
+  const [items, setItems] = useState<V2ExchangeItem[]>(() => readResourceCache<{ items: V2ExchangeItem[]; products: V2Product[] }>(EXCHANGE_CACHE_KEY)?.items ?? []);
+  const [products, setProducts] = useState<V2Product[]>(() => readResourceCache<{ items: V2ExchangeItem[]; products: V2Product[] }>(EXCHANGE_CACHE_KEY)?.products ?? []);
   const [form, setForm] = useState<V2ExchangeItemSaveInput | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => readResourceCache(EXCHANGE_CACHE_KEY) === undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
 
   const load = useCallback(async () => {
     if (!api || !session) return;
-    setLoading(true);
+    setLoading(readResourceCache(EXCHANGE_CACHE_KEY) === undefined);
     try {
       const [nextItems, nextProducts] = await Promise.all([api.listExchangeItems(session.token), api.listProducts(session.token)]);
+      writeResourceCache(EXCHANGE_CACHE_KEY, { items: nextItems, products: nextProducts });
       setItems(nextItems); setProducts(nextProducts); setError("");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "兑换项加载失败"); }
     finally { setLoading(false); }
@@ -57,14 +61,14 @@ export function ExchangePage() {
               <div><span className={`availability-pill ${item.enabled ? "" : "is-off"}`}>{item.enabled ? "可兑换" : "已下架"}</span><h2>{item.name}</h2><p className="exchange-product">兑换 {item.productName}</p></div>
               <strong className="points-cost">{item.pointsCost}<span>积分</span></strong>
             </div>
-            <footer><span>领取后 {item.validDays} 天内有效</span><Button tone="secondary" onClick={() => { setForm(toInput(item)); setFormError(""); }}><Edit3 size={15} />编辑</Button></footer>
+            <footer><span>领取后 {item.validDays} 天内有效</span><Button tone="secondary" onClick={() => { setForm(toInput(item)); setFormError(""); }}><Pencil size={15} />编辑</Button></footer>
           </article>
         ))}
         {!items.length && <EmptyState title="还没有兑换项" detail="新增后，顾客可用积分换取指定商品。" icon={<TicketPercent size={26} />} />}
       </section>
       <Dialog open={Boolean(form)} title={form?.id ? "编辑兑换项" : "新增兑换项"} description="修改只影响之后兑换的商品券，已发出的券不变。" onClose={() => !saving && setForm(null)}>
         {form && <form className="editor-form" onSubmit={save}>
-          <label className="field"><span>兑换项名称</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如：福鼎肉片兑换券" /></label>
+          <label className="field"><span>兑换项名称</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如：雄飞肉片兑换券" /></label>
           <label className="field"><span>指定商品</span><select value={form.productId} onChange={(event) => setForm({ ...form, productId: event.target.value })}>{products.map((product) => <option key={product._id} value={product._id}>{product.name}</option>)}</select></label>
           <div className="form-grid two-columns">
             <label className="field"><span>所需积分</span><input type="number" min="1" step="1" value={form.pointsCost} onChange={(event) => setForm({ ...form, pointsCost: Math.max(1, Math.trunc(Number(event.target.value || 1))) })} /></label>

@@ -11,8 +11,21 @@ if (!envId) {
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const adminDist = join(root, "apps", "admin-web", "dist");
+const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
+
+console.log(`正在为环境 ${envId} 构建商家后台`);
+const buildResult = spawnSync(npmExecutable, ["run", "build:admin"], {
+  cwd: root,
+  stdio: "inherit",
+  env: { ...process.env, VITE_TCB_ENV_ID: envId }
+});
+if (buildResult.error || buildResult.status !== 0) {
+  console.error("商家后台构建失败，已停止部署。");
+  process.exit(buildResult.status || 1);
+}
+
 if (!existsSync(adminDist)) {
-  console.error(`未找到后台构建产物：${adminDist}。请先执行 npm run build:admin`);
+  console.error(`未找到后台构建产物：${adminDist}`);
   process.exit(1);
 }
 

@@ -30,13 +30,16 @@ const POINT_TYPE = {
 
 function prepareOrder(order) {
   const status = ORDER_STATUS[order.status] || { text: order.status, className: "status-muted" };
+  const sourceText = order.source === "COUPON" ? "商品券" : order.source === "MIXED" ? "支付 + 商品券" : "微信支付";
+  const sourceClass = order.source === "COUPON" ? "source-coupon" : order.source === "MIXED" ? "source-mixed" : "source-pay";
   return {
     ...order,
     statusText: status.text,
     statusClass: status.className,
-    sourceText: order.source === "COUPON" ? "商品券" : "微信支付",
-    sourceClass: order.source === "COUPON" ? "source-coupon" : "source-pay",
+    sourceText,
+    sourceClass,
     amountText: order.source === "COUPON" ? "商品券抵扣" : money(order.paidAmount || order.payableAmount),
+    couponCount: (order.couponApplications || []).length || (order.couponId ? 1 : 0),
     timeText: dateTime(order.createdAt),
     itemText: (order.lineItems || []).map((line) => `${line.productName} ×${line.quantity}`).join("，")
   };

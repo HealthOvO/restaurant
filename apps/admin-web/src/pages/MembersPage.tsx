@@ -6,20 +6,27 @@ import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState, PageError, PageLoading } from "../components/PageState";
 import { formatDateTime, pointTypeLabel } from "../lib/format";
+import { readResourceCache, writeResourceCache } from "../lib/resource-cache";
+
+const MEMBERS_CACHE_KEY = "members";
 
 export function MembersPage() {
   const { api, session } = useMerchant();
   const [query, setQuery] = useState("");
-  const [members, setMembers] = useState<V2Member[]>([]);
+  const [members, setMembers] = useState<V2Member[]>(() => readResourceCache<V2Member[]>(MEMBERS_CACHE_KEY) ?? []);
   const [detail, setDetail] = useState<V2MemberDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => readResourceCache(MEMBERS_CACHE_KEY) === undefined);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
 
   const search = useCallback(async (value = "") => {
     if (!api || !session) return;
-    setLoading(true); setError("");
-    try { setMembers(await api.searchMembers(session.token, value)); }
+    setLoading(value ? true : readResourceCache(MEMBERS_CACHE_KEY) === undefined); setError("");
+    try {
+      const next = await api.searchMembers(session.token, value);
+      if (!value) writeResourceCache(MEMBERS_CACHE_KEY, next);
+      setMembers(next);
+    }
     catch (caught) { setError(caught instanceof Error ? caught.message : "用户查询失败"); }
     finally { setLoading(false); }
   }, [api, session]);

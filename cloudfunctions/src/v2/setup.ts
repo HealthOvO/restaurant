@@ -1,5 +1,5 @@
-import { hashV2OwnerPassword } from "./owner-auth";
-import { DomainError, v2OwnerLoginSchema, type V2ExchangeItem, type V2OwnerAccount, type V2Product, type V2StoreConfig } from "@restaurant/shared";
+import { clearV2OwnerLoginAttempts, hashV2OwnerPassword } from "./owner-auth";
+import { DomainError, v2OwnerLoginSchema, type V2Category, type V2ExchangeItem, type V2OwnerAccount, type V2Product, type V2StoreConfig } from "@restaurant/shared";
 import { z } from "zod";
 import type { V2Repository } from "./repository";
 
@@ -19,6 +19,7 @@ function ids(storeId: string) {
   return {
     owner: `${storeId}:owner`,
     config: `${storeId}:config`,
+    category: `${storeId}:category-main`,
     product: `${storeId}:product-fuding`,
     exchange: `${storeId}:exchange-fuding`
   };
@@ -42,10 +43,21 @@ export async function initializeV2Store(repository: V2Repository, rawInput: unkn
     createdAt: timestamp,
     updatedAt: timestamp
   };
+  const category: V2Category = {
+    _id: id.category,
+    storeId: repository.storeId,
+    name: "招牌肉片",
+    enabled: true,
+    sortOrder: 10,
+    version: 1,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
   const product: V2Product = {
     _id: id.product,
     storeId: repository.storeId,
-    name: "福鼎肉片",
+    categoryId: category._id,
+    name: "雄飞肉片",
     description: "新鲜现打，现点现煮",
     basePrice: 1500,
     enabled: true,
@@ -88,7 +100,7 @@ export async function initializeV2Store(repository: V2Repository, rawInput: unkn
   const exchange: V2ExchangeItem = {
     _id: id.exchange,
     storeId: repository.storeId,
-    name: "福鼎肉片商品券",
+    name: "雄飞肉片商品券",
     productId: product._id,
     productName: product.name,
     pointsCost: 100,
@@ -112,10 +124,12 @@ export async function initializeV2Store(repository: V2Repository, rawInput: unkn
 
   // Store config is written last and acts as the initialization marker. A retry can repair a partial setup.
   await repository.saveOwner(owner);
+  await clearV2OwnerLoginAttempts(repository, owner.username, now);
+  await repository.saveCategory(category);
   await repository.saveProduct(product);
   await repository.saveExchangeItem(exchange);
   await repository.saveStoreConfig(config);
-  return { store: config, product, exchange, owner: { username: owner.username, displayName: owner.displayName } };
+  return { store: config, category, product, exchange, owner: { username: owner.username, displayName: owner.displayName } };
 }
 
 export async function resetV2Owner(repository: V2Repository, rawInput: unknown, now = new Date()) {
@@ -133,5 +147,7 @@ export async function resetV2Owner(repository: V2Repository, rawInput: unknown, 
     updatedAt: now.toISOString()
   };
   await repository.saveOwner(updated);
+  await clearV2OwnerLoginAttempts(repository, existing.username, now);
+  if (updated.username !== existing.username) await clearV2OwnerLoginAttempts(repository, updated.username, now);
   return { username: updated.username, displayName: updated.displayName };
 }

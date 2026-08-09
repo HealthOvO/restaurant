@@ -1,4 +1,4 @@
-export type V2OrderSource = "WECHAT_PAY" | "COUPON";
+export type V2OrderSource = "WECHAT_PAY" | "COUPON" | "MIXED";
 export type V2OrderStatus =
   | "PENDING_PAYMENT"
   | "WAITING_FULFILLMENT"
@@ -8,7 +8,7 @@ export type V2OrderStatus =
   | "REFUNDED";
 export type V2PaymentStatus = "INIT" | "NOTPAY" | "SUCCESS" | "CLOSED" | "REFUND";
 export type V2RefundStatus = "PROCESSING" | "SUCCESS" | "CLOSED" | "ABNORMAL";
-export type V2CouponStatus = "AVAILABLE" | "USED" | "EXPIRED" | "VOID";
+export type V2CouponStatus = "AVAILABLE" | "RESERVED" | "USED" | "EXPIRED" | "VOID";
 export type V2PointLedgerType =
   | "PURCHASE"
   | "INVITE_REWARD"
@@ -41,7 +41,16 @@ export interface V2SpecGroup {
   choices: V2SpecChoice[];
 }
 
+export interface V2Category extends V2BaseRecord {
+  name: string;
+  enabled: boolean;
+  sortOrder: number;
+  version: number;
+}
+
 export interface V2Product extends V2BaseRecord {
+  /** Optional for records created before categories were introduced. */
+  categoryId?: string;
   name: string;
   description?: string;
   imageUrl?: string;
@@ -91,6 +100,11 @@ export interface V2CartLineInput {
   note?: string;
 }
 
+export interface V2CouponCartInput {
+  couponId: string;
+  selections: V2CartSelection[];
+}
+
 export interface V2SelectedChoiceSnapshot {
   groupId: string;
   groupName: string;
@@ -115,6 +129,18 @@ export interface V2OrderLineSnapshot {
   inviterPointsTotal: number;
   selectedChoices: V2SelectedChoiceSnapshot[];
   note?: string;
+  pricingSource?: "PAID" | "COUPON";
+  couponId?: string;
+  originalUnitPrice?: number;
+}
+
+export interface V2CouponApplication {
+  couponId: string;
+  couponName: string;
+  productId: string;
+  productName: string;
+  pointsCost: number;
+  lineId: string;
 }
 
 export interface V2OrderQuote {
@@ -143,6 +169,8 @@ export interface V2Order extends V2BaseRecord {
   buyerPoints: number;
   inviterPoints: number;
   lineItems: V2OrderLineSnapshot[];
+  couponApplications?: V2CouponApplication[];
+  /** Legacy single-coupon fields retained for existing orders. */
   couponId?: string;
   couponName?: string;
   couponPointsCost?: number;
@@ -196,9 +224,12 @@ export interface V2Coupon extends V2BaseRecord {
   name: string;
   productId: string;
   productName: string;
+  productSnapshot?: V2Product;
   pointsCost: number;
   status: V2CouponStatus;
   expiresAt: string;
+  reservedOrderId?: string;
+  reservedAt?: string;
   usedOrderId?: string;
   usedAt?: string;
   voidedAt?: string;

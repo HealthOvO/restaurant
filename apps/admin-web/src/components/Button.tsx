@@ -13,7 +13,7 @@ export function Button({
   return (
     <button {...props} disabled={disabled || loading} className={`button button-${tone} ${className}`.trim()}>
       {loading && <span className="button-spinner" aria-hidden="true" />}
-      <span>{children}</span>
+      <span className="button-content">{children}</span>
     </button>
   );
 }

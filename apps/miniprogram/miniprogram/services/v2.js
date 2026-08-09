@@ -6,6 +6,8 @@ function createApiError(message, code, requestId) {
   return error;
 }
 
+const readRequests = new Map();
+
 function callCustomer(action, payload = {}) {
   return wx.cloud.callFunction({
     name: "v2-customer-api",
@@ -21,17 +23,27 @@ function callCustomer(action, payload = {}) {
   });
 }
 
+function callCustomerRead(action, payload = {}) {
+  const key = `${action}:${JSON.stringify(payload)}`;
+  const existing = readRequests.get(key);
+  if (existing) return existing;
+  const request = callCustomer(action, payload).finally(() => readRequests.delete(key));
+  readRequests.set(key, request);
+  return request;
+}
+
 module.exports = {
-  bootstrap: () => callCustomer("member.bootstrap"),
-  getHome: () => callCustomer("home.get"),
+  bootstrap: () => callCustomerRead("member.bootstrap"),
+  getHome: () => callCustomerRead("home.get"),
   createOrder: (payload) => callCustomer("order.create", payload),
-  queryPayment: (orderId) => callCustomer("order.queryPayment", { orderId }),
+  cancelPayment: (orderId) => callCustomer("order.cancelPayment", { orderId }),
+  queryPayment: (orderId) => callCustomerRead("order.queryPayment", { orderId }),
   mockPay: (orderId) => callCustomer("order.mockPay", { orderId }),
-  listOrders: () => callCustomer("order.listMine"),
-  listPoints: () => callCustomer("points.list"),
+  listOrders: () => callCustomerRead("order.listMine"),
+  listPoints: () => callCustomerRead("points.list"),
   exchangeCoupon: (payload) => callCustomer("coupon.exchange", payload),
-  listCoupons: () => callCustomer("coupon.listMine"),
+  listCoupons: () => callCustomerRead("coupon.listMine"),
   useCoupon: (payload) => callCustomer("coupon.use", payload),
   bindInvite: (inviteCode) => callCustomer("invite.bind", { inviteCode }),
-  getInviteOverview: () => callCustomer("invite.overview")
+  getInviteOverview: () => callCustomerRead("invite.overview")
 };

@@ -6,5 +6,6 @@ export function OrderStatusBadge({ status }: { status: V2OrderStatus }) {
 }
 
 export function OrderSourceBadge({ source }: { source: V2Order["source"] }) {
-  return <span className={`source-badge source-${source.toLowerCase()}`}>{source === "WECHAT_PAY" ? "微信支付" : "商品券"}</span>;
+  const label = source === "WECHAT_PAY" ? "微信支付" : source === "MIXED" ? "支付 + 商品券" : "商品券";
+  return <span className={`source-badge source-${source.toLowerCase()}`}>{label}</span>;
 }

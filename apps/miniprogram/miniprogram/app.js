@@ -1,5 +1,7 @@
 const { CLOUD_ENV_ID } = require("./config");
+const api = require("./services/v2");
 const { loadCart } = require("./utils/v2-cart");
+const { writeCache } = require("./utils/v2-cache");
 
 App({
   globalData: {
@@ -16,6 +18,10 @@ App({
     wx.cloud.init({ env: CLOUD_ENV_ID, traceUser: true });
     this.globalData.cart = loadCart();
     this.captureSource(options);
+    api.getHome().then((home) => {
+      this.globalData.home = home;
+      writeCache("home", home);
+    }).catch(() => undefined);
   },
 
   onShow(options) {

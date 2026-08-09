@@ -4,20 +4,25 @@ import type { V2StoreConfigSaveInput } from "@restaurant/shared";
 import { useMerchant } from "../app/MerchantContext";
 import { Button } from "../components/Button";
 import { PageError, PageLoading } from "../components/PageState";
+import { readResourceCache, writeResourceCache } from "../lib/resource-cache";
+
+const SETTINGS_CACHE_KEY = "settings";
 
 export function SettingsPage() {
   const { api, session, notify } = useMerchant();
-  const [form, setForm] = useState<V2StoreConfigSaveInput | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState<V2StoreConfigSaveInput | null>(() => readResourceCache<V2StoreConfigSaveInput>(SETTINGS_CACHE_KEY) ?? null);
+  const [loading, setLoading] = useState(() => readResourceCache(SETTINGS_CACHE_KEY) === undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     if (!api || !session) return;
-    setLoading(true);
+    setLoading(readResourceCache(SETTINGS_CACHE_KEY) === undefined);
     try {
       const config = await api.getStoreConfig(session.token);
-      setForm({ storeName: config.storeName, announcement: config.announcement, businessOpen: config.businessOpen, dayBoundaryTime: config.dayBoundaryTime });
+      const next = { storeName: config.storeName, announcement: config.announcement, businessOpen: config.businessOpen, dayBoundaryTime: config.dayBoundaryTime };
+      writeResourceCache(SETTINGS_CACHE_KEY, next);
+      setForm(next);
       setError("");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "营业设置加载失败"); }
     finally { setLoading(false); }
@@ -29,7 +34,12 @@ export function SettingsPage() {
     if (!form || !api || !session) return;
     if (!form.storeName.trim()) { setError("请输入摊位名称"); return; }
     setSaving(true); setError("");
-    try { setForm(await api.saveStoreConfig(session.token, form)); notify("设置已保存", "success"); }
+    try {
+      const next = await api.saveStoreConfig(session.token, form);
+      writeResourceCache(SETTINGS_CACHE_KEY, next);
+      setForm(next);
+      notify("设置已保存", "success");
+    }
     catch (caught) { setError(caught instanceof Error ? caught.message : "保存失败"); }
     finally { setSaving(false); }
   }
@@ -46,7 +56,7 @@ export function SettingsPage() {
           <label className="field"><span>今日公告</span><textarea rows={3} value={form.announcement ?? ""} onChange={(event) => setForm({ ...form, announcement: event.target.value })} placeholder="例如：每日现打，售完即止" /></label>
         </section>
         <section className="panel settings-section">
-          <header><span className="settings-icon"><Power size={20} /></span><div><h2>接单状态</h2><p>关闭后不能新下单、换券或用券。</p></div></header>
+          <header><span className="settings-icon"><Power size={20} /></span><div><h2>接单状态</h2><p>关闭后不能新下单或用券，积分换券不受影响。</p></div></header>
           <label className={`business-toggle ${form.businessOpen ? "is-open" : ""}`}>
             <input type="checkbox" checked={form.businessOpen} onChange={(event) => setForm({ ...form, businessOpen: event.target.checked })} />
             <span className="business-toggle-track"><i /></span>

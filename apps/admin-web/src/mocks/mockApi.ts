@@ -1,4 +1,6 @@
 import type {
+  V2Category,
+  V2CategorySaveInput,
   V2Coupon,
   V2DashboardStats,
   V2ExchangeItem,
@@ -30,10 +32,16 @@ let config: V2StoreConfig = {
   updatedAt: NOW
 };
 
+let categories: V2Category[] = [
+  { _id: "category-signature", storeId: "store-main", name: "招牌肉片", enabled: true, sortOrder: 10, version: 1, createdAt: NOW, updatedAt: NOW },
+  { _id: "category-snacks", storeId: "store-main", name: "小吃加料", enabled: true, sortOrder: 20, version: 1, createdAt: NOW, updatedAt: NOW }
+];
+
 let products: V2Product[] = [{
   _id: "product-fuding",
   storeId: "store-main",
-  name: "福鼎肉片",
+  categoryId: "category-signature",
+  name: "雄飞肉片",
   description: "鲜肉现打，紫菜虾皮汤底",
   imageUrl: "",
   basePrice: 1500,
@@ -76,9 +84,9 @@ let products: V2Product[] = [{
 let exchangeItems: V2ExchangeItem[] = [{
   _id: "exchange-fuding",
   storeId: "store-main",
-  name: "福鼎肉片兑换券",
+  name: "雄飞肉片兑换券",
   productId: "product-fuding",
-  productName: "福鼎肉片",
+  productName: "雄飞肉片",
   pointsCost: 100,
   validDays: 30,
   enabled: true,
@@ -113,7 +121,7 @@ let orders: V2Order[] = [
     itemCount: 2, buyerPoints: 20, inviterPoints: 2, businessDate: "2026-08-09", pickupSequence: 103,
     pickupNumber: "103", settledAt: "2026-08-09T10:15:00.000Z", createdAt: "2026-08-09T10:14:00.000Z", updatedAt: NOW,
     lineItems: [{
-      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "福鼎肉片", quantity: 2,
+      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "雄飞肉片", quantity: 2,
       basePrice: 1500, unitPrice: 1750, lineTotal: 3500, buyerPointsPerUnit: 10, inviterPointsPerUnit: 1,
       buyerPointsTotal: 20, inviterPointsTotal: 2,
       selectedChoices: [
@@ -126,11 +134,11 @@ let orders: V2Order[] = [
     _id: "order-102", storeId: "store-main", orderNo: "V2MOCK000102", requestKey: "mock-102",
     memberId: "member-wu", memberOpenId: "openid-wu", source: "COUPON", status: "WAITING_FULFILLMENT",
     payableAmount: 0, paidAmount: 0, itemCount: 1, buyerPoints: 0, inviterPoints: 0,
-    couponId: "coupon-wu", couponName: "福鼎肉片兑换券", couponPointsCost: 100,
+    couponId: "coupon-wu", couponName: "雄飞肉片兑换券", couponPointsCost: 100,
     businessDate: "2026-08-09", pickupSequence: 102, pickupNumber: "102", settledAt: "2026-08-09T10:08:00.000Z",
     createdAt: "2026-08-09T10:08:00.000Z", updatedAt: NOW,
     lineItems: [{
-      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "福鼎肉片", quantity: 1,
+      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "雄飞肉片", quantity: 1,
       basePrice: 0, unitPrice: 0, lineTotal: 0, buyerPointsPerUnit: 0, inviterPointsPerUnit: 0,
       buyerPointsTotal: 0, inviterPointsTotal: 0,
       selectedChoices: [{ groupId: "spice", groupName: "辣度", choiceId: "none", choiceName: "不辣", priceDelta: 0 }]
@@ -143,13 +151,29 @@ let orders: V2Order[] = [
     businessDate: "2026-08-09", pickupSequence: 101, pickupNumber: "101", settledAt: "2026-08-09T09:50:00.000Z",
     completedAt: "2026-08-09T10:02:00.000Z", createdAt: "2026-08-09T09:49:00.000Z", updatedAt: NOW,
     lineItems: [{
-      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "福鼎肉片", quantity: 1,
+      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "雄飞肉片", quantity: 1,
       basePrice: 1500, unitPrice: 1500, lineTotal: 1500, buyerPointsPerUnit: 10, inviterPointsPerUnit: 1,
       buyerPointsTotal: 10, inviterPointsTotal: 1,
       selectedChoices: [{ groupId: "spice", groupName: "辣度", choiceId: "hot", choiceName: "加辣", priceDelta: 0 }]
     }]
   }
 ];
+
+const initialMutableState = {
+  config: structuredClone(config),
+  categories: structuredClone(categories),
+  products: structuredClone(products),
+  exchangeItems: structuredClone(exchangeItems),
+  orders: structuredClone(orders)
+};
+
+export function resetMockMerchantApi() {
+  config = structuredClone(initialMutableState.config);
+  categories = structuredClone(initialMutableState.categories);
+  products = structuredClone(initialMutableState.products);
+  exchangeItems = structuredClone(initialMutableState.exchangeItems);
+  orders = structuredClone(initialMutableState.orders);
+}
 
 const ledger: V2PointLedger[] = [
   { _id: "ledger-1", storeId: "store-main", memberId: "member-chen", type: "PURCHASE", amount: 10, balanceAfter: 124, orderId: "order-101", businessDate: "2026-08-09", note: "订单消费积分", createdAt: "2026-08-09T09:50:00.000Z", updatedAt: NOW },
@@ -158,7 +182,7 @@ const ledger: V2PointLedger[] = [
 
 const coupons: V2Coupon[] = [{
   _id: "coupon-chen", storeId: "store-main", memberId: "member-chen", exchangeItemId: "exchange-fuding",
-  exchangeItemVersion: 1, name: "福鼎肉片兑换券", productId: "product-fuding", productName: "福鼎肉片",
+  exchangeItemVersion: 1, name: "雄飞肉片兑换券", productId: "product-fuding", productName: "雄飞肉片",
   pointsCost: 100, status: "AVAILABLE", expiresAt: "2026-09-08T10:00:00.000Z", createdAt: NOW, updatedAt: NOW
 }];
 
@@ -174,9 +198,9 @@ function dashboard(): V2DashboardStats {
   const active = orders.filter((order) => order.status !== "CANCELLED");
   return {
     businessDate: "2026-08-09",
-    paymentOrderCount: active.filter((order) => order.source === "WECHAT_PAY").length,
-    couponOrderCount: active.filter((order) => order.source === "COUPON").length,
-    paymentAmount: active.filter((order) => order.source === "WECHAT_PAY").reduce((sum, order) => sum + order.paidAmount, 0),
+    paymentOrderCount: active.filter((order) => order.paidAmount > 0).length,
+    couponOrderCount: active.filter((order) => order.source === "COUPON" || order.source === "MIXED").length,
+    paymentAmount: active.reduce((sum, order) => sum + order.paidAmount, 0),
     completedOrderCount: active.filter((order) => order.status === "COMPLETED").length,
     refundCount: active.filter((order) => order.status === "REFUNDED").length,
     newMemberCount: 1,
@@ -218,7 +242,13 @@ export const mockMerchantApi: MerchantApi = {
   },
   async profile(token) { auth(token); return delay({ _id: "owner-main", username: "owner", displayName: "雄飞老板" }); },
   async getDashboard(token) { auth(token); return delay(dashboard()); },
-  async listOrders(token, status) { auth(token); return delay(orders.filter((order) => !status || order.status === status)); },
+  async listOrders(token, status) {
+    auth(token);
+    const rows = orders.filter((order) => !status || order.status === status).slice().sort((left, right) => {
+      return left.createdAt.localeCompare(right.createdAt);
+    });
+    return delay(rows);
+  },
   async completeOrder(token, orderId) {
     auth(token);
     const order = orders.find((item) => item._id === orderId);
@@ -235,7 +265,7 @@ export const mockMerchantApi: MerchantApi = {
   },
   async refundOrder(token, orderId) {
     auth(token);
-    const order = orders.find((item) => item._id === orderId && item.source === "WECHAT_PAY");
+    const order = orders.find((item) => item._id === orderId && item.paidAmount > 0);
     if (!order) throw new MerchantApiError("订单不能退款", "ORDER_NOT_REFUNDABLE");
     order.status = "REFUNDED"; order.refundStatus = "SUCCESS"; order.refundedAt = new Date().toISOString(); order.updatedAt = order.refundedAt;
     return delay(order);
@@ -246,6 +276,7 @@ export const mockMerchantApi: MerchantApi = {
     const existing = input.id ? products.find((item) => item._id === input.id) : undefined;
     const row: V2Product = {
       _id: existing?._id ?? `product-${Date.now()}`, storeId: "store-main", name: input.name,
+      categoryId: input.categoryId,
       description: input.description, imageUrl: input.imageUrl, basePrice: input.basePrice,
       enabled: input.enabled, soldOut: input.soldOut, sortOrder: input.sortOrder,
       pointsEnabled: input.pointsEnabled,
@@ -255,6 +286,23 @@ export const mockMerchantApi: MerchantApi = {
       createdAt: existing?.createdAt ?? new Date().toISOString(), updatedAt: new Date().toISOString()
     };
     products = existing ? products.map((item) => item._id === row._id ? row : item) : [...products, row];
+    return delay(row);
+  },
+  async listCategories(token) { auth(token); return delay(categories.slice().sort((a, b) => a.sortOrder - b.sortOrder)); },
+  async saveCategory(token, input: V2CategorySaveInput) {
+    auth(token);
+    const existing = input.id ? categories.find((item) => item._id === input.id) : undefined;
+    const row: V2Category = {
+      _id: existing?._id ?? `category-${Date.now()}`,
+      storeId: "store-main",
+      name: input.name,
+      enabled: input.enabled,
+      sortOrder: input.sortOrder,
+      version: (existing?.version ?? 0) + 1,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    categories = existing ? categories.map((item) => item._id === row._id ? row : item) : [...categories, row];
     return delay(row);
   },
   async listExchangeItems(token) { auth(token); return delay(exchangeItems); },

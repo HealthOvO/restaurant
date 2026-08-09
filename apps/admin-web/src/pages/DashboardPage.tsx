@@ -7,13 +7,16 @@ import { Button } from "../components/Button";
 import { EmptyState, PageError, PageLoading } from "../components/PageState";
 import { OrderSourceBadge, OrderStatusBadge } from "../components/StatusBadge";
 import { formatDateTime, formatMoney } from "../lib/format";
+import { readResourceCache, writeResourceCache } from "../lib/resource-cache";
+
+const DASHBOARD_CACHE_KEY = "dashboard";
 
 export function DashboardPage() {
   const { api, session } = useMerchant();
-  const [stats, setStats] = useState<V2DashboardStats | null>(null);
-  const [orders, setOrders] = useState<V2Order[]>([]);
+  const [stats, setStats] = useState<V2DashboardStats | null>(() => readResourceCache<{ stats: V2DashboardStats; orders: V2Order[] }>(DASHBOARD_CACHE_KEY)?.stats ?? null);
+  const [orders, setOrders] = useState<V2Order[]>(() => readResourceCache<{ stats: V2DashboardStats; orders: V2Order[] }>(DASHBOARD_CACHE_KEY)?.orders ?? []);
   const [error, setError] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] = useState(() => readResourceCache(DASHBOARD_CACHE_KEY) === undefined);
 
   const load = useCallback(async () => {
     if (!api || !session) return;
@@ -24,6 +27,7 @@ export function DashboardPage() {
         api.getDashboard(session.token),
         api.listOrders(session.token, "WAITING_FULFILLMENT")
       ]);
+      writeResourceCache(DASHBOARD_CACHE_KEY, { stats: nextStats, orders: nextOrders });
       setStats(nextStats);
       setOrders(nextOrders);
     } catch (caught) {

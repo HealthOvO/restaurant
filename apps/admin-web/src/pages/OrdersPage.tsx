@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, BellRing, Check, ReceiptText, RefreshCw, RotateCcw, TicketX, WifiOff } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowDownWideNarrow, Bell, BellRing, Check, ReceiptText, RefreshCw, RotateCcw, TicketX, WifiOff } from "lucide-react";
 import type { V2Order, V2OrderStatus } from "@restaurant/shared";
 import { useMerchant } from "../app/MerchantContext";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
-import { EmptyState, PageError, PageLoading } from "../components/PageState";
+import { EmptyState } from "../components/PageState";
 import { OrderSourceBadge, OrderStatusBadge } from "../components/StatusBadge";
 import { formatDateTime, formatMoney } from "../lib/format";
+import { invalidateResourceCache, readResourceCache, writeResourceCache } from "../lib/resource-cache";
 
 type Filter = "ALL" | Exclude<V2OrderStatus, "PENDING_PAYMENT">;
 type PendingAction = { type: "complete" | "cancel" | "refund"; order: V2Order } | null;
@@ -20,6 +21,10 @@ const filters: Array<{ value: Filter; label: string }> = [
   { value: "REFUNDED", label: "已退款" }
 ];
 
+function ordersCacheKey(filter: Filter): string {
+  return `orders:${filter}`;
+}
+
 const emptyCopy: Record<Filter, { title: string; detail: string }> = {
   ALL: { title: "还没有订单", detail: "顾客下单后会显示在这里。" },
   WAITING_FULFILLMENT: { title: "没有待出餐订单", detail: "当前订单都处理完了。" },
@@ -29,43 +34,48 @@ const emptyCopy: Record<Filter, { title: string; detail: string }> = {
   REFUNDED: { title: "还没有退款记录", detail: "退款完成后可在这里查看。" }
 };
 
-function playNewOrderTone() {
-  const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioContextClass) return;
-  const context = new AudioContextClass();
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.frequency.value = 660;
-  gain.gain.setValueAtTime(0.0001, context.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.16, context.currentTime + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.35);
-  oscillator.connect(gain).connect(context.destination);
-  oscillator.start();
-  oscillator.stop(context.currentTime + 0.38);
+export function sortOrdersForFilter(rows: V2Order[], filter: Filter): V2Order[] {
+  void filter;
+  return rows.slice().sort((left, right) => {
+    const byTime = left.createdAt.localeCompare(right.createdAt);
+    if (byTime !== 0) return byTime;
+    return left.orderNo.localeCompare(right.orderNo);
+  });
+}
+
+function OrderListSkeleton() {
+  return (
+    <div className="order-list-skeleton" role="status" aria-label="正在同步订单">
+      {[0, 1].map((item) => (
+        <div className="order-skeleton-card" key={item} aria-hidden="true">
+          <span className="skeleton-block skeleton-pickup" />
+          <div><span className="skeleton-block skeleton-short" /><span className="skeleton-block skeleton-long" /><span className="skeleton-block skeleton-medium" /></div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function OrdersPage() {
-  const { api, session, notify } = useMerchant();
+  const { api, session, notify, newOrderSoundEnabled, setNewOrderSoundEnabled } = useMerchant();
   const [filter, setFilter] = useState<Filter>("WAITING_FULFILLMENT");
-  const [orders, setOrders] = useState<V2Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<V2Order[]>(() => readResourceCache<V2Order[]>(ordersCacheKey("WAITING_FULFILLMENT")) ?? []);
+  const [loading, setLoading] = useState(() => readResourceCache(ordersCacheKey("WAITING_FULFILLMENT")) === undefined);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
-  const [soundEnabled, setSoundEnabled] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [acting, setActing] = useState(false);
-  const seenWaitingIds = useRef<Set<string>>(new Set());
 
   const load = useCallback(async (background = false) => {
     if (!api || !session) return;
-    background ? setSyncing(true) : setLoading(true);
+    const cacheKey = ordersCacheKey(filter);
+    if (background || readResourceCache(cacheKey) !== undefined) setSyncing(true);
+    else setLoading(true);
     try {
-      const next = await api.listOrders(session.token, filter === "ALL" ? undefined : filter);
-      const nextWaitingIds = new Set(next.filter((order) => order.status === "WAITING_FULFILLMENT").map((order) => order._id));
-      if (soundEnabled && Array.from(nextWaitingIds).some((id) => !seenWaitingIds.current.has(id))) playNewOrderTone();
-      seenWaitingIds.current = nextWaitingIds;
+      const next = sortOrdersForFilter(await api.listOrders(session.token, filter === "ALL" ? undefined : filter), filter);
+      writeResourceCache(cacheKey, next);
       setOrders(next);
       setLastSync(new Date());
       setError("");
@@ -75,24 +85,67 @@ export function OrdersPage() {
       setLoading(false);
       setSyncing(false);
     }
-  }, [api, session, filter, soundEnabled]);
+  }, [api, session, filter]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const timer = window.setInterval(() => void load(true), 5000);
-    const visible = () => document.visibilityState === "visible" && void load(true);
+    if (!api || !session) return;
+    let active = true;
+    void api.listOrders(session.token).then((rows) => {
+      if (!active) return;
+      const all = sortOrdersForFilter(rows, "ALL");
+      writeResourceCache(ordersCacheKey("ALL"), all);
+      for (const item of filters) {
+        if (item.value === "ALL") continue;
+        writeResourceCache(ordersCacheKey(item.value), sortOrdersForFilter(all.filter((order) => order.status === item.value), item.value));
+      }
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [api, session]);
+
+  useEffect(() => {
+    const onWaitingOrders = (event: Event) => {
+      const detail = (event as CustomEvent<{ orders: V2Order[]; syncedAt: number }>).detail;
+      setLastSync(new Date(detail.syncedAt));
+      setOnline(true);
+      if (filter === "WAITING_FULFILLMENT") {
+        setOrders(sortOrdersForFilter(detail.orders, filter));
+        setLoading(false);
+        setSyncing(false);
+        setError("");
+      }
+    };
+    window.addEventListener("xiongfei:waiting-orders", onWaitingOrders);
+    return () => window.removeEventListener("xiongfei:waiting-orders", onWaitingOrders);
+  }, [filter]);
+
+  useEffect(() => {
+    const timer = filter === "WAITING_FULFILLMENT" ? undefined : window.setInterval(() => void load(true), 15000);
+    const visible = () => document.visibilityState === "visible" && filter !== "WAITING_FULFILLMENT" && void load(true);
     const goOnline = () => { setOnline(true); void load(true); };
     const goOffline = () => setOnline(false);
     document.addEventListener("visibilitychange", visible);
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
     return () => {
-      window.clearInterval(timer);
+      if (timer) window.clearInterval(timer);
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
     };
   }, [load]);
+
+  function toggleSound() {
+    setNewOrderSoundEnabled(!newOrderSoundEnabled);
+  }
+
+  function selectFilter(next: Filter) {
+    const cached = readResourceCache<V2Order[]>(ordersCacheKey(next));
+    setFilter(next);
+    setOrders(cached ?? []);
+    setLoading(cached === undefined);
+    setError("");
+  }
 
   async function confirmAction() {
     if (!pendingAction || !api || !session) return;
@@ -102,6 +155,7 @@ export function OrdersPage() {
       if (pendingAction.type === "cancel") await api.cancelCouponOrder(session.token, pendingAction.order._id);
       if (pendingAction.type === "refund") await api.refundOrder(session.token, pendingAction.order._id);
       notify(pendingAction.type === "complete" ? "已完成出餐" : pendingAction.type === "cancel" ? "券订单已取消" : "退款已提交", "success");
+      invalidateResourceCache("dashboard", ...filters.map((item) => ordersCacheKey(item.value)));
       setPendingAction(null);
       await load(true);
     } catch (caught) {
@@ -111,24 +165,22 @@ export function OrdersPage() {
     }
   }
 
-  if (loading && !orders.length) return <PageLoading label="正在同步订单" />;
-  if (error && !orders.length) return <PageError message={error} onRetry={() => load()} />;
   const isRefundRetry = pendingAction?.type === "refund" && pendingAction.order.status === "REFUNDING";
   const actionTitle = pendingAction?.type === "complete" ? "完成这笔订单？" : pendingAction?.type === "cancel" ? "取消这笔券订单？" : isRefundRetry ? "重新提交退款？" : "提交整单退款？";
   const actionDescription = pendingAction?.type === "complete"
     ? "确认顾客已经取餐后再完成。"
     : pendingAction?.type === "cancel"
       ? "商品券会退回顾客账户，取餐号保留。"
-      : isRefundRetry ? "上一笔退款已关闭，将使用新的退款单号重新提交。" : "将按原订单退款，并扣回相应积分。";
+      : isRefundRetry ? "上一笔退款已关闭，将使用新的退款单号重新提交。" : "将按原订单退款，扣回积分，并返还本单使用的商品券。";
   const confirmLabel = pendingAction?.type === "complete" ? "完成出餐" : pendingAction?.type === "cancel" ? "确认取消" : isRefundRetry ? "重新退款" : "提交退款";
 
   return (
     <div className="page-stack orders-page">
       <header className="page-header">
-        <div><p className="eyebrow">接单中 · 每 5 秒刷新</p><h1>订单</h1><p>按取餐号出餐，券订单会单独标明。</p></div>
+        <div><p className="eyebrow">待出餐每 5 秒同步</p><h1>订单</h1><p>最早下单排在前面，支付、商品券和混合订单都会标明。</p></div>
         <div className="header-actions">
-          <Button tone={soundEnabled ? "secondary" : "quiet"} onClick={() => { setSoundEnabled((value) => !value); if (!soundEnabled) playNewOrderTone(); }}>
-            {soundEnabled ? <BellRing size={16} /> : <Bell size={16} />}{soundEnabled ? "新单声音已开启" : "打开新单声音"}
+          <Button tone={newOrderSoundEnabled ? "secondary" : "quiet"} onClick={toggleSound} title="新单会连续响铃并显示页面提醒">
+            {newOrderSoundEnabled ? <BellRing size={16} /> : <Bell size={16} />}{newOrderSoundEnabled ? "新单提醒已开启" : "打开新单提醒"}
           </Button>
           <Button tone="secondary" onClick={() => load(true)} loading={syncing}><RefreshCw size={16} />刷新</Button>
         </div>
@@ -139,17 +191,19 @@ export function OrdersPage() {
       <div className="list-toolbar">
         <div className="segmented-tabs" role="tablist" aria-label="订单状态">
           {filters.map((item) => (
-            <button key={item.value} type="button" role="tab" aria-selected={filter === item.value} className={filter === item.value ? "is-active" : ""} onClick={() => setFilter(item.value)}>{item.label}</button>
+            <button key={item.value} type="button" role="tab" aria-selected={filter === item.value} className={filter === item.value ? "is-active" : ""} onClick={() => selectFilter(item.value)}>{item.label}</button>
           ))}
         </div>
         <div className={`sync-strip ${!online ? "is-offline" : ""}`} role="status">
           {!online ? <><WifiOff size={15} /><span>网络断开，等待恢复</span></> : <><span className="live-dot" /><span>{syncing ? "同步中…" : `已更新 ${lastSync ? lastSync.toLocaleTimeString("zh-CN", { hour12: false }) : "—"}`}</span></>}
         </div>
+        <span className="sort-hint"><ArrowDownWideNarrow size={14} />最早优先</span>
         <span className="list-count">{orders.length} 单</span>
       </div>
 
       <section className="order-list" aria-label="订单列表">
-        {orders.map((order) => (
+        {loading && !orders.length && <OrderListSkeleton />}
+        {!loading && orders.map((order) => (
           <article className="order-card" key={order._id}>
             <div className="order-pickup">
               <span>取餐号</span>
@@ -163,26 +217,28 @@ export function OrdersPage() {
               <div className="order-lines">
                 {order.lineItems.map((line) => (
                   <div className="order-line" key={line.lineId}>
-                    <div><strong>{line.productName}</strong><span>{line.selectedChoices.map((choice) => choice.choiceName).join(" · ") || "标准规格"}</span></div>
+                    <div><strong>{line.productName}{(line.pricingSource === "COUPON" || line.couponId) && <small className="line-coupon-label">券抵扣</small>}</strong><span>{line.selectedChoices.map((choice) => choice.choiceName).join(" · ") || "标准规格"}</span></div>
                     <b>× {line.quantity}</b>
                   </div>
                 ))}
               </div>
               <footer className="order-card-footer">
                 <div className="order-total">
-                  {order.source === "WECHAT_PAY" ? <><span>实付</span><strong>{formatMoney(order.paidAmount)}</strong></> : <><span>{order.couponName}</span><strong>{order.couponPointsCost} 积分兑换</strong></>}
+                  {order.paidAmount > 0
+                    ? <><span>实付{(order.couponApplications?.length ?? 0) > 0 ? ` · 另用 ${order.couponApplications?.length} 张券` : ""}</span><strong>{formatMoney(order.paidAmount)}</strong></>
+                    : <><span>商品券订单</span><strong>{order.couponApplications?.length ?? (order.couponId ? 1 : 0)} 张券</strong></>}
                 </div>
                 <div className="order-actions">
                   {order.status === "WAITING_FULFILLMENT" && <Button onClick={() => setPendingAction({ type: "complete", order })}><Check size={16} />完成出餐</Button>}
                   {order.status === "WAITING_FULFILLMENT" && order.source === "COUPON" && <Button tone="quiet" onClick={() => setPendingAction({ type: "cancel", order })}><TicketX size={16} />取消</Button>}
-                  {["WAITING_FULFILLMENT", "COMPLETED"].includes(order.status) && order.source === "WECHAT_PAY" && <Button tone="quiet" onClick={() => setPendingAction({ type: "refund", order })}><RotateCcw size={16} />整单退款</Button>}
+                  {["WAITING_FULFILLMENT", "COMPLETED"].includes(order.status) && order.paidAmount > 0 && <Button tone="quiet" onClick={() => setPendingAction({ type: "refund", order })}><RotateCcw size={16} />整单退款</Button>}
                   {order.status === "REFUNDING" && order.refundStatus === "CLOSED" && <Button tone="danger" onClick={() => setPendingAction({ type: "refund", order })}><RotateCcw size={16} />重新退款</Button>}
                 </div>
               </footer>
             </div>
           </article>
         ))}
-        {!orders.length && <EmptyState title={emptyCopy[filter].title} detail={emptyCopy[filter].detail} icon={<ReceiptText size={26} />} />}
+        {!loading && !orders.length && <EmptyState title={emptyCopy[filter].title} detail={emptyCopy[filter].detail} icon={<ReceiptText size={26} />} />}
       </section>
 
       <Dialog open={Boolean(pendingAction)} title={actionTitle} description={actionDescription} onClose={() => !acting && setPendingAction(null)} width="small">

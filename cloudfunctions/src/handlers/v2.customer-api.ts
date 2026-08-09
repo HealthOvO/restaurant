@@ -8,6 +8,7 @@ const eventSchema = z.object({
     "order.create",
     "order.mockPay",
     "order.queryPayment",
+    "order.cancelPayment",
     "order.listMine",
     "points.list",
     "coupon.exchange",
@@ -30,6 +31,7 @@ export async function main(event: unknown) {
       case "order.create": return application.createPaymentOrder(openId, payload);
       case "order.mockPay": return application.mockPay(openId, String(payload.orderId ?? ""));
       case "order.queryPayment": return application.queryPayment(openId, String(payload.orderId ?? ""));
+      case "order.cancelPayment": return application.cancelPendingPayment(openId, String(payload.orderId ?? ""));
       case "order.listMine": return application.memberOrders(openId);
       case "points.list": return application.memberPoints(openId);
       case "coupon.exchange": return application.exchangeCoupon(openId, payload);

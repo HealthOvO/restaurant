@@ -1,3 +1,0 @@
-- Loading data...
-- Verify login status
-√ You are logged in. No need to log in again.

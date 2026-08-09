@@ -9,6 +9,10 @@
     {"name":"idx_store_inviter","fields":[{"name":"storeId","direction":1},{"name":"inviterMemberId","direction":1}]}
   ]},
   {"collection":"v2_products","indexes":[
+    {"name":"idx_store_enabled_sort","fields":[{"name":"storeId","direction":1},{"name":"enabled","direction":1},{"name":"sortOrder","direction":1}]},
+    {"name":"idx_store_category_sort","fields":[{"name":"storeId","direction":1},{"name":"categoryId","direction":1},{"name":"sortOrder","direction":1}]}
+  ]},
+  {"collection":"v2_categories","indexes":[
     {"name":"idx_store_enabled_sort","fields":[{"name":"storeId","direction":1},{"name":"enabled","direction":1},{"name":"sortOrder","direction":1}]}
   ]},
   {"collection":"v2_exchange_items","indexes":[
@@ -19,6 +23,7 @@
     {"name":"idx_store_member_status_expiry","fields":[{"name":"storeId","direction":1},{"name":"memberId","direction":1},{"name":"status","direction":1},{"name":"expiresAt","direction":1}]}
   ]},
   {"collection":"v2_orders","indexes":[
+    {"name":"idx_store_order_no_unique","fields":[{"name":"storeId","direction":1},{"name":"orderNo","direction":1}],"unique":true},
     {"name":"idx_store_status_created","fields":[{"name":"storeId","direction":1},{"name":"status","direction":1},{"name":"createdAt","direction":-1}]},
     {"name":"idx_store_member_created","fields":[{"name":"storeId","direction":1},{"name":"memberId","direction":1},{"name":"createdAt","direction":-1}]},
     {"name":"idx_store_business_date","fields":[{"name":"storeId","direction":1},{"name":"businessDate","direction":1}]}
@@ -38,6 +43,7 @@
   {"collection":"v2_owner_accounts","indexes":[
     {"name":"idx_store_username_unique","fields":[{"name":"storeId","direction":1},{"name":"username","direction":1}],"unique":true}
   ]},
+  {"collection":"v2_owner_login_attempts","indexes":[]},
   {"collection":"v2_store_config","indexes":[
     {"name":"idx_store_unique","fields":[{"name":"storeId","direction":1}],"unique":true}
   ]},

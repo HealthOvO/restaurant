@@ -5,8 +5,7 @@
     "pages/benefits/benefits",
     "pages/profile/profile",
     "pages/checkout/checkout",
-    "pages/payment-result/payment-result",
-    "pages/coupon-use/coupon-use"
+    "pages/payment-result/payment-result"
   ],
   "window": {
     "navigationBarTitleText": "雄飞肉片",
@@ -28,5 +27,6 @@
     ]
   },
   "style": "v2",
+  "lazyCodeLoading": "requiredComponents",
   "sitemapLocation": "sitemap.json"
 }

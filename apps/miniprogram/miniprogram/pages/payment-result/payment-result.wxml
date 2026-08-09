@@ -5,7 +5,7 @@
     <text class="result-copy">请稍等，不要重复支付。</text>
   </view>
 
-  <view wx:elif="{{order && order.pickupNumber}}" class="result-card surface is-success">
+  <view wx:elif="{{order && (order.status === 'WAITING_FULFILLMENT' || order.status === 'COMPLETED') && order.pickupNumber}}" class="result-card surface is-success">
     <text class="result-kicker">下单成功</text>
     <text class="pickup-label">取餐号</text>
     <text class="pickup-number">{{order.pickupNumber}}</text>
@@ -13,6 +13,24 @@
     <view class="result-points" wx:if="{{order.buyerPoints > 0}}">本次已获得 +{{order.buyerPoints}} 积分</view>
     <button class="primary-button" bindtap="goOrders">查看订单</button>
     <button class="quiet-button" bindtap="goHome">继续点餐</button>
+  </view>
+
+  <view wx:elif="{{order && (order.status === 'REFUNDING' || order.status === 'REFUNDED')}}" class="result-card surface is-terminal">
+    <view class="state-mark">退</view>
+    <text class="result-title">{{order.status === 'REFUNDED' ? '订单已退款' : '退款处理中'}}</text>
+    <text wx:if="{{order.pickupNumber}}" class="result-copy">取餐号 {{order.pickupNumber}}</text>
+    <text class="result-copy">{{error}}</text>
+    <view class="result-points is-returned" wx:if="{{order.status === 'REFUNDED' && order.buyerPoints > 0}}">本单 {{order.buyerPoints}} 积分已回收</view>
+    <button class="primary-button" bindtap="goOrders">查看订单</button>
+    <button class="quiet-button" bindtap="goHome">返回点餐</button>
+  </view>
+
+  <view wx:elif="{{order && order.status === 'CANCELLED'}}" class="result-card surface is-terminal">
+    <view class="state-mark">停</view>
+    <text class="result-title">订单已取消</text>
+    <text class="result-copy">{{error}}</text>
+    <button class="primary-button" bindtap="goHome">重新点餐</button>
+    <button class="quiet-button" bindtap="goOrders">查看订单</button>
   </view>
 
   <view wx:else class="result-card surface">

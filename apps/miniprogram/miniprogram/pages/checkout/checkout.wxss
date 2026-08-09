@@ -1,27 +1,35 @@
 .checkout-page { padding-bottom: calc(190rpx + env(safe-area-inset-bottom)); }
-.checkout-heading { margin: 8rpx 4rpx 28rpx; }
+.checkout-heading { display: flex; margin: 4rpx 4rpx 26rpx; flex-direction: column; gap: 7rpx; }
+.checkout-heading > text:last-child { color: #7c7067; font-size: 22rpx; }
 .checkout-card { overflow: hidden; border-radius: 26rpx; }
 .checkout-line { display: flex; align-items: flex-start; justify-content: space-between; gap: 22rpx; padding: 28rpx 24rpx; border-top: 1rpx solid #ece4da; }
 .checkout-line:first-child { border-top: 0; }
 .checkout-line-main { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 6rpx; }
+.checkout-name-row { display: flex; align-items: center; gap: 10rpx; }
+.checkout-name-row small { padding: 3rpx 8rpx; color: #8f3424; background: #f7e5dd; border-radius: 7rpx; font-size: 16rpx; }
 .checkout-product { font-size: 30rpx; font-weight: 750; }
 .checkout-spec { color: #756a61; font-size: 23rpx; line-height: 1.5; }
-.checkout-price { color: #9a6b2d; font-size: 21rpx; }
+.checkout-price-row { display: flex; align-items: baseline; gap: 10rpx; }
+.checkout-price { color: #9a552d; font-size: 21rpx; }
+.checkout-price-row del { color: #a2968d; font-size: 18rpx; }
 .checkout-line-side { display: flex; align-items: flex-end; flex-direction: column; gap: 18rpx; }
 .checkout-line-total { font-size: 27rpx; font-weight: 700; }
 .mini-stepper { display: flex; align-items: center; gap: 16rpx; }
 .mini-stepper button { display: flex; width: 54rpx; height: 54rpx; align-items: center; justify-content: center; padding: 0; color: #4b4038; background: #eee8df; border: 1rpx solid #e2d9cf; border-radius: 17rpx; font-size: 28rpx; }
 .mini-stepper text { min-width: 28rpx; text-align: center; font-size: 24rpx; font-weight: 650; }
-.checkout-summary { margin-top: 18rpx; padding: 8rpx 24rpx; background: #f2eadf; border-color: #e4d8ca; box-shadow: none; }
-.checkout-summary > view { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 21rpx 0; border-top: 1rpx solid #e2d6c8; }
+.remove-line { width: 96rpx; min-width: 96rpx; max-width: 96rpx; height: 54rpx; min-height: 54rpx; flex: 0 0 96rpx; padding: 0; color: #756a61; background: #eee8e1; border-radius: 15rpx; font-size: 19rpx; }
+.checkout-summary { margin-top: 18rpx; padding: 8rpx 24rpx; background: #fffaf3; border-color: #e4d8ca; box-shadow: none; }
+.checkout-summary > view { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 19rpx 0; border-top: 1rpx solid #e8ded2; }
 .checkout-summary > view:first-child { border-top: 0; }
-.checkout-summary text { color: #756a61; font-size: 24rpx; }
-.checkout-summary strong { font-size: 29rpx; }
+.checkout-summary text { color: #756a61; font-size: 23rpx; }
+.checkout-summary strong { font-size: 27rpx; }
+.checkout-summary .payable-row strong { color: #a9402b; font-size: 32rpx; }
+.discount-value { color: #2f6b4f; }
 .points-value { color: #9a5b17; }
-.checkout-note { margin-top: 20rpx; padding: 0 8rpx; color: #8d8177; font-size: 22rpx; line-height: 1.6; }
 .checkout-error { margin-top: 18rpx; padding: 18rpx 20rpx; color: #872d2d; background: #f8e4e2; border: 1rpx solid #ecc8c4; border-radius: 18rpx; font-size: 23rpx; line-height: 1.5; }
-.checkout-submit-bar { position: fixed; z-index: 50; right: 0; bottom: 0; left: 0; display: flex; min-height: 130rpx; align-items: center; justify-content: space-between; gap: 24rpx; padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom)); background: rgba(255,253,250,.98); border-top: 1rpx solid #e5ddd3; box-shadow: 0 -8rpx 28rpx rgba(52, 38, 29, .06); }
+.checkout-submit-bar { position: fixed; z-index: 50; right: 0; bottom: 0; left: 0; display: flex; min-height: 130rpx; align-items: center; justify-content: space-between; gap: 24rpx; padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom)); background: rgba(255,253,250,.98); border-top: 1rpx solid #e5ddd3; box-shadow: 0 -8rpx 28rpx rgba(52,38,29,.06); }
 .checkout-submit-bar > view { display: flex; flex-direction: column; gap: 3rpx; }
 .checkout-submit-bar text { color: #756a61; font-size: 21rpx; }
 .checkout-submit-bar strong { color: #a44732; font-size: 35rpx; }
-.checkout-submit-bar .primary-button { min-width: 290rpx; }
+.checkout-submit-bar small { color: #756a61; font-size: 17rpx; }
+.checkout-submit-bar .primary-button { width: 360rpx; min-width: 360rpx; max-width: 360rpx; flex: 0 0 360rpx; }

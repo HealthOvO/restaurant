@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { ChevronDown, ChevronUp, CirclePlus, Edit3, GripVertical, Plus, Soup, Trash2 } from "lucide-react";
-import type { V2Product, V2ProductSaveInput, V2SpecGroup } from "@restaurant/shared";
+import { ChevronDown, ChevronUp, CirclePlus, FolderPlus, GripVertical, Pencil, Plus, Soup, Tags, Trash2 } from "lucide-react";
+import type { V2Category, V2CategorySaveInput, V2Product, V2ProductSaveInput, V2SpecGroup } from "@restaurant/shared";
 import { useMerchant } from "../app/MerchantContext";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState, PageError, PageLoading } from "../components/PageState";
 import { formatMoney } from "../lib/format";
+import { readResourceCache, writeResourceCache } from "../lib/resource-cache";
 
-const blankProduct = (): V2ProductSaveInput => ({
+const PRODUCTS_CACHE_KEY = "products";
+const CATEGORIES_CACHE_KEY = "categories";
+
+const blankProduct = (categoryId = ""): V2ProductSaveInput => ({
+  categoryId: categoryId || undefined,
   name: "",
   description: "",
   imageUrl: "",
@@ -24,6 +29,7 @@ const blankProduct = (): V2ProductSaveInput => ({
 function productInput(product: V2Product): V2ProductSaveInput {
   return {
     id: product._id,
+    categoryId: product.categoryId,
     name: product.name,
     description: product.description ?? "",
     imageUrl: product.imageUrl ?? "",
@@ -44,6 +50,7 @@ function newSpecGroup(index: number): V2SpecGroup {
 }
 
 function validateProduct(form: V2ProductSaveInput): string {
+  if (!form.categoryId) return "请选择商品分类";
   if (!form.name.trim()) return "请输入商品名称";
   if (!Number.isInteger(form.basePrice) || form.basePrice < 0) return "商品价格必须是整数分";
   for (const group of form.specGroups) {
@@ -57,17 +64,29 @@ function validateProduct(form: V2ProductSaveInput): string {
 
 export function ProductsPage() {
   const { api, session, notify } = useMerchant();
-  const [products, setProducts] = useState<V2Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<V2Product[]>(() => readResourceCache<V2Product[]>(PRODUCTS_CACHE_KEY) ?? []);
+  const [categories, setCategories] = useState<V2Category[]>(() => readResourceCache<V2Category[]>(CATEGORIES_CACHE_KEY) ?? []);
+  const [loading, setLoading] = useState(() => readResourceCache(PRODUCTS_CACHE_KEY) === undefined || readResourceCache(CATEGORIES_CACHE_KEY) === undefined);
   const [error, setError] = useState("");
   const [form, setForm] = useState<V2ProductSaveInput | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [categoryForm, setCategoryForm] = useState<V2CategorySaveInput | null>(null);
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState("");
 
   const load = useCallback(async () => {
     if (!api || !session) return;
-    setLoading(true); setError("");
-    try { setProducts(await api.listProducts(session.token)); }
+    setLoading(readResourceCache(PRODUCTS_CACHE_KEY) === undefined || readResourceCache(CATEGORIES_CACHE_KEY) === undefined); setError("");
+    try {
+      const results = await Promise.all([api.listProducts(session.token), api.listCategories(session.token)]);
+      const nextProducts = results[0];
+      const nextCategories = results[1];
+      writeResourceCache(PRODUCTS_CACHE_KEY, nextProducts);
+      writeResourceCache(CATEGORIES_CACHE_KEY, nextCategories);
+      setProducts(nextProducts);
+      setCategories(nextCategories);
+    }
     catch (caught) { setError(caught instanceof Error ? caught.message : "商品加载失败"); }
     finally { setLoading(false); }
   }, [api, session]);
@@ -97,6 +116,29 @@ export function ProductsPage() {
     } catch (caught) { notify(caught instanceof Error ? caught.message : "操作失败", "error"); }
   }
 
+  async function saveCategory(event: FormEvent) {
+    event.preventDefault();
+    if (!categoryForm || !api || !session) return;
+    if (!categoryForm.name.trim()) { setCategoryError("请输入分类名称"); return; }
+    setCategorySaving(true); setCategoryError("");
+    try {
+      await api.saveCategory(session.token, categoryForm);
+      notify(categoryForm.id ? "分类已保存" : "分类已创建", "success");
+      setCategoryForm(null);
+      await load();
+    } catch (caught) { setCategoryError(caught instanceof Error ? caught.message : "保存失败"); }
+    finally { setCategorySaving(false); }
+  }
+
+  async function toggleCategory(category: V2Category) {
+    if (!api || !session) return;
+    try {
+      await api.saveCategory(session.token, { id: category._id, name: category.name, enabled: !category.enabled, sortOrder: category.sortOrder });
+      await load();
+      notify(category.enabled ? "分类已停用" : "分类已启用", "success");
+    } catch (caught) { notify(caught instanceof Error ? caught.message : "操作失败", "error"); }
+  }
+
   if (loading && !products.length) return <PageLoading label="正在加载商品" />;
   if (error && !products.length) return <PageError message={error} onRetry={load} />;
 
@@ -104,9 +146,28 @@ export function ProductsPage() {
     <div className="page-stack">
       <header className="page-header">
         <div><p className="eyebrow">商品与规格</p><h1>商品</h1><p>设置价格、辣度、小料和每份积分。</p></div>
-        <Button onClick={() => { setForm(blankProduct()); setFormError(""); }}><Plus size={17} />新增商品</Button>
+        <Button onClick={() => { setForm(blankProduct(categories.find((item) => item.enabled)?._id)); setFormError(""); }}><Plus size={17} />新增商品</Button>
       </header>
       {error && <div className="inline-alert">{error}</div>}
+
+      <section className="category-manager">
+        <div className="category-manager-head">
+          <div><span className="section-icon"><Tags size={18} /></span><div><h2>点餐分类</h2><p>小程序会按这里的顺序显示在左侧。</p></div></div>
+          <Button tone="secondary" onClick={() => { const last = categories[categories.length - 1]; setCategoryForm({ name: "", enabled: true, sortOrder: (last?.sortOrder ?? 0) + 10 }); setCategoryError(""); }}><FolderPlus size={16} />新增分类</Button>
+        </div>
+        <div className="category-list">
+          {categories.map((category, index) => (
+            <article className={`category-chip-card ${category.enabled ? "" : "is-disabled"}`} key={category._id}>
+              <span className="category-order">{String(index + 1).padStart(2, "0")}</span>
+              <div><strong>{category.name}</strong><small>{products.filter((product) => product.categoryId === category._id).length} 个商品 · 排序 {category.sortOrder}</small></div>
+              <span className={`category-state ${category.enabled ? "is-enabled" : ""}`}>{category.enabled ? "显示中" : "已停用"}</span>
+              <Button tone="quiet" onClick={() => { setCategoryForm({ id: category._id, name: category.name, enabled: category.enabled, sortOrder: category.sortOrder }); setCategoryError(""); }}><Pencil size={14} />编辑分类</Button>
+              <Button tone="quiet" onClick={() => void toggleCategory(category)}>{category.enabled ? "停用" : "启用"}</Button>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <div className="catalog-summary"><div><strong>商品列表</strong><span>{products.length} 个商品</span></div><span>上架与售罄状态会显示在小程序</span></div>
       <section className="product-grid">
         {products.map((product) => (
@@ -116,25 +177,34 @@ export function ProductsPage() {
               <span className={`availability-pill ${!product.enabled ? "is-off" : product.soldOut ? "is-sold-out" : ""}`}>{!product.enabled ? "已下架" : product.soldOut ? "已售罄" : "销售中"}</span>
             </div>
             <div className="product-card-body">
-              <div className="product-title-row"><div><h2>{product.name}</h2><p>{product.description || "暂无商品说明"}</p></div><strong>{formatMoney(product.basePrice)}</strong></div>
+              <div className="product-title-row"><div><span className="product-category-label">{categories.find((category) => category._id === product.categoryId)?.name ?? "未分类"}</span><h2>{product.name}</h2><p>{product.description || "暂无商品说明"}</p></div><strong>{formatMoney(product.basePrice)}</strong></div>
               <div className="product-tags">
                 {product.specGroups.map((group) => <span key={group.id}>{group.name} · {group.choices.length} 项</span>)}
                 {!product.specGroups.length && <span>无规格</span>}
               </div>
               <div className="points-line"><span>顾客 +{product.buyerPointsPerUnit}/份</span><span>邀请奖励 +{product.inviterPointsPerUnit}/份</span></div>
               <div className="product-actions">
-                <Button tone="secondary" onClick={() => { setForm(productInput(product)); setFormError(""); }}><Edit3 size={15} />编辑</Button>
+                <Button tone="secondary" onClick={() => { setForm(productInput(product)); setFormError(""); }}><Pencil size={15} />编辑</Button>
                 <Button tone="quiet" onClick={() => quickUpdate(product, { soldOut: !product.soldOut })}>{product.soldOut ? "恢复销售" : "标记售罄"}</Button>
                 <Button tone="quiet" onClick={() => quickUpdate(product, { enabled: !product.enabled })}>{product.enabled ? "下架" : "上架"}</Button>
               </div>
             </div>
           </article>
         ))}
-        {!products.length && <EmptyState title="还没有商品" detail="新增商品后，可继续设置辣度和小料。" icon={<Soup size={26} />} action={<Button onClick={() => setForm(blankProduct())}>新增商品</Button>} />}
+        {!products.length && <EmptyState title="还没有商品" detail="新增商品后，可继续设置辣度和小料。" icon={<Soup size={26} />} action={<Button onClick={() => setForm(blankProduct(categories.find((item) => item.enabled)?._id))}>新增商品</Button>} />}
       </section>
 
       <Dialog open={Boolean(form)} title={form?.id ? "编辑商品" : "新增商品"} description="修改只影响之后创建的订单，历史订单不会变化。" onClose={() => !saving && setForm(null)} width="large">
-        {form && <ProductForm form={form} setForm={setForm} error={formError} saving={saving} onSubmit={save} onCancel={() => setForm(null)} />}
+        {form && <ProductForm form={form} categories={categories} setForm={setForm} error={formError} saving={saving} onSubmit={save} onCancel={() => setForm(null)} />}
+      </Dialog>
+      <Dialog open={Boolean(categoryForm)} title={categoryForm?.id ? "编辑分类" : "新增分类"} description="分类名称和排序会同步到小程序点餐页。" onClose={() => !categorySaving && setCategoryForm(null)} width="small">
+        {categoryForm && <form className="editor-form" onSubmit={saveCategory}>
+          <label className="field"><span>分类名称</span><input autoFocus value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} placeholder="例如：招牌肉片" /></label>
+          <label className="field"><span>显示顺序</span><input type="number" min="0" step="1" value={categoryForm.sortOrder} onChange={(event) => setCategoryForm({ ...categoryForm, sortOrder: Math.max(0, Math.trunc(Number(event.target.value || 0))) })} /><small>数字越小越靠前</small></label>
+          <label className="switch-row compact-switch"><input type="checkbox" checked={categoryForm.enabled} onChange={(event) => setCategoryForm({ ...categoryForm, enabled: event.target.checked })} /><span><strong>在小程序中显示</strong></span></label>
+          {categoryError && <div className="form-error" role="alert">{categoryError}</div>}
+          <div className="dialog-actions"><Button type="button" tone="secondary" onClick={() => setCategoryForm(null)} disabled={categorySaving}>取消</Button><Button type="submit" loading={categorySaving}>保存分类</Button></div>
+        </form>}
       </Dialog>
     </div>
   );
@@ -142,6 +212,7 @@ export function ProductsPage() {
 
 function ProductForm({
   form,
+  categories,
   setForm,
   error,
   saving,
@@ -149,6 +220,7 @@ function ProductForm({
   onCancel
 }: {
   form: V2ProductSaveInput;
+  categories: V2Category[];
   setForm(value: V2ProductSaveInput): void;
   error: string;
   saving: boolean;
@@ -170,7 +242,8 @@ function ProductForm({
       <section className="form-section">
         <div className="form-section-title"><h3>基本信息</h3><p>顾客会在点餐首页看到这些内容。</p></div>
         <div className="form-grid two-columns">
-          <label className="field"><span>商品名称</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如：福鼎肉片" /></label>
+          <label className="field"><span>商品分类</span><select value={form.categoryId ?? ""} onChange={(event) => setForm({ ...form, categoryId: event.target.value })}><option value="" disabled>请选择分类</option>{categories.filter((category) => category.enabled || category._id === form.categoryId).map((category) => <option key={category._id} value={category._id}>{category.name}{category.enabled ? "" : "（已停用）"}</option>)}</select></label>
+          <label className="field"><span>商品名称</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如：雄飞肉片" /></label>
           <label className="field"><span>基础价格（元）</span><input type="number" min="0" step="0.01" value={(form.basePrice / 100).toFixed(2)} onChange={(event) => setForm({ ...form, basePrice: Math.round(Number(event.target.value || 0) * 100) })} /></label>
           <label className="field field-span"><span>商品说明</span><textarea rows={2} value={form.description ?? ""} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="一句话说明口味或用料" /></label>
           <label className="field field-span"><span>图片地址</span><input value={form.imageUrl ?? ""} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} placeholder="https://..." /></label>

@@ -39,6 +39,7 @@ export const v2SpecGroupSchema = z
 export const v2ProductSaveSchema = z
   .object({
     id: idSchema.optional(),
+    categoryId: idSchema.optional(),
     name: z.string().trim().min(1).max(40),
     description: z.string().trim().max(160).optional(),
     imageUrl: z.string().trim().max(1000).optional(),
@@ -82,14 +83,36 @@ export const v2CartLineInputSchema = z.object({
   note: z.string().trim().max(80).optional()
 });
 
-export const v2OrderCreateSchema = z.object({
-  requestId: requestIdSchema,
-  lineItems: z.array(v2CartLineInputSchema).min(1).max(30)
-});
+export const v2OrderCreateSchema = z
+  .object({
+    requestId: requestIdSchema,
+    expectedPayableAmount: priceSchema,
+    expectedBuyerPoints: nonNegativeInteger,
+    lineItems: z.array(v2CartLineInputSchema).max(30).default([]),
+    couponItems: z.array(z.object({
+      couponId: idSchema,
+      selections: z.array(v2CartSelectionSchema).max(12)
+    })).max(20).default([])
+  })
+  .superRefine((order, context) => {
+    if (order.lineItems.length === 0 && order.couponItems.length === 0) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "请先选择商品", path: ["lineItems"] });
+    }
+    const totalQuantity = order.lineItems.reduce((sum, line) => sum + line.quantity, 0);
+    if (totalQuantity + order.couponItems.length > 99) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "单笔订单最多 99 份", path: ["lineItems"] });
+    }
+    const couponIds = order.couponItems.map((item) => item.couponId);
+    if (new Set(couponIds).size !== couponIds.length) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "同一张商品券不能重复使用", path: ["couponItems"] });
+    }
+  });
 
 export const v2CouponExchangeSchema = z.object({
   requestId: requestIdSchema,
-  exchangeItemId: idSchema
+  exchangeItemId: idSchema,
+  expectedVersion: z.number().int().min(1).max(1_000_000),
+  expectedPointsCost: z.number().int().min(1).max(1_000_000)
 });
 
 export const v2CouponUseSchema = z.object({
@@ -102,7 +125,7 @@ export const v2InviteBindSchema = z.object({ inviteCode: z.string().trim().min(4
 
 export const v2OwnerLoginSchema = z.object({
   username: z.string().trim().min(3).max(32),
-  password: z.string().min(8).max(128)
+  password: z.string().min(1).max(128)
 });
 
 export const v2SessionSchema = z.object({ sessionToken: z.string().min(20).max(4096) });
@@ -117,6 +140,13 @@ export const v2ExchangeItemSaveSchema = z.object({
   sortOrder: z.number().int().min(0).max(9999)
 });
 
+export const v2CategorySaveSchema = z.object({
+  id: idSchema.optional(),
+  name: z.string().trim().min(1).max(20),
+  enabled: z.boolean(),
+  sortOrder: z.number().int().min(0).max(9999)
+});
+
 export const v2OwnerOrderListSchema = v2SessionSchema.extend({
   status: z.enum(["ALL", "WAITING_FULFILLMENT", "COMPLETED", "CANCELLED", "REFUNDING", "REFUNDED"]).default("ALL"),
   cursor: z.string().optional(),
@@ -127,6 +157,7 @@ export const v2OwnerOrderActionSchema = v2SessionSchema.extend({ orderId: idSche
 export const v2OwnerMemberQuerySchema = v2SessionSchema.extend({ query: z.string().trim().max(60) });
 
 export type V2ProductSaveInput = z.infer<typeof v2ProductSaveSchema>;
+export type V2CategorySaveInput = z.infer<typeof v2CategorySaveSchema>;
 export type V2StoreConfigSaveInput = z.infer<typeof v2StoreConfigSaveSchema>;
 export type V2OrderCreateInput = z.infer<typeof v2OrderCreateSchema>;
 export type V2CouponExchangeInput = z.infer<typeof v2CouponExchangeSchema>;

@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
+  ArrowRight,
   BarChart3,
+  BellRing,
   ChevronLeft,
   Menu,
   PackageOpen,
@@ -24,7 +26,7 @@ const navigation = [
 ];
 
 export function MerchantShell() {
-  const { session, logout } = useMerchant();
+  const { session, logout, newOrderNotice, dismissNewOrderNotice } = useMerchant();
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const active = navigation.find((item) => location.pathname.startsWith(item.to));
@@ -69,6 +71,17 @@ export function MerchantShell() {
           <span className="mobile-header-spacer" />
         </header>
         <main className="workspace-content">
+          {newOrderNotice && (
+            <aside className="new-order-alert" role="alert" aria-live="assertive">
+              <span className="new-order-alert-icon"><BellRing size={21} aria-hidden="true" /></span>
+              <div>
+                <strong>收到 {newOrderNotice.count} 笔新订单</strong>
+                <span>{newOrderNotice.pickupNumbers.length ? `取餐号 ${newOrderNotice.pickupNumbers.join("、")}，已按下单时间排队` : "已放入待出餐队列"}</span>
+              </div>
+              <Link to="/orders" onClick={dismissNewOrderNotice}>查看订单<ArrowRight size={15} /></Link>
+              <button className="icon-button" type="button" aria-label="关闭新单提醒" onClick={dismissNewOrderNotice}><X size={17} /></button>
+            </aside>
+          )}
           <Outlet />
         </main>
       </div>

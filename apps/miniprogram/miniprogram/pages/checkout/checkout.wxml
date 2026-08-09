@@ -1,40 +1,45 @@
 <view class="page checkout-page">
   <view class="checkout-heading">
-    <text class="eyebrow">确认内容</text>
-    <view class="page-title">这单吃什么</view>
-    <text class="page-subtitle">支付成功后会生成取餐号，并自动发放积分。</text>
+    <text class="eyebrow">核对购物车</text>
+    <view class="page-title">确认订单</view>
+    <text>付费商品与商品券会生成同一个取餐号</text>
   </view>
 
   <view wx:if="{{cart.length}}" class="checkout-card surface">
     <view wx:for="{{cart}}" wx:key="key" class="checkout-line">
       <view class="checkout-line-main">
-        <text class="checkout-product">{{item.productName}}</text>
+        <view class="checkout-name-row">
+          <text class="checkout-product">{{item.productName}}</text>
+          <small wx:if="{{item.isCoupon}}">商品券</small>
+        </view>
         <text class="checkout-spec">{{item.specText}}</text>
-        <text class="checkout-price">{{item.unitPriceText}} / 份</text>
+        <view class="checkout-price-row">
+          <text class="checkout-price">{{item.unitPriceText}}</text>
+          <del wx:if="{{item.isCoupon}}">{{item.originalPriceText}}</del>
+        </view>
       </view>
       <view class="checkout-line-side">
         <text class="checkout-line-total">{{item.lineTotalText}}</text>
-        <view class="mini-stepper">
+        <view wx:if="{{!item.isCoupon}}" class="mini-stepper">
           <button data-key="{{item.key}}" data-offset="-1" bindtap="changeQuantity">−</button>
           <text>{{item.quantity}}</text>
           <button data-key="{{item.key}}" data-offset="1" bindtap="changeQuantity">+</button>
         </view>
+        <button wx:else class="remove-line" data-key="{{item.key}}" bindtap="removeLine">移除</button>
       </view>
     </view>
   </view>
 
   <view wx:if="{{cart.length}}" class="checkout-summary surface">
-    <view><text>共 {{summary.count}} 份</text><strong>{{summary.amountText}}</strong></view>
-    <view><text>支付成功预计获得</text><strong class="points-value">+{{summary.points}} 积分</strong></view>
+    <view><text>商品数量</text><strong>{{summary.count}} 份</strong></view>
+    <view wx:if="{{summary.couponCount > 0}}"><text>商品券抵扣</text><strong class="discount-value">-{{summary.discountText}}</strong></view>
+    <view class="payable-row"><text>应付金额</text><strong>{{summary.amountText}}</strong></view>
+    <view wx:if="{{summary.points > 0}}"><text>本单积分</text><strong class="points-value">+{{summary.points}}</strong></view>
   </view>
 
-  <view wx:if="{{error}}" class="checkout-error">{{error}}</view>
+  <view wx:if="{{error}}" class="checkout-error" role="alert">{{error}}</view>
 
-  <view wx:if="{{cart.length}}" class="checkout-note">
-    <text>支付完成后请留意取餐号；如需退款，请联系摊主处理。</text>
-  </view>
-
-  <view wx:else class="empty-state">
+  <view wx:if="{{!cart.length}}" class="empty-state">
     <view class="state-mark">空</view>
     <text class="state-title">购物车还是空的</text>
     <text class="state-copy">返回点餐页选择商品。</text>
@@ -42,6 +47,6 @@
 </view>
 
 <view wx:if="{{cart.length}}" class="checkout-submit-bar">
-  <view><text>应付</text><strong>{{summary.amountText}}</strong></view>
-  <button class="primary-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitOrder">{{submitting ? '正在提交' : '微信支付'}}</button>
+  <view><text>应付</text><strong>{{summary.amountText}}</strong><small wx:if="{{summary.couponCount > 0}}">已用 {{summary.couponCount}} 张商品券</small></view>
+  <button class="primary-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitOrder">{{submitting ? '正在提交' : summary.submitText}}</button>
 </view>

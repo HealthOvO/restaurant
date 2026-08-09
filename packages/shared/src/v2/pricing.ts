@@ -86,7 +86,7 @@ function priceLine(product: V2Product, input: V2CartLineInput, lineIndex: number
     productName: product.name,
     imageUrl: product.imageUrl,
     quantity,
-    basePrice: couponMode ? 0 : basePrice,
+    basePrice,
     unitPrice,
     lineTotal,
     buyerPointsPerUnit,
@@ -94,7 +94,9 @@ function priceLine(product: V2Product, input: V2CartLineInput, lineIndex: number
     buyerPointsTotal: buyerPointsPerUnit * quantity,
     inviterPointsTotal: inviterPointsPerUnit * quantity,
     selectedChoices,
-    note: input.note?.trim() || undefined
+    note: input.note?.trim() || undefined,
+    pricingSource: couponMode ? "COUPON" : "PAID",
+    originalUnitPrice: couponMode ? basePrice + optionTotal : undefined
   };
 }
 

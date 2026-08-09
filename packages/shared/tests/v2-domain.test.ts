@@ -4,7 +4,10 @@ import {
   formatPickupNumber,
   quoteV2CouponProduct,
   quoteV2Order,
+  transitionV2Coupon,
   transitionV2Order,
+  v2OwnerLoginSchema,
+  v2OrderCreateSchema,
   v2ProductSaveSchema,
   type V2Product
 } from "../src";
@@ -14,7 +17,7 @@ const product: V2Product = {
   storeId: "store-main",
   createdAt: "2026-08-09T00:00:00.000Z",
   updatedAt: "2026-08-09T00:00:00.000Z",
-  name: "福鼎肉片",
+  name: "雄飞肉片",
   description: "现煮",
   basePrice: 1500,
   enabled: true,
@@ -91,6 +94,32 @@ describe("V2 pricing", () => {
       { productId: product._id, quantity: 40, selections: [{ groupId: "spice", choiceIds: ["hot"] }] }
     ])).toThrow("单笔订单最多购买 99 份");
   });
+
+  it("rejects more than 99 total items at the request boundary", () => {
+    expect(() => v2OrderCreateSchema.parse({
+      requestId: "order-request-over-limit",
+      expectedPayableAmount: 150000,
+      expectedBuyerPoints: 1000,
+      lineItems: [
+        { productId: product._id, quantity: 60, selections: [] },
+        { productId: product._id, quantity: 40, selections: [] }
+      ]
+    })).toThrow("单笔订单最多 99 份");
+  });
+
+  it("accepts a mixed cart but rejects the same coupon twice", () => {
+    const base = {
+      requestId: "mixed-cart-request",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [] }]
+    };
+    expect(v2OrderCreateSchema.parse({ ...base, couponItems: [{ couponId: "coupon-1", selections: [] }] }).couponItems).toHaveLength(1);
+    expect(() => v2OrderCreateSchema.parse({
+      ...base,
+      couponItems: [{ couponId: "coupon-1", selections: [] }, { couponId: "coupon-1", selections: [] }]
+    })).toThrow("同一张商品券不能重复使用");
+  });
 });
 
 describe("V2 business day and state", () => {
@@ -108,12 +137,18 @@ describe("V2 business day and state", () => {
     expect(transitionV2Order("PENDING_PAYMENT", "WAITING_FULFILLMENT")).toBe("WAITING_FULFILLMENT");
     expect(() => transitionV2Order("CANCELLED", "WAITING_FULFILLMENT")).toThrow();
   });
+
+  it("supports reserving and releasing a coupon around payment", () => {
+    expect(transitionV2Coupon("AVAILABLE", "RESERVED")).toBe("RESERVED");
+    expect(transitionV2Coupon("RESERVED", "AVAILABLE")).toBe("AVAILABLE");
+    expect(transitionV2Coupon("RESERVED", "USED")).toBe("USED");
+  });
 });
 
 describe("V2 product schema", () => {
   it("keeps all point and money values as integers", () => {
     const parsed = v2ProductSaveSchema.parse({
-      name: "福鼎肉片",
+      name: "雄飞肉片",
       basePrice: 1500,
       enabled: true,
       soldOut: false,
@@ -126,5 +161,12 @@ describe("V2 product schema", () => {
     expect(parsed.basePrice).toBe(1500);
     expect(() => v2ProductSaveSchema.parse({ ...parsed, buyerPointsPerUnit: 0.1 })).toThrow();
     expect(() => v2ProductSaveSchema.parse({ ...parsed, specGroups: [product.specGroups[0], product.specGroups[0]] })).toThrow("规格组 ID 不能重复");
+  });
+});
+
+describe("V2 owner login schema", () => {
+  it("accepts an existing short password while setup still enforces strong new passwords", () => {
+    expect(v2OwnerLoginSchema.parse({ username: "owner", password: "123456" }).password).toBe("123456");
+    expect(() => v2OwnerLoginSchema.parse({ username: "owner", password: "" })).toThrow();
   });
 });

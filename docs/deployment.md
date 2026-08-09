@@ -28,6 +28,8 @@ npm run build:release
 - `v2-payment-notify`
 - `v2-refund-notify`
 
+部署脚本会把顾客、老板及回调函数超时设置为 10 秒，把定时对账函数设置为 60 秒，避免冷启动或批量对账被 3 秒默认超时中断。非上海环境执行前设置 `TCB_REGION`。
+
 仓库已提供跨平台部署命令，构建完成后执行：
 
 ```bash
@@ -40,8 +42,8 @@ npm run deploy:functions -- <CloudBase 环境 ID>
 NODE_ENV=production
 STORE_ID=store-main
 SESSION_SECRET=<至少 32 字节随机值>
-BOOTSTRAP_SECRET=<独立随机值，仅初始化和账号恢复使用>
-SYSTEM_JOB_SECRET=<独立随机值，仅定时任务使用>
+BOOTSTRAP_SECRET=<至少 32 字节独立随机值，仅初始化和账号恢复使用>
+SYSTEM_JOB_SECRET=<至少 32 字节独立随机值，仅定时任务使用>
 PAYMENT_PROVIDER=wechat
 ```
 
@@ -59,7 +61,9 @@ WECHAT_PAY_NOTIFY_URL=<v2-payment-notify HTTPS 地址>
 WECHAT_REFUND_NOTIFY_URL=<v2-refund-notify HTTPS 地址>
 ```
 
-定时器每分钟调用 `v2-system-api` 两次，事件分别为：
+公网路由必须关闭 CloudBase 身份鉴权，由回调函数自行完成微信支付签名、时间戳和密文校验。建议路径分别使用 `/v2-payment-notify` 和 `/v2-refund-notify`。
+
+定时器每分钟调用 `v2-system-api` 两次。SCF 会把自定义消息放在 `Message` 字段中，因此两个触发器的自定义消息分别设置为：
 
 ```json
 {"action":"payments.reconcile","secret":"<SYSTEM_JOB_SECRET>","payload":{}}
@@ -68,6 +72,8 @@ WECHAT_REFUND_NOTIFY_URL=<v2-refund-notify HTTPS 地址>
 ```json
 {"action":"refunds.reconcile","secret":"<SYSTEM_JOB_SECRET>","payload":{}}
 ```
+
+支付对账建议在每分钟第 0 秒执行，退款对账在第 30 秒执行。系统函数同时兼容控制台直接调用和 SCF `Timer` 事件中的 `Message` 字符串。
 
 回调与主动查询都会进入相同幂等事务；定时任务用于处理回调延迟或丢失。
 
@@ -89,7 +95,7 @@ WECHAT_REFUND_NOTIFY_URL=<v2-refund-notify HTTPS 地址>
 }
 ```
 
-初始化后默认暂停营业，并生成一份福鼎肉片、辣度、小料以及一项 100 积分商品券。老板登录后台检查价格和积分后再开启营业。
+初始化后默认暂停营业，并生成一份雄飞肉片、辣度、小料以及一项 100 积分商品券。老板登录后台检查价格和积分后再开启营业。
 
 忘记密码或更换老板微信不影响后台账号。使用 `setup.resetOwner` 和 `BOOTSTRAP_SECRET` 重设账号，旧登录会立即失效：
 
@@ -112,6 +118,8 @@ VITE_TCB_ENV_ID=<CloudBase 环境 ID>
 ```bash
 npm run deploy:admin -- <CloudBase 环境 ID>
 ```
+
+该命令会自动使用传入的环境 ID 重新构建后台，再发布构建产物，避免误传未配置 CloudBase 环境的旧文件。
 
 ## 6. 顾客小程序与摊位二维码
 

@@ -1,4 +1,5 @@
 const api = require("../../services/v2");
+const { invalidateCache } = require("../../utils/v2-cache");
 const { clearCart } = require("../../utils/v2-cart");
 
 Page({
@@ -27,15 +28,23 @@ Page({
     }
     return api.queryPayment(this.data.orderId).then((order) => {
       if (order.status === "WAITING_FULFILLMENT" || order.status === "COMPLETED") {
-        if (order.source === "WECHAT_PAY") {
-          clearCart();
-          wx.removeStorageSync("v2-checkout-request");
-        }
+        clearCart();
+        wx.removeStorageSync("v2-checkout-request");
+        invalidateCache("home", "orders", "benefits", "profile");
         this.setData({ loading: false, order, error: "" });
         return;
       }
       if (order.status === "CANCELLED") {
+        wx.removeStorageSync("v2-checkout-request");
         this.setData({ loading: false, order, error: "订单未支付，已关闭" });
+        return;
+      }
+      if (order.status === "REFUNDING") {
+        this.setData({ loading: false, order, error: "退款正在处理中，请稍后查看" });
+        return;
+      }
+      if (order.status === "REFUNDED") {
+        this.setData({ loading: false, order, error: "订单已退款，本单发放的积分已回收" });
         return;
       }
       const attempts = this.data.attempts + 1;

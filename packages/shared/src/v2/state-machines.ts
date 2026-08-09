@@ -26,7 +26,8 @@ const REFUND_TRANSITIONS: Record<V2RefundStatus, V2RefundStatus[]> = {
 };
 
 const COUPON_TRANSITIONS: Record<V2CouponStatus, V2CouponStatus[]> = {
-  AVAILABLE: ["USED", "EXPIRED", "VOID"],
+  AVAILABLE: ["RESERVED", "USED", "EXPIRED", "VOID"],
+  RESERVED: ["AVAILABLE", "USED", "EXPIRED"],
   USED: ["AVAILABLE", "EXPIRED"],
   EXPIRED: [],
   VOID: []

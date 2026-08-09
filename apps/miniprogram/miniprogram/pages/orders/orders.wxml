@@ -11,7 +11,7 @@
     <button class="secondary-button" bindtap="loadOrders">重新加载</button>
   </view>
   <view wx:elif="{{!orders.length}}" class="empty-state">
-    <view class="state-mark">单</view><text class="state-title">还没有订单</text><text class="state-copy">选好口味下单后，取餐号会显示在这里。</text>
+    <view class="state-mark">单</view><text class="state-title">还没有订单</text><text class="state-copy">点餐后可在这里查看进度。</text>
     <button class="primary-button" bindtap="goHome">去点餐</button>
   </view>
 
@@ -28,9 +28,9 @@
         <text class="order-items">{{item.itemText}}</text>
         <view class="order-meta"><text>共 {{item.itemCount}} 份</text><strong>{{item.amountText}}</strong></view>
       </view>
-      <view wx:if="{{item.source === 'WECHAT_PAY' && item.buyerPoints > 0 && item.settledAt && item.status !== 'REFUNDED'}}" class="order-points">本单已获得 +{{item.buyerPoints}} 积分</view>
-      <view wx:if="{{item.source === 'WECHAT_PAY' && item.buyerPoints > 0 && item.status === 'REFUNDED'}}" class="order-points is-refunded">本单积分已退回</view>
-      <view wx:if="{{item.source === 'COUPON'}}" class="order-points is-coupon">使用「{{item.couponName}}」下单</view>
+      <view wx:if="{{item.paidAmount > 0 && item.buyerPoints > 0 && item.settledAt && item.status !== 'REFUNDED'}}" class="order-points">本单已获得 +{{item.buyerPoints}} 积分</view>
+      <view wx:if="{{item.paidAmount > 0 && item.buyerPoints > 0 && item.status === 'REFUNDED'}}" class="order-points is-refunded">本单积分已回收</view>
+      <view wx:if="{{item.couponCount > 0}}" class="order-points is-coupon">本单使用 {{item.couponCount}} 张商品券</view>
     </view>
   </view>
 </view>
