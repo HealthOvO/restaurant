@@ -1,0 +1,41 @@
+README.md
+  s_8f688ecc677e50::t_8ea0de71e3db7f 1
+apps/admin-web/index.html
+  s_8f688ecc677e50::t_7ed8c40e94b572 7-8
+apps/admin-web/src/app/MerchantShell.tsx
+  s_8f688ecc677e50::t_21faadc9e3cc44 38
+apps/admin-web/src/mocks/mockApi.ts
+  s_8f688ecc677e50::t_a3af3ff0f2689c 25,215,219
+apps/admin-web/src/pages/LoginPage.tsx
+  s_8f688ecc677e50::t_8365b5106f2346 33-53,55-85
+apps/admin-web/src/styles/global.css
+  s_8f688ecc677e50::t_38136a09c23673 382,384,386-391,394-404,406,409-421,423-425,431-432,434,436,440-441,445-446,452-455,458-461,464-465,468-469,472-474,477-479,482-488,490-495,497,500-507,510-511,514-536,542-545,550-551,556-557,561-563,568-586,600-601,617-628,634,2288-2300,2408-2422
+apps/admin-web/src/test/App.test.tsx
+  s_8f688ecc677e50::t_e2982f616c3c94 15-17,25,38
+apps/miniprogram/miniprogram/app.json
+  s_8f688ecc677e50::t_634a5cfa40085f 12
+apps/miniprogram/miniprogram/pages/profile/profile.js
+  s_8f688ecc677e50::t_9cd4f5b5205112 44
+cloudfunctions/tests/v2-application.test.ts
+  s_8f688ecc677e50::t_ea48972af624cc 15,284,287
+docs/deployment.md
+  s_8f688ecc677e50::t_b935e9c9aa1996 77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bceb2229ce70f38b9247b6dedc73c17c913e5bbb",
+  "prompts": {},
+  "sessions": {
+    "s_8f688ecc677e50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe272-c5ca-7303-80b2-161652f0c965",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
