@@ -1,0 +1,47 @@
+apps/admin-web/src/app/MerchantContext.tsx
+  s_8f688ecc677e50::t_8ca519da1008db 53
+apps/admin-web/src/app/MerchantShell.tsx
+  s_8f688ecc677e50::t_a27c21a0e0869a 57
+apps/admin-web/src/components/PageState.tsx
+  s_8f688ecc677e50::t_cfd2f72253ff39 1,19-31,33-34
+apps/admin-web/src/lib/api.ts
+  s_8f688ecc677e50::t_4d0398c765d256 70
+apps/admin-web/src/mocks/mockApi.ts
+  s_8f688ecc677e50::t_e641bad8f43a6c 38
+apps/admin-web/src/pages/DashboardPage.tsx
+  s_8f688ecc677e50::t_3ccd9020a57f51 2,7,54,73,86,93,95,100
+apps/admin-web/src/pages/ExchangePage.tsx
+  s_8f688ecc677e50::t_eea011537c4ea0 39,49,57,60,63,65,75
+apps/admin-web/src/pages/LoginPage.tsx
+  s_8f688ecc677e50::t_500795e7a4a271 38,68-69
+apps/admin-web/src/pages/MembersPage.tsx
+  s_8f688ecc677e50::t_7dbf32a914783d 2,41,45,47,49-52,57-58,60,63,71,73
+apps/admin-web/src/pages/OrdersPage.tsx
+  s_8f688ecc677e50::t_9108e7a12f4ccf 2,23-31,104,116,118,120-122,127,130,138-147,183,189-190
+apps/admin-web/src/pages/ProductsPage.tsx
+  s_8f688ecc677e50::t_742d49a0481d70 2,106,110,115,124,133,136,191,225
+apps/admin-web/src/pages/SettingsPage.tsx
+  s_8f688ecc677e50::t_686ad95300c78e 32,41,59
+apps/admin-web/src/styles/global.css
+  s_8f688ecc677e50::t_9aef18b4772e1b 325,329-333,348-349,354,358-378,877,885-888,951-961,1016-1026,1029,1033-1044,1047-1049,1064,1068,1070,1073-1074,1099-1103,1114-1119,1128-1130,1327-1358,1366-1372,1382-1384,1393-1420,1505-1506,1725,1731-1740,1772-1780,1844-1850,1871-1875,1892,1895-1898,1911-1934,2163,2167-2169,2174-2186,2260-2262,2277-2280,2316-2318,2340-2341
+apps/admin-web/src/test/App.test.tsx
+  s_8f688ecc677e50::t_1dba451b748230 1,28-30,32,44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ff006ae3e456f583ea04163e3a01d564e848f334",
+  "prompts": {},
+  "sessions": {
+    "s_8f688ecc677e50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe272-c5ca-7303-80b2-161652f0c965",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
