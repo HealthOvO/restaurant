@@ -30,45 +30,59 @@ export function LoginPage() {
 
   return (
     <main className="login-page">
-      <section className="login-brand-panel" aria-label="后台介绍">
-        <div className="login-brand-content">
-          <div className="login-logo"><Soup size={26} aria-hidden="true" /></div>
-          <p className="eyebrow">阿福肉片</p>
-          <h1>收单、出餐、配置，<br />都在一个地方。</h1>
-          <p className="login-intro">新订单、取餐号和商品设置，一眼就能找到。</p>
-          <div className="login-preview" aria-hidden="true">
-            <div><span>103</span><p>福鼎肉片 × 2</p><strong>待出餐</strong></div>
-            <div><span>102</span><p>商品券订单</p><strong>待出餐</strong></div>
+      <div className="login-shell">
+        <section className="login-brand-panel" aria-label="后台介绍">
+          <div className="login-brand-content">
+            <header className="login-brand-header">
+              <div className="login-brand-lockup">
+                <span className="login-logo"><Soup size={23} aria-hidden="true" /></span>
+                <span>
+                  <strong>雄飞肉片</strong>
+                  <small>商家后台</small>
+                </span>
+              </div>
+              <span className="login-brand-tag">营业管理</span>
+            </header>
+
+            <div className="login-brand-copy">
+              <p className="eyebrow">每天开摊，从这里开始</p>
+              <h1>今天的订单，<br />都在这里。</h1>
+              <p className="login-intro">查看新订单和取餐号，完成出餐，也可以随时调整商品。</p>
+            </div>
+
+            <p className="login-brand-footnote">新鲜现做 · 叫号取餐</p>
           </div>
-        </div>
-      </section>
-      <section className="login-form-panel">
-        <form className="login-form" onSubmit={submit} noValidate>
-          <div className="login-form-heading">
-            <span className="login-mobile-logo"><Soup size={22} aria-hidden="true" /></span>
-            <p className="eyebrow">商家后台</p>
-            <h2>欢迎回来</h2>
-            <p>使用老板账号登录</p>
-          </div>
-          <label className="field">
-            <span>账号</span>
-            <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" placeholder="请输入账号" />
-          </label>
-          <label className="field">
-            <span>密码</span>
-            <span className="password-field">
-              <input value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="请输入密码" />
-              <button type="button" aria-label={showPassword ? "隐藏密码" : "显示密码"} onClick={() => setShowPassword((value) => !value)}>
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </span>
-          </label>
-          {error && <div className="form-error" role="alert">{error}</div>}
-          <Button type="submit" loading={loading} className="login-submit"><LockKeyhole size={18} aria-hidden="true" />进入后台</Button>
-          <p className="session-note">关闭浏览器后需要重新登录</p>
-          {isMockMode && <p className="dev-note">本地演示账号已填好</p>}
-        </form>
-      </section>
+        </section>
+
+        <section className="login-form-panel">
+          <form className="login-form" onSubmit={submit} noValidate>
+            <div className="login-form-heading">
+              <p className="eyebrow">老板账号</p>
+              <h2>老板登录</h2>
+              <p>登录后查看今天的订单。</p>
+            </div>
+            <div className="login-fields">
+              <label className="field" htmlFor="merchant-username">
+                <span>账号</span>
+                <input id="merchant-username" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" placeholder="请输入账号" />
+              </label>
+              <label className="field" htmlFor="merchant-password">
+                <span>密码</span>
+                <span className="password-field">
+                  <input id="merchant-password" value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="请输入密码" />
+                  <button type="button" aria-label={showPassword ? "隐藏密码" : "显示密码"} onClick={() => setShowPassword((value) => !value)}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </span>
+              </label>
+            </div>
+            {error && <div className="form-error" role="alert">{error}</div>}
+            <Button type="submit" loading={loading} className="login-submit">登录</Button>
+            <p className="session-note"><LockKeyhole size={14} aria-hidden="true" />账号信息仅用于本店后台</p>
+            {isMockMode && <p className="dev-note">本地演示账号已填好</p>}
+          </form>
+        </section>
+      </div>
     </main>
   );
 }

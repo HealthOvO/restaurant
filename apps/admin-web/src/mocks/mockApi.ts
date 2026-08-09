@@ -22,7 +22,7 @@ const TOKEN = "mock-owner-session-token-for-browser-testing";
 let config: V2StoreConfig = {
   _id: "store-main:config",
   storeId: "store-main",
-  storeName: "阿福肉片",
+  storeName: "雄飞肉片",
   announcement: "每日现打肉泥，现点现煮",
   businessOpen: true,
   dayBoundaryTime: "04:00",
@@ -212,11 +212,11 @@ export const mockMerchantApi: MerchantApi = {
     }
     return delay({
       token: TOKEN,
-      owner: { _id: "owner-main", username: "owner", displayName: "阿福老板" },
+      owner: { _id: "owner-main", username: "owner", displayName: "雄飞老板" },
       expiresAt: "2099-12-31T23:59:59.000Z"
     });
   },
-  async profile(token) { auth(token); return delay({ _id: "owner-main", username: "owner", displayName: "阿福老板" }); },
+  async profile(token) { auth(token); return delay({ _id: "owner-main", username: "owner", displayName: "雄飞老板" }); },
   async getDashboard(token) { auth(token); return delay(dashboard()); },
   async listOrders(token, status) { auth(token); return delay(orders.filter((order) => !status || order.status === status)); },
   async completeOrder(token, orderId) {

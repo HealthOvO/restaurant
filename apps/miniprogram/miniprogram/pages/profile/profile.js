@@ -41,6 +41,6 @@ Page({
   },
 
   onShareAppMessage() {
-    return { title: "来阿福肉片一起吃一碗", path: "/pages/home/home?source=friend" };
+    return { title: "来雄飞肉片一起吃一碗", path: "/pages/home/home?source=friend" };
   }
 });

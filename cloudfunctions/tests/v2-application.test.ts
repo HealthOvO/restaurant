@@ -12,7 +12,7 @@ const clock: V2Clock = { now: () => new Date(nowIso) };
 const storeConfig: V2StoreConfig = {
   _id: "store-main:config",
   storeId: "store-main",
-  storeName: "阿福肉片",
+  storeName: "雄飞肉片",
   announcement: "现点现煮",
   businessOpen: true,
   dayBoundaryTime: "04:00",
@@ -281,10 +281,10 @@ describe("V2 store setup", () => {
   it("initializes one closed store and resets the owner with session invalidation", async () => {
     const repository = new InMemoryV2Repository("store-main");
     const result = await initializeV2Store(repository, {
-      storeName: "阿福肉片",
+      storeName: "雄飞肉片",
       username: "owner",
       password: "strong-password",
-      displayName: "阿福老板"
+      displayName: "雄飞老板"
     }, new Date(nowIso));
     expect(result.store.businessOpen).toBe(false);
     expect(result.product.buyerPointsPerUnit).toBe(10);

@@ -74,7 +74,7 @@ WECHAT_REFUND_NOTIFY_URL=<v2-refund-notify HTTPS 地址>
   "action": "setup.initialize",
   "secret": "<BOOTSTRAP_SECRET>",
   "payload": {
-    "storeName": "阿福肉片",
+    "storeName": "雄飞肉片",
     "announcement": "新鲜现做，叫号取餐",
     "username": "owner",
     "password": "<至少 8 位强密码>",
