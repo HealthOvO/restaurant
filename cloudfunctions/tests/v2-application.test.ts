@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { V2ExchangeItem, V2Member, V2OwnerAccount, V2Product, V2StoreConfig } from "@restaurant/shared";
+import type { V2ExchangeItem, V2Member, V2Order, V2OwnerAccount, V2Product, V2StoreConfig } from "@restaurant/shared";
 import { V2Application, type V2Clock } from "../src/v2/application";
 import { loginV2Owner, hashV2OwnerPassword, requireV2Owner } from "../src/v2/owner-auth";
-import { MockV2PaymentProvider } from "../src/v2/payment";
-import { InMemoryV2Repository, withoutV2DocumentId } from "../src/v2/repository";
+import { MockV2PaymentProvider, type V2PaymentProvider } from "../src/v2/payment";
+import { InMemoryV2Repository, v2DocumentSetOptions, withoutV2DocumentId } from "../src/v2/repository";
 import { initializeV2Store, resetV2Owner } from "../src/v2/setup";
 
 const nowIso = "2026-08-09T10:00:00.000Z";
@@ -88,7 +88,7 @@ function member(id: string, openId: string, code: string, pointsBalance = 0): V2
   };
 }
 
-function setup(points = 0) {
+function setup(points = 0, payments: V2PaymentProvider = new MockV2PaymentProvider()) {
   const inviter = member("member-inviter", "openid-inviter", "INVITER", 0);
   const buyer = { ...member("member-buyer", "openid-buyer", "BUYER001", points), inviterMemberId: inviter._id };
   const repository = new InMemoryV2Repository("store-main", {
@@ -106,7 +106,6 @@ function setup(points = 0) {
       updatedAt: nowIso
     }]
   });
-  const payments = new MockV2PaymentProvider();
   const application = new V2Application(repository, payments, clock);
   return { repository, payments, application, inviter, buyer };
 }
@@ -169,6 +168,86 @@ describe("V2 payment settlement", () => {
     expect((await repository.getMemberById(buyer._id))?.pointsBalance).toBe(-25);
     expect((await repository.getMemberById(inviter._id))?.pointsBalance).toBe(0);
     expect((await repository.listPointLedgerByMember(buyer._id))).toHaveLength(2);
+  });
+
+  it("moves a NOTPAY reconciliation forward instead of querying the same batch forever", async () => {
+    const { application, repository, buyer } = setup();
+    const created = await application.createPaymentOrder(buyer.openId, {
+      requestId: "order-request-reconcile",
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    });
+    await repository.runTransaction(async (tx) => {
+      const payment = await tx.getPayment(created.order._id);
+      if (!payment) throw new Error("missing payment");
+      await tx.savePayment({ ...payment, nextQueryAt: "2026-08-09T09:59:00.000Z" });
+    });
+
+    await application.reconcilePayments();
+    const payment = await repository.getPayment(created.order._id);
+    expect(payment?.status).toBe("NOTPAY");
+    expect(payment?.queryCount).toBe(1);
+    expect(payment?.nextQueryAt).toBe("2026-08-09T10:00:30.000Z");
+  });
+
+  it("allows a CLOSED refund to be retried with a new refund number", async () => {
+    class ClosedThenSuccessProvider extends MockV2PaymentProvider {
+      readonly refundNumbers: string[] = [];
+      override async refund(_order: V2Order, outRefundNo: string) {
+        this.refundNumbers.push(outRefundNo);
+        return this.refundNumbers.length === 1
+          ? { status: "CLOSED" as const, refundId: "closed-refund" }
+          : { status: "SUCCESS" as const, refundId: "successful-refund" };
+      }
+    }
+    const payments = new ClosedThenSuccessProvider();
+    const { application, repository, buyer } = setup(0, payments);
+    const created = await application.createPaymentOrder(buyer.openId, {
+      requestId: "order-request-refund-retry",
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    });
+    await application.confirmPaidOrder(created.order._id, "MOCK");
+
+    const closed = await application.refundOrder(created.order._id);
+    expect(closed.status).toBe("REFUNDING");
+    expect(closed.refundStatus).toBe("CLOSED");
+    const refunded = await application.refundOrder(created.order._id);
+    expect(refunded.status).toBe("REFUNDED");
+    expect(payments.refundNumbers).toHaveLength(2);
+    expect(payments.refundNumbers[0]).not.toBe(payments.refundNumbers[1]);
+    expect((await repository.listPointLedgerByMember(buyer._id))).toHaveLength(2);
+  });
+
+  it("does not let an old CLOSED refund overwrite the active retry status", async () => {
+    class ClosedThenProcessingProvider extends MockV2PaymentProvider {
+      readonly refundNumbers: string[] = [];
+      override async refund(_order: V2Order, outRefundNo: string) {
+        this.refundNumbers.push(outRefundNo);
+        return this.refundNumbers.length === 1
+          ? { status: "CLOSED" as const, refundId: "closed-refund" }
+          : { status: "PROCESSING" as const, refundId: "processing-refund" };
+      }
+    }
+    const payments = new ClosedThenProcessingProvider();
+    const { application, repository, buyer } = setup(0, payments);
+    const created = await application.createPaymentOrder(buyer.openId, {
+      requestId: "order-request-stale-refund",
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    });
+    await application.confirmPaidOrder(created.order._id, "MOCK");
+
+    const closed = await application.refundOrder(created.order._id);
+    const oldRefund = await repository.getRefund(closed.activeRefundId!);
+    const retrying = await application.refundOrder(created.order._id);
+    expect(retrying.refundStatus).toBe("PROCESSING");
+    expect(retrying.activeRefundId).not.toBe(closed.activeRefundId);
+
+    const afterStaleUpdate = await application.recordWeChatRefund({
+      outRefundNo: oldRefund!.outRefundNo,
+      status: "CLOSED",
+      refundId: "closed-refund"
+    });
+    expect(afterStaleUpdate.refundStatus).toBe("PROCESSING");
+    expect(afterStaleUpdate.activeRefundId).toBe(retrying.activeRefundId);
   });
 });
 
@@ -305,6 +384,9 @@ describe("V2 CloudBase document writes", () => {
     expect(withoutV2DocumentId({ _id: "member-1", storeId: "store-main", pointsBalance: 10 })).toEqual({
       storeId: "store-main",
       pointsBalance: 10
+    });
+    expect(v2DocumentSetOptions({ _id: "member-1", storeId: "store-main", pointsBalance: 10 })).toEqual({
+      data: { storeId: "store-main", pointsBalance: 10 }
     });
   });
 });

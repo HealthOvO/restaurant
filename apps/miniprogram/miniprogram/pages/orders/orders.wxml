@@ -2,7 +2,7 @@
   <view class="orders-heading">
     <text class="eyebrow">取餐进度</text>
     <view class="page-title">我的订单</view>
-    <text class="page-subtitle">支付下单和商品券下单都会在这里显示。</text>
+    <text class="page-subtitle">微信支付和商品券订单都会显示在这里。</text>
   </view>
 
   <view wx:if="{{loading}}" class="loading-state"><view class="loading-dot"></view><text>正在加载订单</text></view>
@@ -28,7 +28,8 @@
         <text class="order-items">{{item.itemText}}</text>
         <view class="order-meta"><text>共 {{item.itemCount}} 份</text><strong>{{item.amountText}}</strong></view>
       </view>
-      <view wx:if="{{item.source === 'WECHAT_PAY' && item.buyerPoints > 0 && item.settledAt}}" class="order-points">本单已获得 +{{item.buyerPoints}} 积分</view>
+      <view wx:if="{{item.source === 'WECHAT_PAY' && item.buyerPoints > 0 && item.settledAt && item.status !== 'REFUNDED'}}" class="order-points">本单已获得 +{{item.buyerPoints}} 积分</view>
+      <view wx:if="{{item.source === 'WECHAT_PAY' && item.buyerPoints > 0 && item.status === 'REFUNDED'}}" class="order-points is-refunded">本单积分已退回</view>
       <view wx:if="{{item.source === 'COUPON'}}" class="order-points is-coupon">使用「{{item.couponName}}」下单</view>
     </view>
   </view>

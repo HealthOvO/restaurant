@@ -1,14 +1,15 @@
-.orders-heading { padding: 14rpx 4rpx 28rpx; }
+.orders-heading { padding: 12rpx 4rpx 30rpx; }
 .order-list { display: flex; flex-direction: column; gap: 20rpx; }
-.order-card { padding: 24rpx; }
+.order-card { overflow: hidden; padding: 0; border-radius: 26rpx; }
 .order-card-head, .order-meta, .pickup-row { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; }
-.order-card-head { padding-bottom: 20rpx; border-bottom: 1rpx solid #eee7dd; }
+.order-card-head { padding: 22rpx 24rpx; border-bottom: 1rpx solid #eee6dc; }
 .order-source { display: flex; align-items: center; gap: 14rpx; color: #8d8177; font-size: 21rpx; }
-.pickup-row { margin: 22rpx 0; padding: 22rpx 24rpx; color: #756a61; background: #f7efe2; border-radius: 20rpx; font-size: 24rpx; }
-.pickup-row strong { color: #a9402b; font-size: 54rpx; line-height: 1; letter-spacing: 4rpx; }
-.order-content { display: flex; flex-direction: column; gap: 16rpx; padding-top: 20rpx; }
+.pickup-row { margin: 0; padding: 26rpx 24rpx; color: #756a61; background: linear-gradient(90deg, #f6ecdf, #fbf6ef); border-bottom: 1rpx solid #eadfd2; font-size: 23rpx; }
+.pickup-row strong { color: #a44732; font-size: 58rpx; line-height: 1; letter-spacing: 4rpx; }
+.order-content { display: flex; flex-direction: column; gap: 16rpx; padding: 23rpx 24rpx; }
 .order-items { color: #342a24; font-size: 27rpx; font-weight: 650; line-height: 1.55; }
 .order-meta { color: #8d8177; font-size: 23rpx; }
 .order-meta strong { color: #2a211c; font-size: 27rpx; }
-.order-points { margin-top: 20rpx; padding-top: 18rpx; color: #2f6b4f; border-top: 1rpx solid #eee7dd; font-size: 23rpx; font-weight: 650; }
+.order-points { margin: 0; padding: 18rpx 24rpx; color: #2f6b4f; background: #f7faf8; border-top: 1rpx solid #e5ece8; font-size: 22rpx; font-weight: 650; }
 .order-points.is-coupon { color: #77551a; }
+.order-points.is-refunded { color: #81766d; background: #f7f4f0; border-color: #ebe4dc; }

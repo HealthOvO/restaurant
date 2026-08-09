@@ -111,9 +111,13 @@ export function quoteV2Order(products: V2Product[], inputs: V2CartLineInput[]): 
     return priceLine(product, input, index, false);
   });
 
+  const itemCount = lineItems.reduce((total, item) => total + item.quantity, 0);
+  if (itemCount > 99) {
+    throw new DomainError("QUANTITY_LIMIT", "单笔订单最多购买 99 份");
+  }
   return {
     lineItems,
-    itemCount: lineItems.reduce((total, item) => total + item.quantity, 0),
+    itemCount,
     payableAmount: lineItems.reduce((total, item) => total + item.lineTotal, 0),
     buyerPoints: lineItems.reduce((total, item) => total + item.buyerPointsTotal, 0),
     inviterPoints: lineItems.reduce((total, item) => total + item.inviterPointsTotal, 0)

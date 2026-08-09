@@ -30,11 +30,11 @@ Page({
 
   onLoad() {
     this.syncCart(loadCart());
-    this.loadHome();
   },
 
   onShow() {
     this.syncCart(loadCart());
+    this.loadHome();
   },
 
   onPullDownRefresh() {
@@ -131,17 +131,23 @@ Page({
     }
     const selections = product.specGroups.map((group) => ({ groupId: group.id, choiceIds: group.choices.filter((choice) => choice.selected).map((choice) => choice.id) }));
     const selectedChoices = product.specGroups.flatMap((group) => group.choices.filter((choice) => choice.selected).map((choice) => ({ groupName: group.name, choiceName: choice.name, priceDelta: choice.priceDelta })));
-    const nextCart = addCartLine(this.data.cart, {
-      productId: product._id,
-      productName: product.name,
-      imageUrl: product.imageUrl,
-      basePrice: product.basePrice,
-      unitPrice: this.data.activeUnitPrice,
-      buyerPointsPerUnit: product.pointsEnabled ? product.buyerPointsPerUnit : 0,
-      quantity: this.data.quantity,
-      selections,
-      selectedChoices
-    });
+    let nextCart;
+    try {
+      nextCart = addCartLine(this.data.cart, {
+        productId: product._id,
+        productName: product.name,
+        imageUrl: product.imageUrl,
+        basePrice: product.basePrice,
+        unitPrice: this.data.activeUnitPrice,
+        buyerPointsPerUnit: product.pointsEnabled ? product.buyerPointsPerUnit : 0,
+        quantity: this.data.quantity,
+        selections,
+        selectedChoices
+      });
+    } catch (error) {
+      wx.showToast({ title: error.message || "购物车数量已达上限", icon: "none" });
+      return;
+    }
     saveCart(nextCart);
     this.syncCart(nextCart);
     this.closeProduct();

@@ -28,7 +28,7 @@ foreach ($dir in $functionDirs) {
   Write-Host "`n==> 部署云函数 $($dir.Name)" -ForegroundColor Yellow
   Push-Location $dir.FullName
   try {
-    tcb fn deploy $dir.Name -e $EnvId --force --yes
+    tcb fn deploy $dir.Name -e $EnvId --force --deployMode zip
     if ($LASTEXITCODE -ne 0) {
       throw "云函数 $($dir.Name) 部署失败，请先确认 tcb login 状态和环境权限。"
     }

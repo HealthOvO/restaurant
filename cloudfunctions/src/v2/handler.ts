@@ -33,7 +33,7 @@ export async function v2Response<T>(operation: () => Promise<T>): Promise<V2ApiS
       return { ok: false, code: "INVALID_INPUT", message: "提交内容不完整或格式不正确", requestId };
     }
     console.error("[v2] unexpected error", { requestId, error });
-    return { ok: false, code: "INTERNAL_ERROR", message: "系统开小差了，请稍后重试", requestId };
+    return { ok: false, code: "INTERNAL_ERROR", message: "操作没有完成，请稍后再试", requestId };
   }
 }
 

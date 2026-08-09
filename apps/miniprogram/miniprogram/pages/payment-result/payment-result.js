@@ -27,8 +27,10 @@ Page({
     }
     return api.queryPayment(this.data.orderId).then((order) => {
       if (order.status === "WAITING_FULFILLMENT" || order.status === "COMPLETED") {
-        clearCart();
-        wx.removeStorageSync("v2-checkout-request");
+        if (order.source === "WECHAT_PAY") {
+          clearCart();
+          wx.removeStorageSync("v2-checkout-request");
+        }
         this.setData({ loading: false, order, error: "" });
         return;
       }

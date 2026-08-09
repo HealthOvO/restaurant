@@ -3,7 +3,7 @@
   <view wx:elif="{{error}}" class="error-state"><view class="state-mark">!</view><text class="state-title">暂时不能使用</text><text class="state-copy">{{error}}</text><button class="secondary-button" bindtap="loadCoupon">重新加载</button></view>
 
   <block wx:elif="{{coupon && product}}">
-    <view class="coupon-use-heading"><text class="eyebrow">商品券下单</text><view class="page-title">{{product.name}}</view><text class="page-subtitle">本单实付 0 元，提交后会直接生成取餐号。</text></view>
+    <view class="coupon-use-heading"><text class="eyebrow">使用商品券</text><view class="page-title">{{product.name}}</view><text class="page-subtitle">本单实付 0 元，提交后直接生成取餐号。</text></view>
     <view class="free-order-note"><text>使用</text><strong>{{coupon.name}}</strong><text>本单不再获得消费积分</text></view>
 
     <view wx:for="{{product.specGroups}}" wx:key="id" wx:for-item="group" class="coupon-spec surface">

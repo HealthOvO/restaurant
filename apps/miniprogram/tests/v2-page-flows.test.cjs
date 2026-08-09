@@ -99,7 +99,7 @@ test("payment result clears the cart only after settlement", async () => {
   const wx = wxMock();
   let clearCount = 0;
   const loaded = loadPage("pages/payment-result/payment-result.js", {
-    "../../services/v2": { queryPayment: async () => ({ _id: "order-1", status: "WAITING_FULFILLMENT", pickupNumber: "018" }) },
+    "../../services/v2": { queryPayment: async () => ({ _id: "order-1", source: "WECHAT_PAY", status: "WAITING_FULFILLMENT", pickupNumber: "018" }) },
     "../../utils/v2-cart": { clearCart: () => { clearCount += 1; } }
   }, wx);
   try {
@@ -107,5 +107,20 @@ test("payment result clears the cart only after settlement", async () => {
     await loaded.page.query();
     assert.equal(clearCount, 1);
     assert.equal(loaded.page.data.order.pickupNumber, "018");
+  } finally { loaded.restore(); }
+});
+
+test("coupon pickup result preserves an unrelated paid cart", async () => {
+  const wx = wxMock();
+  let clearCount = 0;
+  const loaded = loadPage("pages/payment-result/payment-result.js", {
+    "../../services/v2": { queryPayment: async () => ({ _id: "coupon-order-1", source: "COUPON", status: "WAITING_FULFILLMENT", pickupNumber: "019" }) },
+    "../../utils/v2-cart": { clearCart: () => { clearCount += 1; } }
+  }, wx);
+  try {
+    loaded.page.setData({ orderId: "coupon-order-1" });
+    await loaded.page.query();
+    assert.equal(clearCount, 0);
+    assert.equal(loaded.page.data.order.pickupNumber, "019");
   } finally { loaded.restore(); }
 });

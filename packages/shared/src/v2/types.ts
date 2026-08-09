@@ -135,6 +135,8 @@ export interface V2Order extends V2BaseRecord {
   status: V2OrderStatus;
   paymentStatus?: V2PaymentStatus;
   refundStatus?: V2RefundStatus;
+  activeRefundId?: string;
+  refundAttempt?: number;
   payableAmount: number;
   paidAmount: number;
   itemCount: number;

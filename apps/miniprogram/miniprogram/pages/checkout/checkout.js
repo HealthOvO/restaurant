@@ -1,5 +1,5 @@
 const api = require("../../services/v2");
-const { cartSummary, createRequestId, loadCart, saveCart } = require("../../utils/v2-cart");
+const { MAX_CART_QUANTITY, cartSummary, createRequestId, loadCart, saveCart } = require("../../utils/v2-cart");
 
 function money(cents) {
   return `¥${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -37,6 +37,10 @@ Page({
     const raw = loadCart();
     const index = raw.findIndex((item) => item.key === key);
     if (index < 0) return;
+    if (Number(offset || 0) > 0 && cartSummary(raw).count >= MAX_CART_QUANTITY) {
+      wx.showToast({ title: `单笔最多 ${MAX_CART_QUANTITY} 份`, icon: "none" });
+      return;
+    }
     const nextQuantity = raw[index].quantity + Number(offset || 0);
     if (nextQuantity <= 0) raw.splice(index, 1);
     else raw[index].quantity = Math.min(99, nextQuantity);

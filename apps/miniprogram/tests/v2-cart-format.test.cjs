@@ -25,6 +25,12 @@ test("cart merges identical selections and calculates integer points", () => {
     saveCart(merged);
     assert.deepEqual(loadCart(), merged);
     assert.equal(storage.has("v2-checkout-request"), false);
+    assert.throws(() => addCartLine(merged, { ...base, quantity: 97 }), /最多放 99 份/);
+    assert.throws(() => addCartLine([{ ...base, key: "p1|a", quantity: 60 }], {
+      ...base,
+      selections: [{ groupId: "spice", choiceIds: ["hot"] }],
+      quantity: 40
+    }), /最多放 99 份/);
   } finally {
     delete require.cache[cartPath];
     if (previousWx === undefined) delete global.wx; else global.wx = previousWx;

@@ -86,6 +86,23 @@ export class V2Application {
     return config;
   }
 
+  private async recordPendingPaymentQuery(paymentId: string, observedAt: Date): Promise<void> {
+    const now = observedAt.toISOString();
+    await this.repository.runTransaction(async (tx) => {
+      const payment = await tx.getPayment(paymentId);
+      if (!payment || !(payment.status === "INIT" || payment.status === "NOTPAY")) return;
+      const queryCount = payment.queryCount + 1;
+      const delaySeconds = Math.min(300, 30 * Math.max(1, queryCount));
+      await tx.savePayment({
+        ...payment,
+        status: transitionV2Payment(payment.status, "NOTPAY"),
+        queryCount,
+        nextQueryAt: nextQueryAt(observedAt, delaySeconds),
+        updatedAt: now
+      });
+    });
+  }
+
   async bootstrapMember(openId: string): Promise<V2Member> {
     const normalized = openId.trim();
     if (!normalized) throw new DomainError("UNAUTHORIZED", "无法识别微信账号");
@@ -265,6 +282,7 @@ export class V2Application {
         return closed;
       });
     }
+    await this.recordPendingPaymentQuery(payment._id, this.clock.now());
     return order;
   }
 
@@ -578,9 +596,15 @@ export class V2Application {
   async refundOrder(orderId: string): Promise<V2Order> {
     const order = await this.repository.getOrder(orderId);
     if (!order || order.source !== "WECHAT_PAY" || !order.settledAt) throw new DomainError("ORDER_NOT_REFUNDABLE", "订单不能退款");
-    if (order.status === "REFUNDED" || order.status === "REFUNDING") return order;
-    if (!(["WAITING_FULFILLMENT", "COMPLETED"] as V2Order["status"][]).includes(order.status)) throw new DomainError("ORDER_NOT_REFUNDABLE", "订单不能退款");
-    const refundId = stableId("refund", order._id);
+    if (order.status === "REFUNDED") return order;
+    if (order.status === "REFUNDING") {
+      const activeRefund = await this.repository.getRefund(order.activeRefundId ?? stableId("refund", order._id));
+      if (!activeRefund || activeRefund.status !== "CLOSED") return order;
+    } else if (!(["WAITING_FULFILLMENT", "COMPLETED"] as V2Order["status"][]).includes(order.status)) {
+      throw new DomainError("ORDER_NOT_REFUNDABLE", "订单不能退款");
+    }
+    const attempt = (order.refundAttempt ?? 0) + 1;
+    const refundId = stableId("refund", order._id, String(attempt));
     const outRefundNo = `R${stableHash(refundId).slice(0, 27).toUpperCase()}`;
     const providerResult = await this.payments.refund(order, outRefundNo);
     const nowDate = this.clock.now();
@@ -589,29 +613,44 @@ export class V2Application {
       _id: refundId, storeId: this.repository.storeId, orderId: order._id,
       outRefundNo, wechatRefundId: providerResult.refundId, amount: order.paidAmount,
       status: providerResult.status, nextQueryAt: nextQueryAt(nowDate, 60), queryCount: 0,
-      confirmedBy: providerResult.status === "SUCCESS" ? "MOCK" : undefined,
+      confirmedBy: providerResult.status === "SUCCESS" ? (this.payments.mode === "MOCK" ? "MOCK" : "OWNER_QUERY") : undefined,
       createdAt: now, updatedAt: now
     };
     await this.repository.runTransaction(async (tx) => {
       const current = await tx.getOrder(order._id);
-      if (!current || current.status === "REFUNDED" || current.status === "REFUNDING") return;
-      await tx.saveOrder({ ...current, status: transitionV2Order(current.status, "REFUNDING"), refundStatus: providerResult.status, updatedAt: now });
-      await tx.saveRefund(refund);
+      if (!current || current.status === "REFUNDED") return;
+      if (current.status === "REFUNDING" && current.activeRefundId && current.activeRefundId !== order.activeRefundId && current.activeRefundId !== refundId) return;
+      const status = current.status === "REFUNDING" ? current.status : transitionV2Order(current.status, "REFUNDING");
+      await tx.saveOrder({
+        ...current,
+        status,
+        refundStatus: providerResult.status,
+        activeRefundId: refundId,
+        refundAttempt: attempt,
+        updatedAt: now
+      });
+      const existingRefund = await tx.getRefund(refundId);
+      await tx.saveRefund(existingRefund ? { ...existingRefund, ...refund, createdAt: existingRefund.createdAt } : refund);
     });
-    return providerResult.status === "SUCCESS" ? this.confirmRefund(order._id, "MOCK", providerResult.refundId) : (await this.repository.getOrder(order._id))!;
+    const confirmedBy = this.payments.mode === "MOCK" ? "MOCK" : "OWNER_QUERY";
+    return providerResult.status === "SUCCESS"
+      ? this.confirmRefund(order._id, confirmedBy, providerResult.refundId, refundId)
+      : (await this.repository.getOrder(order._id))!;
   }
 
-  async confirmRefund(orderId: string, source: V2Refund["confirmedBy"], refundProviderId?: string): Promise<V2Order> {
+  async confirmRefund(orderId: string, source: V2Refund["confirmedBy"], refundProviderId?: string, targetRefundId?: string): Promise<V2Order> {
     const config = await this.requireStoreConfig();
     const nowDate = this.clock.now();
     const now = nowDate.toISOString();
     const businessDate = businessDateAt(nowDate, config.dayBoundaryTime);
-    const refundId = stableId("refund", orderId);
     return this.repository.runTransaction(async (tx) => {
       const order = await tx.getOrder(orderId);
-      const refund = await tx.getRefund(refundId);
-      if (!order || !refund) throw new DomainError("REFUND_NOT_FOUND", "退款记录不存在");
+      if (!order) throw new DomainError("REFUND_NOT_FOUND", "退款记录不存在");
       if (order.status === "REFUNDED") return order;
+      const refundId = targetRefundId ?? order.activeRefundId ?? stableId("refund", orderId);
+      if (order.activeRefundId && order.activeRefundId !== refundId) return order;
+      const refund = await tx.getRefund(refundId);
+      if (!refund) throw new DomainError("REFUND_NOT_FOUND", "退款记录不存在");
       if (order.status !== "REFUNDING") throw new DomainError("ORDER_NOT_REFUNDING", "订单不在退款中");
       const member = await tx.getMember(order.memberId);
       if (!member) throw new DomainError("MEMBER_NOT_FOUND", "会员信息不存在");
@@ -656,7 +695,7 @@ export class V2Application {
     if (input.amount !== undefined && input.amount !== refund.amount) {
       throw new DomainError("REFUND_AMOUNT_MISMATCH", "微信退款金额与退款单不一致");
     }
-    if (input.status === "SUCCESS") return this.confirmRefund(refund.orderId, "CALLBACK", input.refundId);
+    if (input.status === "SUCCESS") return this.confirmRefund(refund.orderId, "CALLBACK", input.refundId, refund._id);
     const now = this.clock.now();
     const nowIso = now.toISOString();
     return this.repository.runTransaction(async (tx) => {
@@ -673,6 +712,7 @@ export class V2Application {
         nextQueryAt: new Date(now.getTime() + 30 * 60_000).toISOString(),
         updatedAt: nowIso
       });
+      if (order.activeRefundId && order.activeRefundId !== currentRefund._id) return order;
       const updated = { ...order, refundStatus: status, updatedAt: nowIso };
       await tx.saveOrder(updated);
       return updated;
@@ -691,6 +731,8 @@ export class V2Application {
         await this.payments.close(payment.outTradeNo);
         const order = await this.repository.getOrder(payment.orderId);
         if (order) results.push(await this.queryPayment(order.memberOpenId, order._id));
+      } else if (result.status === "NOTPAY") {
+        await this.recordPendingPaymentQuery(payment._id, now);
       }
     }
     return results;
@@ -701,7 +743,7 @@ export class V2Application {
     const results = [];
     for (const refund of due) {
       const result = await this.payments.queryRefund(refund.outRefundNo);
-      if (result.status === "SUCCESS") results.push(await this.confirmRefund(refund.orderId, "JOB", result.refundId));
+      if (result.status === "SUCCESS") results.push(await this.confirmRefund(refund.orderId, "JOB", result.refundId, refund._id));
       else results.push(await this.recordWeChatRefund({ outRefundNo: refund.outRefundNo, status: result.status, refundId: result.refundId }));
     }
     return results;

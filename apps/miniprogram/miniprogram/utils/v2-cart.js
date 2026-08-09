@@ -1,5 +1,6 @@
 const STORAGE_KEY = "fuding-cart-v2";
 const CHECKOUT_REQUEST_KEY = "v2-checkout-request";
+const MAX_CART_QUANTITY = 99;
 
 function loadCart() {
   const value = wx.getStorageSync(STORAGE_KEY);
@@ -35,6 +36,12 @@ function selectionKey(productId, selections) {
 }
 
 function addCartLine(cart, line) {
+  const currentQuantity = cartSummary(cart).count;
+  if (!Number.isInteger(line.quantity) || line.quantity < 1 || currentQuantity + line.quantity > MAX_CART_QUANTITY) {
+    const error = new Error(`购物车最多放 ${MAX_CART_QUANTITY} 份`);
+    error.code = "CART_QUANTITY_LIMIT";
+    throw error;
+  }
   const key = selectionKey(line.productId, line.selections);
   const existingIndex = cart.findIndex((item) => item.key === key);
   if (existingIndex >= 0) {
@@ -49,4 +56,4 @@ function createRequestId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-module.exports = { loadCart, saveCart, clearCart, cartSummary, addCartLine, createRequestId };
+module.exports = { MAX_CART_QUANTITY, loadCart, saveCart, clearCart, cartSummary, addCartLine, createRequestId };

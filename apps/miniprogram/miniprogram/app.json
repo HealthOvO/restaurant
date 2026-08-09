@@ -10,15 +10,15 @@
   ],
   "window": {
     "navigationBarTitleText": "雄飞肉片",
-    "navigationBarBackgroundColor": "#f7f3ea",
+    "navigationBarBackgroundColor": "#f6f1e9",
     "navigationBarTextStyle": "black",
     "backgroundTextStyle": "light",
-    "backgroundColor": "#f7f3ea"
+    "backgroundColor": "#f6f1e9"
   },
   "tabBar": {
     "color": "#7b7067",
-    "selectedColor": "#a9402b",
-    "backgroundColor": "#fffcf7",
+    "selectedColor": "#a44732",
+    "backgroundColor": "#fffdfa",
     "borderStyle": "white",
     "list": [
       { "pagePath": "pages/home/home", "text": "点餐" },

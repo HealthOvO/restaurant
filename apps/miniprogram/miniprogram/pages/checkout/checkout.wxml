@@ -2,7 +2,7 @@
   <view class="checkout-heading">
     <text class="eyebrow">确认内容</text>
     <view class="page-title">这单吃什么</view>
-    <text class="page-subtitle">支付成功后才会生成取餐号和积分。</text>
+    <text class="page-subtitle">支付成功后会生成取餐号，并自动发放积分。</text>
   </view>
 
   <view wx:if="{{cart.length}}" class="checkout-card surface">
@@ -31,7 +31,7 @@
   <view wx:if="{{error}}" class="checkout-error">{{error}}</view>
 
   <view wx:if="{{cart.length}}" class="checkout-note">
-    <text>支付完成后请留意取餐号。订单需要退款时，请联系摊主处理。</text>
+    <text>支付完成后请留意取餐号；如需退款，请联系摊主处理。</text>
   </view>
 
   <view wx:else class="empty-state">

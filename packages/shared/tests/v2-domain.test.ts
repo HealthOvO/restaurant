@@ -84,6 +84,13 @@ describe("V2 pricing", () => {
       ])
     ).not.toThrow();
   });
+
+  it("rejects carts whose combined quantity exceeds 99", () => {
+    expect(() => quoteV2Order([product], [
+      { productId: product._id, quantity: 60, selections: [{ groupId: "spice", choiceIds: ["mild"] }] },
+      { productId: product._id, quantity: 40, selections: [{ groupId: "spice", choiceIds: ["hot"] }] }
+    ])).toThrow("单笔订单最多购买 99 份");
+  });
 });
 
 describe("V2 business day and state", () => {

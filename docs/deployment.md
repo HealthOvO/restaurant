@@ -28,6 +28,12 @@ npm run build:release
 - `v2-payment-notify`
 - `v2-refund-notify`
 
+仓库已提供跨平台部署命令，构建完成后执行：
+
+```bash
+npm run deploy:functions -- <CloudBase 环境 ID>
+```
+
 所有函数配置：
 
 ```text
@@ -100,6 +106,12 @@ VITE_TCB_ENV_ID=<CloudBase 环境 ID>
 ```
 
 运行 `npm run build:admin`，把 `apps/admin-web/dist` 发布到 CloudBase 静态托管，并在 CloudBase 开启匿名登录。匿名身份只负责调用云函数，后台业务仍要求 8 小时老板会话令牌。
+
+也可以直接使用仓库部署命令：
+
+```bash
+npm run deploy:admin -- <CloudBase 环境 ID>
+```
 
 ## 6. 顾客小程序与摊位二维码
 

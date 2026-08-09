@@ -2,7 +2,7 @@
   <view class="benefit-hero">
     <text class="eyebrow">我的权益</text>
     <view class="benefit-balance"><strong>{{pointsBalance}}</strong><text>可用积分</text></view>
-    <text>积分为整数，可兑换商家配置的指定商品券。</text>
+    <text>积分可兑换商家提供的指定商品券。</text>
   </view>
 
   <view class="segment-control">
@@ -14,7 +14,7 @@
   <view wx:elif="{{error}}" class="error-state"><view class="state-mark">!</view><text class="state-title">权益暂时没加载出来</text><text class="state-copy">{{error}}</text><button class="secondary-button" bindtap="loadBenefits">重新加载</button></view>
 
   <block wx:elif="{{activeTab === 'coupon'}}">
-    <view class="section-heading"><text class="section-heading-title">可兑换</text><text class="section-heading-copy">兑换后再免费下单</text></view>
+    <view class="section-heading"><text class="section-heading-title">可兑换</text><text class="section-heading-copy">兑换后可免费下单</text></view>
     <view wx:if="{{exchangeItems.length}}" class="exchange-list">
       <view wx:for="{{exchangeItems}}" wx:key="_id" class="exchange-card surface">
         <view><text class="exchange-name">{{item.name}}</text><text class="exchange-copy">指定商品：{{item.productName}} · {{item.validDays}} 天有效</text></view>

@@ -113,13 +113,14 @@ export function OrdersPage() {
 
   if (loading && !orders.length) return <PageLoading label="正在同步订单" />;
   if (error && !orders.length) return <PageError message={error} onRetry={() => load()} />;
-  const actionTitle = pendingAction?.type === "complete" ? "完成这笔订单？" : pendingAction?.type === "cancel" ? "取消这笔券订单？" : "提交整单退款？";
+  const isRefundRetry = pendingAction?.type === "refund" && pendingAction.order.status === "REFUNDING";
+  const actionTitle = pendingAction?.type === "complete" ? "完成这笔订单？" : pendingAction?.type === "cancel" ? "取消这笔券订单？" : isRefundRetry ? "重新提交退款？" : "提交整单退款？";
   const actionDescription = pendingAction?.type === "complete"
     ? "确认顾客已经取餐后再完成。"
     : pendingAction?.type === "cancel"
       ? "商品券会退回顾客账户，取餐号保留。"
-      : "将按原订单退款，并扣回相应积分。";
-  const confirmLabel = pendingAction?.type === "complete" ? "完成出餐" : pendingAction?.type === "cancel" ? "确认取消" : "提交退款";
+      : isRefundRetry ? "上一笔退款已关闭，将使用新的退款单号重新提交。" : "将按原订单退款，并扣回相应积分。";
+  const confirmLabel = pendingAction?.type === "complete" ? "完成出餐" : pendingAction?.type === "cancel" ? "确认取消" : isRefundRetry ? "重新退款" : "提交退款";
 
   return (
     <div className="page-stack orders-page">
@@ -175,6 +176,7 @@ export function OrdersPage() {
                   {order.status === "WAITING_FULFILLMENT" && <Button onClick={() => setPendingAction({ type: "complete", order })}><Check size={16} />完成出餐</Button>}
                   {order.status === "WAITING_FULFILLMENT" && order.source === "COUPON" && <Button tone="quiet" onClick={() => setPendingAction({ type: "cancel", order })}><TicketX size={16} />取消</Button>}
                   {["WAITING_FULFILLMENT", "COMPLETED"].includes(order.status) && order.source === "WECHAT_PAY" && <Button tone="quiet" onClick={() => setPendingAction({ type: "refund", order })}><RotateCcw size={16} />整单退款</Button>}
+                  {order.status === "REFUNDING" && order.refundStatus === "CLOSED" && <Button tone="danger" onClick={() => setPendingAction({ type: "refund", order })}><RotateCcw size={16} />重新退款</Button>}
                 </div>
               </footer>
             </div>

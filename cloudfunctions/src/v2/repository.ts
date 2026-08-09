@@ -316,7 +316,7 @@ function dashboardFromRows(date: string, orders: V2Order[], ledger: V2PointLedge
 }
 
 type CloudTransaction = {
-  collection(name: string): { doc(id: string): { get(): Promise<{ data?: unknown }>; set(data: unknown): Promise<unknown>; create(data: unknown): Promise<unknown>; update(data: unknown): Promise<unknown> } };
+  collection(name: string): { doc(id: string): { get(): Promise<{ data?: unknown }>; set(options: { data: unknown }): Promise<unknown>; update(data: unknown): Promise<unknown> } };
 };
 
 function collection(name: string) { return cloud.database().collection(name); }
@@ -345,8 +345,12 @@ export function withoutV2DocumentId<T extends { _id: string }>(row: T): Omit<T, 
   return data;
 }
 
+export function v2DocumentSetOptions<T extends { _id: string }>(row: T): { data: Omit<T, "_id"> } {
+  return { data: withoutV2DocumentId(row) };
+}
+
 async function cloudSave<T extends { _id: string }>(name: string, row: T): Promise<void> {
-  await collection(name).doc(row._id).set({ data: withoutV2DocumentId(row) });
+  await collection(name).doc(row._id).set(v2DocumentSetOptions(row));
 }
 
 async function txGet<T extends { storeId: string }>(tx: CloudTransaction, name: string, id: string, storeId: string): Promise<T | null> {
@@ -356,10 +360,13 @@ async function txGet<T extends { storeId: string }>(tx: CloudTransaction, name: 
 }
 
 async function txSave<T extends { _id: string; storeId: string }>(tx: CloudTransaction, name: string, row: T, storeId: string): Promise<void> {
-  const existing = await txGet<T>(tx, name, row._id, storeId);
-  const data = withoutV2DocumentId(row);
-  if (existing) await tx.collection(name).doc(row._id).set(data);
-  else await tx.collection(name).doc(row._id).create(data);
+  const document = tx.collection(name).doc(row._id);
+  const result = await document.get().catch(() => null);
+  const existing = result?.data as { storeId?: string } | undefined;
+  if (existing && existing.storeId !== storeId) {
+    throw new DomainError("STORE_SCOPE_VIOLATION", "数据不属于当前门店");
+  }
+  await document.set(v2DocumentSetOptions(row));
 }
 
 export class CloudV2Repository implements V2Repository {

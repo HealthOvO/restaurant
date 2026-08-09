@@ -17,8 +17,8 @@
     "build:cloudfunctions": "npm run build --workspace @restaurant/cloudfunctions",
     "build:release": "npm run build:shared && npm run build:cloudfunctions && npm run build:admin",
     "prepare:miniprogram": "npm run build:shared && npm run sync:shared --workspace @restaurant/miniprogram",
-    "deploy:functions": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy-cloudfunctions.ps1",
-    "deploy:admin": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy-admin-web.ps1",
+    "deploy:functions": "node ./scripts/deploy-cloudfunctions.mjs",
+    "deploy:admin": "node ./scripts/deploy-admin-web.mjs",
     "review": "npm run check:todo && npm run typecheck && npm run test"
   },
   "devDependencies": {

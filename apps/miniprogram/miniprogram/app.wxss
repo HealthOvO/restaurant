@@ -1,7 +1,7 @@
 page {
   min-height: 100%;
-  color: #2a211c;
-  background: #f7f3ea;
+  color: #2f251f;
+  background: #f6f1e9;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
@@ -19,10 +19,14 @@ button::after {
   border: 0;
 }
 
+button {
+  margin: 0;
+}
+
 .page {
   min-height: 100vh;
-  padding: 28rpx 24rpx 64rpx;
-  padding-bottom: calc(64rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 24rpx 72rpx;
+  padding-bottom: calc(72rpx + env(safe-area-inset-bottom));
 }
 
 .page-with-cart {
@@ -30,17 +34,17 @@ button::after {
 }
 
 .eyebrow {
-  color: #a9402b;
-  font-size: 21rpx;
+  color: #a44732;
+  font-size: 20rpx;
   font-weight: 700;
-  letter-spacing: 3rpx;
+  letter-spacing: 2rpx;
 }
 
 .page-title {
-  margin-top: 10rpx;
-  font-size: 50rpx;
-  font-weight: 750;
-  line-height: 1.15;
+  margin-top: 8rpx;
+  font-size: 46rpx;
+  font-weight: 760;
+  line-height: 1.18;
   letter-spacing: -1rpx;
 }
 
@@ -52,10 +56,10 @@ button::after {
 }
 
 .surface {
-  background: #fffcf7;
-  border: 1rpx solid #e4ddd2;
-  border-radius: 26rpx;
-  box-shadow: 0 8rpx 22rpx rgba(58, 42, 31, 0.05);
+  background: #fffdfa;
+  border: 1rpx solid #e8dfd4;
+  border-radius: 24rpx;
+  box-shadow: 0 10rpx 28rpx rgba(69, 48, 35, 0.055);
 }
 
 .section-heading {
@@ -63,7 +67,7 @@ button::after {
   align-items: flex-end;
   justify-content: space-between;
   gap: 20rpx;
-  margin: 36rpx 4rpx 18rpx;
+  margin: 40rpx 2rpx 18rpx;
 }
 
 .section-heading-title {
@@ -93,8 +97,12 @@ button::after {
 
 .primary-button {
   color: #ffffff;
-  background: #a9402b;
-  box-shadow: 0 8rpx 16rpx rgba(169, 64, 43, 0.16);
+  background: #a44732;
+  box-shadow: 0 10rpx 22rpx rgba(164, 71, 50, 0.18);
+}
+
+.primary-button.button-hover {
+  background: #8c3928;
 }
 
 .primary-button[disabled] {
@@ -104,9 +112,14 @@ button::after {
 }
 
 .secondary-button {
-  color: #463a33;
-  background: #ffffff;
-  border: 1rpx solid #d6cbbf;
+  color: #483b34;
+  background: #fffdfa;
+  border: 1rpx solid #d8cdc0;
+}
+
+.secondary-button.button-hover,
+.quiet-button.button-hover {
+  background: #e9e2d9;
 }
 
 .quiet-button {
@@ -127,7 +140,7 @@ button::after {
 .empty-state,
 .error-state {
   display: flex;
-  min-height: 420rpx;
+  min-height: 380rpx;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -143,8 +156,8 @@ button::after {
   height: 88rpx;
   align-items: center;
   justify-content: center;
-  color: #a9402b;
-  background: #f4e3dc;
+  color: #a44732;
+  background: #f4e4de;
   border-radius: 28rpx;
   font-size: 34rpx;
   font-weight: 800;
@@ -166,7 +179,7 @@ button::after {
   width: 24rpx;
   height: 24rpx;
   border: 4rpx solid #dfd5ca;
-  border-top-color: #a9402b;
+  border-top-color: #a44732;
   border-radius: 50%;
   animation: spin 700ms linear infinite;
 }
@@ -228,7 +241,7 @@ button::after {
   max-height: 88vh;
   padding: 32rpx 24rpx calc(28rpx + env(safe-area-inset-bottom));
   overflow-y: auto;
-  background: #fffcf7;
+  background: #fffdfa;
   border-radius: 34rpx 34rpx 0 0;
   box-shadow: 0 -20rpx 50rpx rgba(45, 31, 22, 0.16);
 }
@@ -254,7 +267,7 @@ button::after {
 }
 
 .sheet-price {
-  color: #a9402b;
+  color: #a44732;
   font-size: 34rpx;
   font-weight: 750;
 }
@@ -262,7 +275,9 @@ button::after {
 .close-button {
   display: flex;
   width: 64rpx;
+  min-width: 64rpx;
   height: 64rpx;
+  flex: 0 0 64rpx;
   align-items: center;
   justify-content: center;
   padding: 0;
@@ -270,6 +285,10 @@ button::after {
   background: #eee8df;
   border-radius: 20rpx;
   font-size: 32rpx;
+}
+
+.close-button.button-hover {
+  background: #dfd7cd;
 }
 
 .field-label {
