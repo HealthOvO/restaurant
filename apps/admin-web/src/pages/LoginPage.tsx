@@ -35,7 +35,7 @@ export function LoginPage() {
           <div className="login-logo"><Soup size={26} aria-hidden="true" /></div>
           <p className="eyebrow">阿福肉片</p>
           <h1>收单、出餐、配置，<br />都在一个地方。</h1>
-          <p className="login-intro">订单按取餐号清楚排列，商品和积分规则随时可改。没有多余权限，也没有复杂流程。</p>
+          <p className="login-intro">新订单、取餐号和商品设置，一眼就能找到。</p>
           <div className="login-preview" aria-hidden="true">
             <div><span>103</span><p>福鼎肉片 × 2</p><strong>待出餐</strong></div>
             <div><span>102</span><p>商品券订单</p><strong>待出餐</strong></div>
@@ -65,8 +65,8 @@ export function LoginPage() {
           </label>
           {error && <div className="form-error" role="alert">{error}</div>}
           <Button type="submit" loading={loading} className="login-submit"><LockKeyhole size={18} aria-hidden="true" />进入后台</Button>
-          <p className="session-note">登录状态仅保留在当前浏览器窗口</p>
-          {isMockMode && <p className="dev-note">当前为本地验收数据，账号已预填。</p>}
+          <p className="session-note">关闭浏览器后需要重新登录</p>
+          {isMockMode && <p className="dev-note">本地演示账号已填好</p>}
         </form>
       </section>
     </main>

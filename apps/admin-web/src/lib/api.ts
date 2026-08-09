@@ -67,7 +67,7 @@ async function callOwner<T>(action: string, payload: Record<string, unknown>): P
     const app = await cloudApp();
     const response = await app.callFunction({ name: "v2-owner-api", data: { action, payload } });
     const result = response?.result as ApiResponse<T> | undefined;
-    if (!result) throw new MerchantApiError("服务没有返回结果", "EMPTY_RESPONSE");
+    if (!result) throw new MerchantApiError("请求没有成功，请重试", "EMPTY_RESPONSE");
     if (!result.ok || result.data === undefined) {
       throw new MerchantApiError(result.message || "操作失败", result.code, result.requestId);
     }

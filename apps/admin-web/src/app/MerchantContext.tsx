@@ -50,7 +50,7 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
-    if (!api) throw new MerchantApiError("后台服务正在初始化");
+    if (!api) throw new MerchantApiError("后台还没准备好，请稍等一下");
     const next = await api.login(username, password);
     saveOwnerSession(next);
     setSession(next);

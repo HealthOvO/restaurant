@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AlertCircle, PackageOpen, RefreshCw } from "lucide-react";
 import { Button } from "./Button";
 
@@ -15,10 +16,22 @@ export function PageError({ message, onRetry }: { message: string; onRetry?(): v
   );
 }
 
-export function EmptyState({ title, detail, action }: { title: string; detail?: string; action?: React.ReactNode }) {
+export function EmptyState({
+  title,
+  detail,
+  action,
+  icon,
+  compact = false
+}: {
+  title: string;
+  detail?: string;
+  action?: ReactNode;
+  icon?: ReactNode;
+  compact?: boolean;
+}) {
   return (
-    <div className="empty-state">
-      <span className="empty-icon" aria-hidden="true"><PackageOpen size={28} /></span>
+    <div className={`empty-state ${compact ? "empty-state-compact" : ""}`.trim()}>
+      <span className="empty-icon" aria-hidden="true">{icon ?? <PackageOpen size={28} />}</span>
       <h3>{title}</h3>
       {detail && <p>{detail}</p>}
       {action}

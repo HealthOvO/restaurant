@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { ChevronDown, ChevronUp, CirclePlus, Edit3, GripVertical, Image, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, CirclePlus, Edit3, GripVertical, Plus, Soup, Trash2 } from "lucide-react";
 import type { V2Product, V2ProductSaveInput, V2SpecGroup } from "@restaurant/shared";
 import { useMerchant } from "../app/MerchantContext";
 import { Button } from "../components/Button";
@@ -103,15 +103,16 @@ export function ProductsPage() {
   return (
     <div className="page-stack">
       <header className="page-header">
-        <div><p className="eyebrow">商品与规格</p><h1>商品</h1><p>价格单位是元，积分始终使用整数。</p></div>
+        <div><p className="eyebrow">商品与规格</p><h1>商品</h1><p>设置价格、辣度、小料和每份积分。</p></div>
         <Button onClick={() => { setForm(blankProduct()); setFormError(""); }}><Plus size={17} />新增商品</Button>
       </header>
       {error && <div className="inline-alert">{error}</div>}
+      <div className="catalog-summary"><div><strong>商品列表</strong><span>{products.length} 个商品</span></div><span>上架与售罄状态会显示在小程序</span></div>
       <section className="product-grid">
         {products.map((product) => (
           <article className="product-card" key={product._id}>
             <div className="product-image">
-              {product.imageUrl ? <img src={product.imageUrl} alt={product.name} /> : <Image size={28} aria-label="暂无商品图片" />}
+              {product.imageUrl ? <img src={product.imageUrl} alt={product.name} /> : <div className="product-image-placeholder" aria-label={`${product.name}暂无图片`}><Soup size={30} /><span>{product.name}</span></div>}
               <span className={`availability-pill ${!product.enabled ? "is-off" : product.soldOut ? "is-sold-out" : ""}`}>{!product.enabled ? "已下架" : product.soldOut ? "已售罄" : "销售中"}</span>
             </div>
             <div className="product-card-body">
@@ -120,7 +121,7 @@ export function ProductsPage() {
                 {product.specGroups.map((group) => <span key={group.id}>{group.name} · {group.choices.length} 项</span>)}
                 {!product.specGroups.length && <span>无规格</span>}
               </div>
-              <div className="points-line"><span>本人 +{product.buyerPointsPerUnit}</span><span>邀请人 +{product.inviterPointsPerUnit}</span></div>
+              <div className="points-line"><span>顾客 +{product.buyerPointsPerUnit}/份</span><span>邀请奖励 +{product.inviterPointsPerUnit}/份</span></div>
               <div className="product-actions">
                 <Button tone="secondary" onClick={() => { setForm(productInput(product)); setFormError(""); }}><Edit3 size={15} />编辑</Button>
                 <Button tone="quiet" onClick={() => quickUpdate(product, { soldOut: !product.soldOut })}>{product.soldOut ? "恢复销售" : "标记售罄"}</Button>
@@ -129,10 +130,10 @@ export function ProductsPage() {
             </div>
           </article>
         ))}
-        {!products.length && <EmptyState title="还没有商品" detail="先创建福鼎肉片，再配置辣度和小料。" action={<Button onClick={() => setForm(blankProduct())}>新增商品</Button>} />}
+        {!products.length && <EmptyState title="还没有商品" detail="新增商品后，可继续设置辣度和小料。" icon={<Soup size={26} />} action={<Button onClick={() => setForm(blankProduct())}>新增商品</Button>} />}
       </section>
 
-      <Dialog open={Boolean(form)} title={form?.id ? "编辑商品" : "新增商品"} description="商品修改只影响之后创建的订单。" onClose={() => !saving && setForm(null)} width="large">
+      <Dialog open={Boolean(form)} title={form?.id ? "编辑商品" : "新增商品"} description="修改只影响之后创建的订单，历史订单不会变化。" onClose={() => !saving && setForm(null)} width="large">
         {form && <ProductForm form={form} setForm={setForm} error={formError} saving={saving} onSubmit={save} onCancel={() => setForm(null)} />}
       </Dialog>
     </div>
@@ -187,7 +188,7 @@ function ProductForm({
           <label className="field"><span>顾客每份积分</span><input type="number" min="0" step="1" disabled={!form.pointsEnabled} value={form.buyerPointsPerUnit} onChange={(event) => setForm({ ...form, buyerPointsPerUnit: Math.max(0, Math.trunc(Number(event.target.value || 0))) })} /></label>
           <label className="field"><span>直接邀请人每份积分</span><input type="number" min="0" step="1" disabled={!form.pointsEnabled} value={form.inviterPointsPerUnit} onChange={(event) => setForm({ ...form, inviterPointsPerUnit: Math.max(0, Math.trunc(Number(event.target.value || 0))) })} /></label>
         </div>
-        {warning && <div className="warning-note">当前价格较低但积分较高，请确认不会造成低成本刷积分。</div>}
+        {warning && <div className="warning-note">这组价格和积分差距较大，请再核对一次。</div>}
       </section>
 
       <section className="form-section">
@@ -221,7 +222,7 @@ function ProductForm({
               </div>
             </section>
           ))}
-          {!form.specGroups.length && <div className="quiet-empty">还没有规格组。商品也可以不配置规格直接售卖。</div>}
+          {!form.specGroups.length && <div className="quiet-empty">暂未添加规格，商品将按基础价格出售。</div>}
         </div>
       </section>
       {error && <div className="form-error" role="alert">{error}</div>}

@@ -54,7 +54,7 @@ export function MerchantShell() {
           <div className="avatar" aria-hidden="true">{session?.owner.displayName.slice(0, 1)}</div>
           <div className="account-copy">
             <strong>{session?.owner.displayName}</strong>
-            <span>唯一老板账号</span>
+            <span>老板账号</span>
           </div>
           <button className="icon-button" type="button" aria-label="退出登录" title="退出登录" onClick={logout}>
             <ChevronLeft size={19} />

@@ -35,7 +35,7 @@ let products: V2Product[] = [{
   storeId: "store-main",
   name: "福鼎肉片",
   description: "鲜肉现打，紫菜虾皮汤底",
-  imageUrl: "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=800&q=80",
+  imageUrl: "",
   basePrice: 1500,
   enabled: true,
   soldOut: false,

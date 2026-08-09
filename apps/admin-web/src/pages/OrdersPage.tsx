@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, BellRing, Check, RefreshCw, RotateCcw, TicketX, WifiOff } from "lucide-react";
+import { Bell, BellRing, Check, ReceiptText, RefreshCw, RotateCcw, TicketX, WifiOff } from "lucide-react";
 import type { V2Order, V2OrderStatus } from "@restaurant/shared";
 import { useMerchant } from "../app/MerchantContext";
 import { Button } from "../components/Button";
@@ -19,6 +19,15 @@ const filters: Array<{ value: Filter; label: string }> = [
   { value: "REFUNDING", label: "退款中" },
   { value: "REFUNDED", label: "已退款" }
 ];
+
+const emptyCopy: Record<Filter, { title: string; detail: string }> = {
+  ALL: { title: "还没有订单", detail: "顾客下单后会显示在这里。" },
+  WAITING_FULFILLMENT: { title: "没有待出餐订单", detail: "当前订单都处理完了。" },
+  COMPLETED: { title: "还没有已完成订单", detail: "完成出餐后可在这里查看。" },
+  CANCELLED: { title: "没有已取消订单", detail: "取消的券订单会保留在这里。" },
+  REFUNDING: { title: "没有退款中的订单", detail: "已提交的退款会显示在这里。" },
+  REFUNDED: { title: "还没有退款记录", detail: "退款完成后可在这里查看。" }
+};
 
 function playNewOrderTone() {
   const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -92,7 +101,7 @@ export function OrdersPage() {
       if (pendingAction.type === "complete") await api.completeOrder(session.token, pendingAction.order._id);
       if (pendingAction.type === "cancel") await api.cancelCouponOrder(session.token, pendingAction.order._id);
       if (pendingAction.type === "refund") await api.refundOrder(session.token, pendingAction.order._id);
-      notify(pendingAction.type === "complete" ? "订单已完成" : pendingAction.type === "cancel" ? "券订单已取消，商品券已恢复" : "退款已处理", "success");
+      notify(pendingAction.type === "complete" ? "已完成出餐" : pendingAction.type === "cancel" ? "券订单已取消" : "退款已提交", "success");
       setPendingAction(null);
       await load(true);
     } catch (caught) {
@@ -104,34 +113,38 @@ export function OrdersPage() {
 
   if (loading && !orders.length) return <PageLoading label="正在同步订单" />;
   if (error && !orders.length) return <PageError message={error} onRetry={() => load()} />;
-  const actionTitle = pendingAction?.type === "complete" ? "确认完成订单？" : pendingAction?.type === "cancel" ? "确认取消券订单？" : "确认整单退款？";
+  const actionTitle = pendingAction?.type === "complete" ? "完成这笔订单？" : pendingAction?.type === "cancel" ? "取消这笔券订单？" : "提交整单退款？";
   const actionDescription = pendingAction?.type === "complete"
-    ? "完成后订单会离开待出餐列表。"
+    ? "确认顾客已经取餐后再完成。"
     : pendingAction?.type === "cancel"
-      ? "取消后会恢复顾客原商品券，取餐号不会回收。"
-      : "退款成功后会按下单快照回收顾客和邀请人的积分。";
+      ? "商品券会退回顾客账户，取餐号保留。"
+      : "将按原订单退款，并扣回相应积分。";
+  const confirmLabel = pendingAction?.type === "complete" ? "完成出餐" : pendingAction?.type === "cancel" ? "确认取消" : "提交退款";
 
   return (
     <div className="page-stack orders-page">
       <header className="page-header">
-        <div><p className="eyebrow">每 5 秒自动同步</p><h1>订单</h1><p>支付订单和商品券订单使用同一套出餐流程。</p></div>
+        <div><p className="eyebrow">接单中 · 每 5 秒刷新</p><h1>订单</h1><p>按取餐号出餐，券订单会单独标明。</p></div>
         <div className="header-actions">
           <Button tone={soundEnabled ? "secondary" : "quiet"} onClick={() => { setSoundEnabled((value) => !value); if (!soundEnabled) playNewOrderTone(); }}>
-            {soundEnabled ? <BellRing size={16} /> : <Bell size={16} />}{soundEnabled ? "新单提示已开" : "开启新单提示"}
+            {soundEnabled ? <BellRing size={16} /> : <Bell size={16} />}{soundEnabled ? "新单声音已开启" : "打开新单声音"}
           </Button>
           <Button tone="secondary" onClick={() => load(true)} loading={syncing}><RefreshCw size={16} />刷新</Button>
         </div>
       </header>
 
-      <div className="sync-strip" role="status">
-        {!online ? <><WifiOff size={15} /><span>网络已断开，恢复后会自动同步</span></> : <><span className="live-dot" /><span>{syncing ? "正在同步" : `上次同步 ${lastSync ? lastSync.toLocaleTimeString("zh-CN", { hour12: false }) : "—"}`}</span></>}
-      </div>
       {error && <div className="inline-alert" role="alert">{error}</div>}
 
-      <div className="segmented-tabs" role="tablist" aria-label="订单状态">
-        {filters.map((item) => (
-          <button key={item.value} type="button" role="tab" aria-selected={filter === item.value} className={filter === item.value ? "is-active" : ""} onClick={() => setFilter(item.value)}>{item.label}</button>
-        ))}
+      <div className="list-toolbar">
+        <div className="segmented-tabs" role="tablist" aria-label="订单状态">
+          {filters.map((item) => (
+            <button key={item.value} type="button" role="tab" aria-selected={filter === item.value} className={filter === item.value ? "is-active" : ""} onClick={() => setFilter(item.value)}>{item.label}</button>
+          ))}
+        </div>
+        <div className={`sync-strip ${!online ? "is-offline" : ""}`} role="status">
+          {!online ? <><WifiOff size={15} /><span>网络断开，等待恢复</span></> : <><span className="live-dot" /><span>{syncing ? "同步中…" : `已更新 ${lastSync ? lastSync.toLocaleTimeString("zh-CN", { hour12: false }) : "—"}`}</span></>}
+        </div>
+        <span className="list-count">{orders.length} 单</span>
       </div>
 
       <section className="order-list" aria-label="订单列表">
@@ -167,14 +180,14 @@ export function OrdersPage() {
             </div>
           </article>
         ))}
-        {!orders.length && <EmptyState title="这个状态下没有订单" detail="切换其他状态，或稍后再刷新。" />}
+        {!orders.length && <EmptyState title={emptyCopy[filter].title} detail={emptyCopy[filter].detail} icon={<ReceiptText size={26} />} />}
       </section>
 
       <Dialog open={Boolean(pendingAction)} title={actionTitle} description={actionDescription} onClose={() => !acting && setPendingAction(null)} width="small">
         {pendingAction && <div className="confirm-order-summary"><span>取餐号 {pendingAction.order.pickupNumber}</span><strong>{pendingAction.order.lineItems.map((item) => `${item.productName} × ${item.quantity}`).join("、")}</strong></div>}
         <div className="dialog-actions">
-          <Button tone="secondary" onClick={() => setPendingAction(null)} disabled={acting}>暂不处理</Button>
-          <Button tone={pendingAction?.type === "complete" ? "primary" : "danger"} onClick={confirmAction} loading={acting}>确认</Button>
+          <Button tone="secondary" onClick={() => setPendingAction(null)} disabled={acting}>先不处理</Button>
+          <Button tone={pendingAction?.type === "complete" ? "primary" : "danger"} onClick={confirmAction} loading={acting}>{confirmLabel}</Button>
         </div>
       </Dialog>
     </div>

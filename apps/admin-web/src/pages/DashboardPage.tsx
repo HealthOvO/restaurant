@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Banknote, CheckCheck, Coins, ReceiptText, RefreshCw, TicketPercent, UserPlus, Users } from "lucide-react";
+import { ArrowRight, Banknote, CheckCheck, Coins, ReceiptText, RefreshCw, RotateCcw, TicketPercent, UserPlus } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { V2DashboardStats, V2Order } from "@restaurant/shared";
 import { useMerchant } from "../app/MerchantContext";
 import { Button } from "../components/Button";
-import { PageError, PageLoading } from "../components/PageState";
+import { EmptyState, PageError, PageLoading } from "../components/PageState";
 import { OrderSourceBadge, OrderStatusBadge } from "../components/StatusBadge";
 import { formatDateTime, formatMoney } from "../lib/format";
 
@@ -51,7 +51,7 @@ export function DashboardPage() {
         <div>
           <p className="eyebrow">营业日 {stats.businessDate}</p>
           <h1>今天的生意</h1>
-          <p>先处理待出餐订单，其他数据会自动汇总。</p>
+          <p>待出餐先处理，今天的经营数据都在这里。</p>
         </div>
         <Button tone="secondary" onClick={load} loading={refreshing}><RefreshCw size={16} />刷新</Button>
       </header>
@@ -70,7 +70,7 @@ export function DashboardPage() {
       <div className="dashboard-grid">
         <section className="panel dashboard-orders">
           <header className="section-heading">
-            <div><h2>待出餐</h2><p>{orders.length ? "按取餐号依次处理" : "当前没有待出餐订单"}</p></div>
+            <div><h2>待出餐</h2><p>{orders.length ? `${orders.length} 单等待处理` : "暂时没有新单"}</p></div>
             <Link className="text-link" to="/orders">查看全部<ArrowRight size={15} /></Link>
           </header>
           <div className="compact-order-list">
@@ -83,21 +83,21 @@ export function DashboardPage() {
                 </div>
               </article>
             ))}
-            {!orders.length && <div className="quiet-empty">新订单会显示在这里</div>}
+            {!orders.length && <EmptyState compact title="没有待出餐订单" detail="有新单时会出现在这里。" icon={<ReceiptText size={24} />} />}
           </div>
         </section>
 
         <section className="panel points-summary">
           <header className="section-heading"><div><h2>积分情况</h2><p>今日发放与消耗</p></div><Coins size={20} aria-hidden="true" /></header>
           <dl className="summary-list">
-            <div><dt>消费积分</dt><dd>+{stats.buyerPointsIssued}</dd></div>
+            <div><dt>下单获得</dt><dd>+{stats.buyerPointsIssued}</dd></div>
             <div><dt>邀请奖励</dt><dd>+{stats.inviterPointsIssued}</dd></div>
-            <div><dt>换券消耗</dt><dd>-{stats.exchangePointsSpent}</dd></div>
+            <div><dt>换券使用</dt><dd>-{stats.exchangePointsSpent}</dd></div>
           </dl>
           <div className="summary-divider" />
           <dl className="summary-list muted-summary">
             <div><dt><UserPlus size={16} />新增用户</dt><dd>{stats.newMemberCount}</dd></div>
-            <div><dt><Users size={16} />退款订单</dt><dd>{stats.refundCount}</dd></div>
+            <div><dt><RotateCcw size={16} />退款订单</dt><dd>{stats.refundCount}</dd></div>
           </dl>
         </section>
       </div>

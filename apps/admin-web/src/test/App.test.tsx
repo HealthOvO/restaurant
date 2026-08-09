@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 
@@ -25,10 +25,11 @@ describe("merchant V2 app", () => {
     fireEvent.click(await screen.findByRole("link", { name: "订单" }));
     const completeButtons = await screen.findAllByRole("button", { name: /完成出餐/ });
     fireEvent.click(completeButtons[0]);
-    expect(screen.getByRole("dialog", { name: "确认完成订单？" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "确认" }));
+    const dialog = screen.getByRole("dialog", { name: "完成这笔订单？" });
+    expect(dialog).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "完成出餐" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(await screen.findByText("订单已完成")).toBeInTheDocument();
+    expect(await screen.findByText("已完成出餐")).toBeInTheDocument();
   });
 
   it("edits product points and keeps them as integers", async () => {
@@ -40,6 +41,6 @@ describe("merchant V2 app", () => {
     fireEvent.change(points, { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: "保存商品" }));
     expect(await screen.findByText("商品已保存")).toBeInTheDocument();
-    expect(await screen.findByText("本人 +12")).toBeInTheDocument();
+    expect(await screen.findByText("顾客 +12/份")).toBeInTheDocument();
   });
 });
