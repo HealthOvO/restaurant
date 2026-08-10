@@ -243,7 +243,7 @@ function ProductForm({
         <div className="form-section-title"><h3>基本信息</h3><p>顾客会在点餐首页看到这些内容。</p></div>
         <div className="form-grid two-columns">
           <label className="field"><span>商品分类</span><select value={form.categoryId ?? ""} onChange={(event) => setForm({ ...form, categoryId: event.target.value })}><option value="" disabled>请选择分类</option>{categories.filter((category) => category.enabled || category._id === form.categoryId).map((category) => <option key={category._id} value={category._id}>{category.name}{category.enabled ? "" : "（已停用）"}</option>)}</select></label>
-          <label className="field"><span>商品名称</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如：雄飞肉片" /></label>
+          <label className="field"><span>商品名称</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如：祯好七福鼎肉片" /></label>
           <label className="field"><span>基础价格（元）</span><input type="number" min="0" step="0.01" value={(form.basePrice / 100).toFixed(2)} onChange={(event) => setForm({ ...form, basePrice: Math.round(Number(event.target.value || 0) * 100) })} /></label>
           <label className="field field-span"><span>商品说明</span><textarea rows={2} value={form.description ?? ""} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="一句话说明口味或用料" /></label>
           <label className="field field-span"><span>图片地址</span><input value={form.imageUrl ?? ""} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} placeholder="https://..." /></label>

@@ -102,7 +102,7 @@ test("home refreshes coupons after returning from benefits and closes open sheet
         calls += 1;
         return {
           categories: [{ _id: "food", name: "肉片" }], products: [],
-          coupons: [{ _id: "coupon-1", productName: "雄飞肉片", productSnapshot: { basePrice: 1500 } }],
+          coupons: [{ _id: "coupon-1", productName: "祯好七福鼎肉片", productSnapshot: { basePrice: 1500 } }],
           config: { businessOpen: true }, member: { pointsBalance: 0 }, availableCouponCount: 1
         };
       }
@@ -141,7 +141,7 @@ test("home keeps a sold-out product visible but does not open its selector", () 
     }
   }, wx);
   try {
-    loaded.page.setData({ products: [{ _id: "sold-out-product", name: "雄飞肉片", enabled: true, soldOut: true }] });
+    loaded.page.setData({ products: [{ _id: "sold-out-product", name: "祯好七福鼎肉片", enabled: true, soldOut: true }] });
     loaded.page.openProduct({ currentTarget: { dataset: { id: "sold-out-product" } } });
     assert.equal(loaded.page.data.products.length, 1);
     assert.equal(loaded.page.data.activeProduct, null);
@@ -297,7 +297,7 @@ test("coupon exchange reuses its request id and submits the confirmed version", 
     "../../utils/v2-format": { dateTime: () => "", preparePoint: (row) => row }
   }, wx);
   try {
-    const item = { _id: "exchange-1", name: "雄飞肉片商品券", pointsCost: 50, version: 3, canExchange: true };
+    const item = { _id: "exchange-1", name: "祯好七福鼎肉片商品券", pointsCost: 50, version: 3, canExchange: true };
     loaded.page.setData({ exchangeItems: [item] });
     await loaded.page.exchange({ currentTarget: { dataset: { id: item._id } } });
     await loaded.page.exchange({ currentTarget: { dataset: { id: item._id } } });
@@ -319,7 +319,7 @@ test("benefits prepares a clear points gap and keeps usable coupons first", () =
     loaded.page.applyBenefits({
       home: {
         config: { businessOpen: true },
-        exchangeItems: [{ _id: "exchange-1", pointsCost: 100, productName: "雄飞肉片" }]
+        exchangeItems: [{ _id: "exchange-1", pointsCost: 100, productName: "祯好七福鼎肉片" }]
       },
       coupons: [
         { _id: "used", status: "USED", expiresAt: "2099-09-01T00:00:00.000Z" },
@@ -358,7 +358,7 @@ test("coupon use renders its issued product snapshot after the live product is d
   const wx = wxMock();
   const snapshot = {
     _id: "product-1",
-    name: "雄飞肉片",
+    name: "祯好七福鼎肉片",
     specGroups: [{ id: "spice", mode: "SINGLE", required: true, choices: [{ id: "mild", enabled: true, priceDelta: 0, isDefault: true }] }]
   };
   const loaded = loadPage("pages/coupon-use/coupon-use.js", {
@@ -371,7 +371,7 @@ test("coupon use renders its issued product snapshot after the live product is d
   try {
     loaded.page.setData({ couponId: "coupon-1" });
     await loaded.page.loadCoupon();
-    assert.equal(loaded.page.data.product.name, "雄飞肉片");
+    assert.equal(loaded.page.data.product.name, "祯好七福鼎肉片");
     assert.equal(loaded.page.data.product.specGroups[0].choices[0].selected, true);
   } finally { loaded.restore(); }
 });

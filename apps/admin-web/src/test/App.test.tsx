@@ -19,7 +19,7 @@ describe("merchant V2 app", () => {
   it("logs in with the only owner account and opens today's dashboard", async () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: "老板登录" })).toBeInTheDocument();
-    expect(screen.getByText("雄飞肉片")).toBeInTheDocument();
+    expect(screen.getByText("祯好七福鼎肉片")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "登录" }));
     expect(await screen.findByRole("heading", { name: "今天的生意" })).toBeInTheDocument();
     expect(screen.getByText("支付金额")).toBeInTheDocument();

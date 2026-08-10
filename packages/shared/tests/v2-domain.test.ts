@@ -17,7 +17,7 @@ const product: V2Product = {
   storeId: "store-main",
   createdAt: "2026-08-09T00:00:00.000Z",
   updatedAt: "2026-08-09T00:00:00.000Z",
-  name: "雄飞肉片",
+  name: "祯好七福鼎肉片",
   description: "现煮",
   basePrice: 1500,
   enabled: true,
@@ -148,7 +148,7 @@ describe("V2 business day and state", () => {
 describe("V2 product schema", () => {
   it("keeps all point and money values as integers", () => {
     const parsed = v2ProductSaveSchema.parse({
-      name: "雄飞肉片",
+      name: "祯好七福鼎肉片",
       basePrice: 1500,
       enabled: true,
       soldOut: false,

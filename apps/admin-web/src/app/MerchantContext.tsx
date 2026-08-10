@@ -107,8 +107,8 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
   }, [api, session, newOrderSoundEnabled]);
 
   useEffect(() => {
-    document.title = newOrderNotice ? `(${newOrderNotice.count} 笔新单) 雄飞肉片 · 商家后台` : "雄飞肉片 · 商家后台";
-    return () => { document.title = "雄飞肉片 · 商家后台"; };
+    document.title = newOrderNotice ? `(${newOrderNotice.count} 笔新单) 祯好七福鼎肉片 · 商家后台` : "祯好七福鼎肉片 · 商家后台";
+    return () => { document.title = "祯好七福鼎肉片 · 商家后台"; };
   }, [newOrderNotice]);
 
   const notify = useCallback((message: string, tone: ToastMessage["tone"] = "neutral") => {

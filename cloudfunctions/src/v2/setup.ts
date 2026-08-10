@@ -57,7 +57,7 @@ export async function initializeV2Store(repository: V2Repository, rawInput: unkn
     _id: id.product,
     storeId: repository.storeId,
     categoryId: category._id,
-    name: "雄飞肉片",
+    name: "祯好七福鼎肉片",
     description: "新鲜现打，现点现煮",
     basePrice: 1500,
     enabled: true,
@@ -100,7 +100,7 @@ export async function initializeV2Store(repository: V2Repository, rawInput: unkn
   const exchange: V2ExchangeItem = {
     _id: id.exchange,
     storeId: repository.storeId,
-    name: "雄飞肉片商品券",
+    name: "祯好七福鼎肉片商品券",
     productId: product._id,
     productName: product.name,
     pointsCost: 100,

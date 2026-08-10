@@ -68,7 +68,7 @@ export function ExchangePage() {
       </section>
       <Dialog open={Boolean(form)} title={form?.id ? "编辑兑换项" : "新增兑换项"} description="修改只影响之后兑换的商品券，已发出的券不变。" onClose={() => !saving && setForm(null)}>
         {form && <form className="editor-form" onSubmit={save}>
-          <label className="field"><span>兑换项名称</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如：雄飞肉片兑换券" /></label>
+          <label className="field"><span>兑换项名称</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如：祯好七福鼎肉片兑换券" /></label>
           <label className="field"><span>指定商品</span><select value={form.productId} onChange={(event) => setForm({ ...form, productId: event.target.value })}>{products.map((product) => <option key={product._id} value={product._id}>{product.name}</option>)}</select></label>
           <div className="form-grid two-columns">
             <label className="field"><span>所需积分</span><input type="number" min="1" step="1" value={form.pointsCost} onChange={(event) => setForm({ ...form, pointsCost: Math.max(1, Math.trunc(Number(event.target.value || 1))) })} /></label>

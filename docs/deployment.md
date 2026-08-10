@@ -86,7 +86,7 @@ WECHAT_REFUND_NOTIFY_URL=<v2-refund-notify HTTPS 地址>
   "action": "setup.initialize",
   "secret": "<BOOTSTRAP_SECRET>",
   "payload": {
-    "storeName": "雄飞肉片",
+    "storeName": "祯好七福鼎肉片",
     "announcement": "新鲜现做，叫号取餐",
     "username": "owner",
     "password": "<至少 8 位强密码>",
@@ -95,7 +95,7 @@ WECHAT_REFUND_NOTIFY_URL=<v2-refund-notify HTTPS 地址>
 }
 ```
 
-初始化后默认暂停营业，并生成一份雄飞肉片、辣度、小料以及一项 100 积分商品券。老板登录后台检查价格和积分后再开启营业。
+初始化后默认暂停营业，并生成一份祯好七福鼎肉片、辣度、小料以及一项 100 积分商品券。老板登录后台检查价格和积分后再开启营业。
 
 忘记密码或更换老板微信不影响后台账号。使用 `setup.resetOwner` 和 `BOOTSTRAP_SECRET` 重设账号，旧登录会立即失效：
 

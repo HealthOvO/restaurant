@@ -37,7 +37,7 @@ export function MerchantShell() {
         <div className="brand-lockup">
           <span className="brand-mark" aria-hidden="true"><PackageOpen size={22} /></span>
           <div>
-            <strong>雄飞肉片</strong>
+            <strong>祯好七福鼎肉片</strong>
             <span>商家后台</span>
           </div>
           <button className="icon-button sidebar-close" type="button" aria-label="关闭导航" onClick={() => setOpen(false)}>

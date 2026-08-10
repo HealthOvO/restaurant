@@ -24,7 +24,7 @@ const TOKEN = "mock-owner-session-token-for-browser-testing";
 let config: V2StoreConfig = {
   _id: "store-main:config",
   storeId: "store-main",
-  storeName: "雄飞肉片",
+  storeName: "祯好七福鼎肉片",
   announcement: "每日现打肉泥，现点现煮",
   businessOpen: true,
   dayBoundaryTime: "04:00",
@@ -41,7 +41,7 @@ let products: V2Product[] = [{
   _id: "product-fuding",
   storeId: "store-main",
   categoryId: "category-signature",
-  name: "雄飞肉片",
+  name: "祯好七福鼎肉片",
   description: "鲜肉现打，紫菜虾皮汤底",
   imageUrl: "",
   basePrice: 1500,
@@ -84,9 +84,9 @@ let products: V2Product[] = [{
 let exchangeItems: V2ExchangeItem[] = [{
   _id: "exchange-fuding",
   storeId: "store-main",
-  name: "雄飞肉片兑换券",
+  name: "祯好七福鼎肉片兑换券",
   productId: "product-fuding",
-  productName: "雄飞肉片",
+  productName: "祯好七福鼎肉片",
   pointsCost: 100,
   validDays: 30,
   enabled: true,
@@ -121,7 +121,7 @@ let orders: V2Order[] = [
     itemCount: 2, buyerPoints: 20, inviterPoints: 2, businessDate: "2026-08-09", pickupSequence: 103,
     pickupNumber: "103", settledAt: "2026-08-09T10:15:00.000Z", createdAt: "2026-08-09T10:14:00.000Z", updatedAt: NOW,
     lineItems: [{
-      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "雄飞肉片", quantity: 2,
+      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "祯好七福鼎肉片", quantity: 2,
       basePrice: 1500, unitPrice: 1750, lineTotal: 3500, buyerPointsPerUnit: 10, inviterPointsPerUnit: 1,
       buyerPointsTotal: 20, inviterPointsTotal: 2,
       selectedChoices: [
@@ -134,11 +134,11 @@ let orders: V2Order[] = [
     _id: "order-102", storeId: "store-main", orderNo: "V2MOCK000102", requestKey: "mock-102",
     memberId: "member-wu", memberOpenId: "openid-wu", source: "COUPON", status: "WAITING_FULFILLMENT",
     payableAmount: 0, paidAmount: 0, itemCount: 1, buyerPoints: 0, inviterPoints: 0,
-    couponId: "coupon-wu", couponName: "雄飞肉片兑换券", couponPointsCost: 100,
+    couponId: "coupon-wu", couponName: "祯好七福鼎肉片兑换券", couponPointsCost: 100,
     businessDate: "2026-08-09", pickupSequence: 102, pickupNumber: "102", settledAt: "2026-08-09T10:08:00.000Z",
     createdAt: "2026-08-09T10:08:00.000Z", updatedAt: NOW,
     lineItems: [{
-      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "雄飞肉片", quantity: 1,
+      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "祯好七福鼎肉片", quantity: 1,
       basePrice: 0, unitPrice: 0, lineTotal: 0, buyerPointsPerUnit: 0, inviterPointsPerUnit: 0,
       buyerPointsTotal: 0, inviterPointsTotal: 0,
       selectedChoices: [{ groupId: "spice", groupName: "辣度", choiceId: "none", choiceName: "不辣", priceDelta: 0 }]
@@ -151,7 +151,7 @@ let orders: V2Order[] = [
     businessDate: "2026-08-09", pickupSequence: 101, pickupNumber: "101", settledAt: "2026-08-09T09:50:00.000Z",
     completedAt: "2026-08-09T10:02:00.000Z", createdAt: "2026-08-09T09:49:00.000Z", updatedAt: NOW,
     lineItems: [{
-      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "雄飞肉片", quantity: 1,
+      lineId: "line-1", productId: "product-fuding", productVersion: 1, productName: "祯好七福鼎肉片", quantity: 1,
       basePrice: 1500, unitPrice: 1500, lineTotal: 1500, buyerPointsPerUnit: 10, inviterPointsPerUnit: 1,
       buyerPointsTotal: 10, inviterPointsTotal: 1,
       selectedChoices: [{ groupId: "spice", groupName: "辣度", choiceId: "hot", choiceName: "加辣", priceDelta: 0 }]
@@ -182,7 +182,7 @@ const ledger: V2PointLedger[] = [
 
 const coupons: V2Coupon[] = [{
   _id: "coupon-chen", storeId: "store-main", memberId: "member-chen", exchangeItemId: "exchange-fuding",
-  exchangeItemVersion: 1, name: "雄飞肉片兑换券", productId: "product-fuding", productName: "雄飞肉片",
+  exchangeItemVersion: 1, name: "祯好七福鼎肉片兑换券", productId: "product-fuding", productName: "祯好七福鼎肉片",
   pointsCost: 100, status: "AVAILABLE", expiresAt: "2026-09-08T10:00:00.000Z", createdAt: NOW, updatedAt: NOW
 }];
 
@@ -236,11 +236,11 @@ export const mockMerchantApi: MerchantApi = {
     }
     return delay({
       token: TOKEN,
-      owner: { _id: "owner-main", username: "owner", displayName: "雄飞老板" },
+      owner: { _id: "owner-main", username: "owner", displayName: "老板" },
       expiresAt: "2099-12-31T23:59:59.000Z"
     });
   },
-  async profile(token) { auth(token); return delay({ _id: "owner-main", username: "owner", displayName: "雄飞老板" }); },
+  async profile(token) { auth(token); return delay({ _id: "owner-main", username: "owner", displayName: "老板" }); },
   async getDashboard(token) { auth(token); return delay(dashboard()); },
   async listOrders(token, status) {
     auth(token);

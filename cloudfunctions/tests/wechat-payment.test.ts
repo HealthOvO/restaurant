@@ -89,7 +89,7 @@ describe("WeChat Pay API v3 adapter", () => {
       _id: "order-1", storeId: "store-main", orderNo: "V2ORDER001", requestKey: "request-1",
       memberId: "member-1", memberOpenId: "openid-1", source: "WECHAT_PAY", status: "PENDING_PAYMENT",
       payableAmount: 1500, paidAmount: 0, itemCount: 1, buyerPoints: 10, inviterPoints: 0,
-      lineItems: [{ productName: "雄飞肉片" }], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      lineItems: [{ productName: "祯好七福鼎肉片" }], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
     } as V2Order;
     const result = await provider.prepare(order);
     expect(result).toMatchObject({ mode: "WECHAT", package: "prepay_id=wx-prepay-001", signType: "RSA" });

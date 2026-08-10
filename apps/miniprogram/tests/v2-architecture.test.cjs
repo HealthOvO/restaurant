@@ -36,14 +36,14 @@ test("active customer pages contain no legacy staff or AI-assistant wording", ()
   assert.doesNotMatch(source, /店员|staff|智能助手|机器人|大模型|AI\s*助手/i);
 });
 
-test("customer app uses the current Xiongfei brand and CloudBase project config", () => {
+test("customer app uses the current store brand and CloudBase project config", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "app.json"), "utf8"));
   const project = JSON.parse(fs.readFileSync(path.join(root, "..", "project.config.json"), "utf8"));
   const source = fs.readFileSync(path.join(root, "pages", "profile", "profile.js"), "utf8");
-  assert.equal(manifest.window.navigationBarTitleText, "雄飞肉片");
+  assert.equal(manifest.window.navigationBarTitleText, "祯好七福鼎肉片");
   assert.equal(project.projectname, "xiongfei-ordering-v2");
   assert.equal(project.appid, "wx547edd316e3cb6b1");
-  assert.match(source, /来雄飞肉片一起吃一碗/);
+  assert.match(source, /来祯好七福鼎肉片一起吃一碗/);
   assert.doesNotMatch(JSON.stringify({ manifest, project, source }), /阿福肉片/);
 });
 

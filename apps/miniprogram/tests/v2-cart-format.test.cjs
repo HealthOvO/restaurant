@@ -44,7 +44,7 @@ test("cart merges identical selections and calculates integer points", () => {
     }];
     const reconciled = reconcileCart(stale, [{
       _id: "p1",
-      name: "雄飞肉片",
+      name: "祯好七福鼎肉片",
       enabled: true,
       soldOut: false,
       imageUrl: "",
@@ -54,18 +54,18 @@ test("cart merges identical selections and calculates integer points", () => {
       specGroups: [{ id: "spice", name: "辣度", mode: "SINGLE", required: true, choices: [{ id: "mild", name: "微辣", enabled: true, priceDelta: 0 }] }]
     }]);
     assert.equal(reconciled.changed, true);
-    assert.equal(reconciled.cart[0].productName, "雄飞肉片");
+    assert.equal(reconciled.cart[0].productName, "祯好七福鼎肉片");
     assert.equal(reconciled.cart[0].unitPrice, 1500);
     assert.equal(reconciled.cart[0].buyerPointsPerUnit, 10);
     assert.equal(reconciled.cart[0].selectedChoices[0].choiceName, "微辣");
 
     const withCoupon = addCouponLine(reconciled.cart, {
-      couponId: "coupon-1", couponName: "肉片券", productId: "p1", productName: "雄飞肉片",
+      couponId: "coupon-1", couponName: "肉片券", productId: "p1", productName: "祯好七福鼎肉片",
       basePrice: 1500, originalUnitPrice: 1500, selections: [], selectedChoices: []
     });
     assert.deepEqual(cartSummary(withCoupon), { count: 2, paidCount: 1, couponCount: 1, amount: 1500, discount: 1500, points: 10 });
     assert.throws(() => addCouponLine(withCoupon, {
-      couponId: "coupon-1", productId: "p1", productName: "雄飞肉片", selections: []
+      couponId: "coupon-1", productId: "p1", productName: "祯好七福鼎肉片", selections: []
     }), /已经在购物车/);
   } finally {
     delete require.cache[cartPath];
@@ -76,7 +76,7 @@ test("cart merges identical selections and calculates integer points", () => {
 test("order and point formatting distinguishes payment, coupon and mixed orders", () => {
   delete require.cache[formatPath];
   const { prepareOrder, preparePoint } = require(formatPath);
-  const coupon = prepareOrder({ source: "COUPON", status: "WAITING_FULFILLMENT", lineItems: [{ productName: "雄飞肉片", quantity: 1 }], itemCount: 1 });
+  const coupon = prepareOrder({ source: "COUPON", status: "WAITING_FULFILLMENT", lineItems: [{ productName: "祯好七福鼎肉片", quantity: 1 }], itemCount: 1 });
   assert.equal(coupon.sourceText, "商品券");
   assert.equal(coupon.amountText, "商品券抵扣");
   assert.equal(coupon.statusText, "制作中");

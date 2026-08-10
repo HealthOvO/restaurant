@@ -13,7 +13,7 @@ const clock: V2Clock = { now: () => new Date(nowIso) };
 const storeConfig: V2StoreConfig = {
   _id: "store-main:config",
   storeId: "store-main",
-  storeName: "雄飞肉片",
+  storeName: "祯好七福鼎肉片",
   announcement: "现点现煮",
   businessOpen: true,
   dayBoundaryTime: "04:00",
@@ -24,7 +24,7 @@ const storeConfig: V2StoreConfig = {
 const product: V2Product = {
   _id: "product-fuding",
   storeId: "store-main",
-  name: "雄飞肉片",
+  name: "祯好七福鼎肉片",
   description: "每日现打",
   basePrice: 1500,
   enabled: true,
@@ -64,7 +64,7 @@ const product: V2Product = {
 const exchangeItem: V2ExchangeItem = {
   _id: "exchange-fuding",
   storeId: "store-main",
-  name: "雄飞肉片兑换券",
+  name: "祯好七福鼎肉片兑换券",
   productId: product._id,
   productName: product.name,
   pointsCost: 50,
@@ -672,7 +672,7 @@ describe("V2 coupons", () => {
       ]
     });
     expect(order.lineItems[0].productVersion).toBe(1);
-    expect(order.lineItems[0].productName).toBe("雄飞肉片");
+    expect(order.lineItems[0].productName).toBe("祯好七福鼎肉片");
   });
 });
 
@@ -745,10 +745,10 @@ describe("V2 store setup", () => {
   it("initializes one closed store and resets the owner with session invalidation", async () => {
     const repository = new InMemoryV2Repository("store-main");
     const result = await initializeV2Store(repository, {
-      storeName: "雄飞肉片",
+      storeName: "祯好七福鼎肉片",
       username: "owner",
       password: "strong-password",
-      displayName: "雄飞老板"
+      displayName: "老板"
     }, new Date(nowIso));
     expect(result.store.businessOpen).toBe(false);
     expect(result.product.buyerPointsPerUnit).toBe(10);

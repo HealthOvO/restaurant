@@ -37,7 +37,7 @@ export function LoginPage() {
               <div className="login-brand-lockup">
                 <span className="login-logo"><Soup size={23} aria-hidden="true" /></span>
                 <span>
-                  <strong>雄飞肉片</strong>
+                  <strong>祯好七福鼎肉片</strong>
                   <small>商家后台</small>
                 </span>
               </div>
