@@ -1,0 +1,57 @@
+README.md
+  s_8f688ecc677e50::t_c6dc7a1562cf21 1
+apps/admin-web/index.html
+  s_8f688ecc677e50::t_0d0888ce22f1a3 7-8
+apps/admin-web/src/app/MerchantContext.tsx
+  s_8f688ecc677e50::t_2f7cd2070ccffb 110-111
+apps/admin-web/src/app/MerchantShell.tsx
+  s_8f688ecc677e50::t_fc734161d81097 40
+apps/admin-web/src/mocks/mockApi.ts
+  s_8f688ecc677e50::t_199ba58b308882 27,44,87,89,124,137,141,154,185,239,243
+apps/admin-web/src/pages/ExchangePage.tsx
+  s_8f688ecc677e50::t_39bc1f58c173a1 71
+apps/admin-web/src/pages/LoginPage.tsx
+  s_8f688ecc677e50::t_f6848a89164431 40
+apps/admin-web/src/pages/ProductsPage.tsx
+  s_8f688ecc677e50::t_ae8c1b954f435f 246
+apps/admin-web/src/test/App.test.tsx
+  s_8f688ecc677e50::t_76fc51a069ed89 22
+apps/miniprogram/miniprogram/app.json
+  s_8f688ecc677e50::t_a2530ea3993815 11
+apps/miniprogram/miniprogram/pages/profile/profile.js
+  s_8f688ecc677e50::t_0c7e073ca34f85 74
+apps/miniprogram/tests/v2-architecture.test.cjs
+  s_8f688ecc677e50::t_0d166935ebcf46 39,43,46
+apps/miniprogram/tests/v2-cart-format.test.cjs
+  s_8f688ecc677e50::t_caf914b5636815 47,57,63,68,79
+apps/miniprogram/tests/v2-page-flows.test.cjs
+  s_8f688ecc677e50::t_c6f4c9a13b1de3 105,144,300,322,361,374
+cloudfunctions/src/v2/setup.ts
+  s_8f688ecc677e50::t_2286fab90e5973 60,103
+cloudfunctions/tests/v2-application.test.ts
+  s_8f688ecc677e50::t_b919c0983ccd5d 16,27,67,675,748,751
+cloudfunctions/tests/wechat-payment.test.ts
+  s_8f688ecc677e50::t_f3bd781187da76 92
+docs/deployment.md
+  s_8f688ecc677e50::t_24d3297487b14d 89,98
+packages/shared/tests/v2-domain.test.ts
+  s_8f688ecc677e50::t_f1e6a8019425a2 20,151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9c8482727f17a771f2b8d7e46e6eb59d51ba7591",
+  "prompts": {},
+  "sessions": {
+    "s_8f688ecc677e50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe272-c5ca-7303-80b2-161652f0c965",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
