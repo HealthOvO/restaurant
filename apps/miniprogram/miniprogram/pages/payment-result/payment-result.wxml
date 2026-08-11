@@ -2,7 +2,7 @@
   <view wx:if="{{loading}}" class="result-card surface">
     <view class="result-loader"><view class="loading-dot"></view></view>
     <text class="result-title">正在确认支付结果</text>
-    <text class="result-copy">请稍等，不要重复支付。</text>
+    <text class="result-copy">{{progressText}}</text>
   </view>
 
   <view wx:elif="{{order && (order.status === 'WAITING_FULFILLMENT' || order.status === 'COMPLETED') && order.pickupNumber}}" class="result-card surface is-success">

@@ -159,6 +159,10 @@ let orders: V2Order[] = [
   }
 ];
 
+let mockSessionExpired = false;
+let mockOrderListFailure = false;
+let mockOrderListDelays: Record<string, number> = {};
+
 const initialMutableState = {
   config: structuredClone(config),
   categories: structuredClone(categories),
@@ -173,6 +177,69 @@ export function resetMockMerchantApi() {
   products = structuredClone(initialMutableState.products);
   exchangeItems = structuredClone(initialMutableState.exchangeItems);
   orders = structuredClone(initialMutableState.orders);
+  mockSessionExpired = false;
+  mockOrderListFailure = false;
+  mockOrderListDelays = {};
+}
+
+export function expireMockMerchantSession(): void {
+  mockSessionExpired = true;
+}
+
+export function setMockOrderListFailure(enabled: boolean): void {
+  mockOrderListFailure = enabled;
+}
+
+export function setMockOrderListDelay(status: V2Order["status"] | "ALL", milliseconds: number): void {
+  mockOrderListDelays[status] = milliseconds;
+}
+
+export function emptyMockWaitingQueue(): void {
+  orders = orders.filter((order) => order.status !== "WAITING_FULFILLMENT");
+}
+
+export function addMockDelayedPaymentOrder(): void {
+  const template = initialMutableState.orders.find((order) => order._id === "order-103");
+  if (!template || orders.some((order) => order._id === "order-delayed-payment")) return;
+  orders = [...orders, {
+    ...structuredClone(template),
+    _id: "order-delayed-payment",
+    orderNo: "V2MOCK000104",
+    pickupSequence: 104,
+    pickupNumber: "104",
+    createdAt: "2026-08-09T09:00:00.000Z",
+    settledAt: "2026-08-09T10:30:00.000Z",
+    updatedAt: "2026-08-09T10:30:00.000Z"
+  }];
+}
+
+export function addMockRefundingOrders(): void {
+  const template = orders.find((order) => order._id === "order-101");
+  if (!template || orders.some((order) => order._id === "order-refund-abnormal")) return;
+  orders = [...orders,
+    {
+      ...structuredClone(template),
+      _id: "order-refund-abnormal",
+      orderNo: "V2MOCK000201",
+      pickupSequence: 201,
+      pickupNumber: "201",
+      status: "REFUNDING",
+      refundStatus: "ABNORMAL",
+      createdAt: "2026-08-09T10:20:00.000Z",
+      updatedAt: "2026-08-09T10:31:00.000Z"
+    },
+    {
+      ...structuredClone(template),
+      _id: "order-refund-closed",
+      orderNo: "V2MOCK000202",
+      pickupSequence: 202,
+      pickupNumber: "202",
+      status: "REFUNDING",
+      refundStatus: "CLOSED",
+      createdAt: "2026-08-09T10:21:00.000Z",
+      updatedAt: "2026-08-09T10:32:00.000Z"
+    }
+  ];
 }
 
 const ledger: V2PointLedger[] = [
@@ -191,7 +258,7 @@ function delay<T>(value: T, ms = 90): Promise<T> {
 }
 
 function auth(token: string) {
-  if (token !== TOKEN) throw new MerchantApiError("登录已失效，请重新登录", "UNAUTHORIZED");
+  if (mockSessionExpired || token !== TOKEN) throw new MerchantApiError("登录已失效，请重新登录", "UNAUTHORIZED");
 }
 
 function dashboard(): V2DashboardStats {
@@ -242,12 +309,23 @@ export const mockMerchantApi: MerchantApi = {
   },
   async profile(token) { auth(token); return delay({ _id: "owner-main", username: "owner", displayName: "老板" }); },
   async getDashboard(token) { auth(token); return delay(dashboard()); },
-  async listOrders(token, status) {
+  async listOrders(token, status, cursor, limit = 50, direction = "QUEUE") {
     auth(token);
+    if (mockOrderListFailure) throw new MerchantApiError("订单同步失败，请稍后重试", "NETWORK_ERROR");
     const rows = orders.filter((order) => !status || order.status === status).slice().sort((left, right) => {
-      return left.createdAt.localeCompare(right.createdAt);
+      const queueOrder = status === "WAITING_FULFILLMENT" && direction === "QUEUE";
+      const leftSortAt = status === "WAITING_FULFILLMENT" && direction === "RECENT" ? left.settledAt ?? left.createdAt : left.createdAt;
+      const rightSortAt = status === "WAITING_FULFILLMENT" && direction === "RECENT" ? right.settledAt ?? right.createdAt : right.createdAt;
+      const byTime = leftSortAt.localeCompare(rightSortAt);
+      if (byTime !== 0) return queueOrder ? byTime : -byTime;
+      return queueOrder ? left.orderNo.localeCompare(right.orderNo) : right.orderNo.localeCompare(left.orderNo);
     });
-    return delay(rows);
+    const offset = cursor ? Math.max(0, Number.parseInt(cursor, 10) || 0) : 0;
+    const pageRows = rows.slice(offset, offset + limit);
+    return delay(
+      { rows: pageRows, nextCursor: offset + limit < rows.length ? String(offset + limit) : undefined },
+      mockOrderListDelays[status ?? "ALL"] ?? 90
+    );
   },
   async completeOrder(token, orderId) {
     auth(token);
@@ -274,6 +352,9 @@ export const mockMerchantApi: MerchantApi = {
   async saveProduct(token, input: V2ProductSaveInput) {
     auth(token);
     const existing = input.id ? products.find((item) => item._id === input.id) : undefined;
+    if (existing && input.expectedVersion !== existing.version) {
+      throw new MerchantApiError("商品已被其他页面修改，请刷新后重试", "VERSION_CONFLICT");
+    }
     const row: V2Product = {
       _id: existing?._id ?? `product-${Date.now()}`, storeId: "store-main", name: input.name,
       categoryId: input.categoryId,

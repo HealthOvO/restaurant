@@ -7,12 +7,27 @@ export const NEW_ORDER_CHIME = [
   { offset: 1.33, frequency: 1046, duration: 0.28, gain: 0.18 }
 ] as const;
 
-export function playNewOrderAlert(): void {
+let sharedContext: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
   const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioContextClass) return;
-  const context = new AudioContextClass();
+  if (!AudioContextClass) return null;
+  sharedContext ??= new AudioContextClass();
+  return sharedContext;
+}
+
+export async function playNewOrderAlert(): Promise<boolean> {
+  const context = getAudioContext();
+  if (!context) return false;
+  if (context.state === "suspended") {
+    try {
+      await context.resume();
+    } catch {
+      return false;
+    }
+  }
+  if (context.state !== "running") return false;
   const start = context.currentTime + 0.02;
-  let ended = 0;
 
   for (const note of NEW_ORDER_CHIME) {
     const oscillator = context.createOscillator();
@@ -24,13 +39,8 @@ export function playNewOrderAlert(): void {
     gain.gain.exponentialRampToValueAtTime(note.gain, noteStart + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + note.duration);
     oscillator.connect(gain).connect(context.destination);
-    oscillator.addEventListener("ended", () => {
-      ended += 1;
-      if (ended === NEW_ORDER_CHIME.length) void context.close();
-    });
     oscillator.start(noteStart);
     oscillator.stop(noteStart + note.duration + 0.02);
   }
-
-  if (context.state === "suspended") void context.resume().catch(() => undefined);
+  return true;
 }

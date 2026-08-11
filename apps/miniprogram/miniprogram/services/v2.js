@@ -7,6 +7,8 @@ function createApiError(message, code, requestId) {
 }
 
 const readRequests = new Map();
+let memberReady = false;
+let memberBootstrapRequest = null;
 
 function callCustomer(action, payload = {}) {
   return wx.cloud.callFunction({
@@ -32,18 +34,54 @@ function callCustomerRead(action, payload = {}) {
   return request;
 }
 
+function rememberMember(request) {
+  memberBootstrapRequest = request.then((value) => {
+    memberReady = true;
+    return value;
+  }).catch((error) => {
+    memberReady = false;
+    memberBootstrapRequest = null;
+    throw error;
+  });
+  return memberBootstrapRequest;
+}
+
+function ensureMember() {
+  if (memberReady) return Promise.resolve();
+  if (memberBootstrapRequest) return memberBootstrapRequest.then(() => undefined);
+  return rememberMember(callCustomerRead("member.bootstrap")).then(() => undefined);
+}
+
+function getHome() {
+  const request = callCustomerRead("home.get");
+  if (!memberReady && !memberBootstrapRequest) return rememberMember(request);
+  return request.then((home) => {
+    memberReady = true;
+    return home;
+  });
+}
+
+function callForMember(action, payload = {}, readOnly = false, retried = false) {
+  return ensureMember().then(() => (readOnly ? callCustomerRead(action, payload) : callCustomer(action, payload))).catch((error) => {
+    if (retried || !error || error.code !== "MEMBER_NOT_FOUND") throw error;
+    memberReady = false;
+    memberBootstrapRequest = null;
+    return ensureMember().then(() => callForMember(action, payload, readOnly, true));
+  });
+}
+
 module.exports = {
-  bootstrap: () => callCustomerRead("member.bootstrap"),
-  getHome: () => callCustomerRead("home.get"),
-  createOrder: (payload) => callCustomer("order.create", payload),
-  cancelPayment: (orderId) => callCustomer("order.cancelPayment", { orderId }),
-  queryPayment: (orderId) => callCustomerRead("order.queryPayment", { orderId }),
-  mockPay: (orderId) => callCustomer("order.mockPay", { orderId }),
-  listOrders: () => callCustomerRead("order.listMine"),
-  listPoints: () => callCustomerRead("points.list"),
-  exchangeCoupon: (payload) => callCustomer("coupon.exchange", payload),
-  listCoupons: () => callCustomerRead("coupon.listMine"),
-  useCoupon: (payload) => callCustomer("coupon.use", payload),
-  bindInvite: (inviteCode) => callCustomer("invite.bind", { inviteCode }),
-  getInviteOverview: () => callCustomerRead("invite.overview")
+  bootstrap: ensureMember,
+  getHome,
+  createOrder: (payload) => callForMember("order.create", payload),
+  cancelPayment: (orderId) => callForMember("order.cancelPayment", { orderId }),
+  queryPayment: (orderId) => callForMember("order.queryPayment", { orderId }, true),
+  mockPay: (orderId) => callForMember("order.mockPay", { orderId }),
+  listOrders: () => callForMember("order.listMine", {}, true),
+  listPoints: () => callForMember("points.list", {}, true),
+  exchangeCoupon: (payload) => callForMember("coupon.exchange", payload),
+  listCoupons: () => callForMember("coupon.listMine", {}, true),
+  resolveInvite: (inviteCode) => callForMember("invite.resolve", { inviteCode }, true),
+  bindInvite: (inviteCode) => callForMember("invite.bind", { inviteCode }),
+  getInviteOverview: () => callForMember("invite.overview", {}, true)
 };

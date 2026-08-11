@@ -10,6 +10,7 @@ const LOGIN_LOCK_MS = 15 * 60_000;
 const MAX_LOGIN_ATTEMPTS = 5;
 const PASSWORD_HASH_ROUNDS = 10;
 const DUMMY_PASSWORD_HASH = "$2b$10$Mfk6zjhoDHCrqzbwOwkLWOW0XI0513tPQvRRLUDzWLrUJo3IgTWPG";
+const UNKNOWN_OWNER_BUCKET = "__unknown_owner__";
 
 interface OwnerClaims {
   ownerId: string;
@@ -30,13 +31,18 @@ function loginAttemptId(repository: V2Repository, username: string): string {
   return `${repository.storeId}:owner-login:${usernameKey}`;
 }
 
-async function reserveLoginAttempt(repository: V2Repository, username: string, now: Date) {
+interface LoginAttemptReservation {
+  locked: boolean;
+  allowed: boolean;
+}
+
+async function reserveLoginAttempt(repository: V2Repository, username: string, now: Date): Promise<LoginAttemptReservation> {
   const id = loginAttemptId(repository, username);
   const nowIso = now.toISOString();
   return repository.runTransaction(async (tx) => {
     const existing = await tx.getOwnerLoginAttempt(id);
     if (existing?.lockedUntil && existing.lockedUntil > nowIso) {
-      throw new DomainError("LOGIN_RATE_LIMITED", "登录尝试较多，请稍后再试");
+      return { locked: true, allowed: false };
     }
     const windowActive = Boolean(existing && now.getTime() - new Date(existing.windowStartedAt).getTime() < LOGIN_WINDOW_MS);
     const attemptCount = windowActive ? existing!.attemptCount + 1 : 1;
@@ -55,7 +61,9 @@ async function reserveLoginAttempt(repository: V2Repository, username: string, n
       createdAt: existing?.createdAt ?? nowIso,
       updatedAt: nowIso
     });
-    return { id, lockedOnFailure: Boolean(lockedUntil) };
+    // The attempt that fills the bucket is allowed to verify its password. Reserving
+    // the lock now makes every concurrent attempt after it stop before bcrypt.
+    return { locked: Boolean(lockedUntil), allowed: true };
   });
 }
 
@@ -82,11 +90,15 @@ export async function hashV2OwnerPassword(password: string): Promise<string> {
 
 export async function loginV2Owner(repository: V2Repository, rawInput: unknown, now = new Date()): Promise<V2OwnerSession> {
   const input = v2OwnerLoginSchema.parse(rawInput);
-  const attempt = await reserveLoginAttempt(repository, input.username, now);
   const owner = await repository.getOwnerByUsername(input.username);
+  const attemptUsername = owner ? input.username : UNKNOWN_OWNER_BUCKET;
+  const reservation = await reserveLoginAttempt(repository, attemptUsername, now);
+  if (!reservation.allowed) throw new DomainError("LOGIN_RATE_LIMITED", "登录尝试较多，请稍后再试");
   const passwordMatches = await compare(input.password, owner?.passwordHash ?? DUMMY_PASSWORD_HASH);
   if (!owner || !owner.enabled || !passwordMatches) {
-    if (attempt.lockedOnFailure) throw new DomainError("LOGIN_RATE_LIMITED", "登录尝试较多，请稍后再试");
+    // Unknown usernames share one bucket, so arbitrary input cannot create an unbounded
+    // number of documents.
+    if (reservation.locked) throw new DomainError("LOGIN_RATE_LIMITED", "登录尝试较多，请稍后再试");
     throw new DomainError("INVALID_CREDENTIALS", "账号或密码错误");
   }
   await clearV2OwnerLoginAttempts(repository, input.username, now);

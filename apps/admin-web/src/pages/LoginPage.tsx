@@ -4,7 +4,7 @@ import { useMerchant } from "../app/MerchantContext";
 import { Button } from "../components/Button";
 
 export function LoginPage() {
-  const { login, isMockMode } = useMerchant();
+  const { login, isMockMode, sessionNotice } = useMerchant();
   const [username, setUsername] = useState(isMockMode ? "owner" : "");
   const [password, setPassword] = useState(isMockMode ? "demo12345" : "");
   const [showPassword, setShowPassword] = useState(false);
@@ -76,6 +76,7 @@ export function LoginPage() {
                 </span>
               </label>
             </div>
+            {sessionNotice && <div className="inline-alert login-session-alert" role="status">{sessionNotice}</div>}
             {error && <div className="form-error" role="alert">{error}</div>}
             <Button type="submit" loading={loading} className="login-submit">登录</Button>
             <p className="session-note"><LockKeyhole size={14} aria-hidden="true" />账号信息仅用于本店后台</p>

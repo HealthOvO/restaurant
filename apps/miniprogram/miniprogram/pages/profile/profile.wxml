@@ -4,7 +4,7 @@
 
   <block wx:elif="{{home && overview}}">
     <view class="profile-card">
-      <view class="profile-avatar">雄</view>
+      <view class="profile-avatar" aria-label="祯好七福鼎肉片"><view class="profile-bowl"><view></view></view></view>
       <view class="profile-main"><text class="profile-name">微信顾客</text><text>当前微信已登录</text></view>
       <view class="profile-points"><strong>{{home.member.pointsBalance}}</strong><text>积分</text></view>
     </view>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDownWideNarrow, Bell, BellRing, Check, ReceiptText, RefreshCw, RotateCcw, TicketX, WifiOff } from "lucide-react";
 import type { V2Order, V2OrderStatus } from "@restaurant/shared";
 import { useMerchant } from "../app/MerchantContext";
@@ -7,7 +7,8 @@ import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/PageState";
 import { OrderSourceBadge, OrderStatusBadge } from "../components/StatusBadge";
 import { formatDateTime, formatMoney } from "../lib/format";
-import { invalidateResourceCache, readResourceCache, writeResourceCache } from "../lib/resource-cache";
+import { invalidateResourceCache } from "../lib/resource-cache";
+import { orderPageCacheKey, readOrderPageCache, writeOrderPageCache } from "../lib/order-page-cache";
 
 type Filter = "ALL" | Exclude<V2OrderStatus, "PENDING_PAYMENT">;
 type PendingAction = { type: "complete" | "cancel" | "refund"; order: V2Order } | null;
@@ -21,9 +22,7 @@ const filters: Array<{ value: Filter; label: string }> = [
   { value: "REFUNDED", label: "已退款" }
 ];
 
-function ordersCacheKey(filter: Filter): string {
-  return `orders:${filter}`;
-}
+const PAGE_SIZE = 50;
 
 const emptyCopy: Record<Filter, { title: string; detail: string }> = {
   ALL: { title: "还没有订单", detail: "顾客下单后会显示在这里。" },
@@ -35,11 +34,11 @@ const emptyCopy: Record<Filter, { title: string; detail: string }> = {
 };
 
 export function sortOrdersForFilter(rows: V2Order[], filter: Filter): V2Order[] {
-  void filter;
   return rows.slice().sort((left, right) => {
     const byTime = left.createdAt.localeCompare(right.createdAt);
-    if (byTime !== 0) return byTime;
-    return left.orderNo.localeCompare(right.orderNo);
+    const direction = filter === "WAITING_FULFILLMENT" ? 1 : -1;
+    if (byTime !== 0) return byTime * direction;
+    return left.orderNo.localeCompare(right.orderNo) * direction;
   });
 }
 
@@ -57,93 +56,118 @@ function OrderListSkeleton() {
 }
 
 export function OrdersPage() {
-  const { api, session, notify, newOrderSoundEnabled, setNewOrderSoundEnabled } = useMerchant();
+  const { api, session, notify, newOrderSoundEnabled, setNewOrderSoundEnabled, orderMonitor, retryOrderMonitor } = useMerchant();
   const [filter, setFilter] = useState<Filter>("WAITING_FULFILLMENT");
-  const [orders, setOrders] = useState<V2Order[]>(() => readResourceCache<V2Order[]>(ordersCacheKey("WAITING_FULFILLMENT")) ?? []);
-  const [loading, setLoading] = useState(() => readResourceCache(ordersCacheKey("WAITING_FULFILLMENT")) === undefined);
+  const [orders, setOrders] = useState<V2Order[]>(() => readOrderPageCache("WAITING_FULFILLMENT")?.rows ?? []);
+  const [nextCursor, setNextCursor] = useState<string | undefined>(() => readOrderPageCache("WAITING_FULFILLMENT")?.nextCursor);
+  const [loading, setLoading] = useState(() => readOrderPageCache("WAITING_FULFILLMENT") === undefined);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [acting, setActing] = useState(false);
+  const requestSequence = useRef(0);
+  const monitorRefreshInFlight = useRef(false);
+  const ordersRef = useRef(orders);
+  const nextCursorRef = useRef(nextCursor);
 
-  const load = useCallback(async (background = false) => {
+  const commitPage = useCallback((rows: V2Order[], cursor: string | undefined, requestedFilter: Filter) => {
+    const sorted = sortOrdersForFilter(rows, requestedFilter);
+    ordersRef.current = sorted;
+    nextCursorRef.current = cursor;
+    setOrders(sorted);
+    setNextCursor(cursor);
+    writeOrderPageCache(requestedFilter, { rows: sorted, nextCursor: cursor });
+  }, []);
+
+  const load = useCallback(async (background = false, append = false) => {
     if (!api || !session) return;
-    const cacheKey = ordersCacheKey(filter);
-    if (background || readResourceCache(cacheKey) !== undefined) setSyncing(true);
+    const requestedFilter = filter;
+    const cursor = append ? nextCursorRef.current : undefined;
+    if (append && !cursor) return;
+    const requestId = ++requestSequence.current;
+    if (append) setLoadingMore(true);
+    else if (background || readOrderPageCache(requestedFilter) !== undefined) setSyncing(true);
     else setLoading(true);
     try {
-      const next = sortOrdersForFilter(await api.listOrders(session.token, filter === "ALL" ? undefined : filter), filter);
-      writeResourceCache(cacheKey, next);
-      setOrders(next);
+      const page = await api.listOrders(session.token, requestedFilter === "ALL" ? undefined : requestedFilter, cursor, PAGE_SIZE);
+      if (requestId !== requestSequence.current) return;
+      const merged = append
+        ? [...ordersRef.current, ...page.rows.filter((row) => !ordersRef.current.some((current) => current._id === row._id))]
+        : page.rows;
+      commitPage(merged, page.nextCursor, requestedFilter);
       setLastSync(new Date());
       setError("");
     } catch (caught) {
+      if (requestId !== requestSequence.current) return;
       setError(caught instanceof Error ? caught.message : "订单同步失败");
     } finally {
-      setLoading(false);
-      setSyncing(false);
+      if (requestId === requestSequence.current) {
+        setLoading(false);
+        setLoadingMore(false);
+        setSyncing(false);
+      }
     }
-  }, [api, session, filter]);
+  }, [api, session, filter, commitPage]);
 
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => {
-    if (!api || !session) return;
-    let active = true;
-    void api.listOrders(session.token).then((rows) => {
-      if (!active) return;
-      const all = sortOrdersForFilter(rows, "ALL");
-      writeResourceCache(ordersCacheKey("ALL"), all);
-      for (const item of filters) {
-        if (item.value === "ALL") continue;
-        writeResourceCache(ordersCacheKey(item.value), sortOrdersForFilter(all.filter((order) => order.status === item.value), item.value));
-      }
-    }).catch(() => undefined);
-    return () => { active = false; };
-  }, [api, session]);
 
   useEffect(() => {
     const onWaitingOrders = (event: Event) => {
-      const detail = (event as CustomEvent<{ orders: V2Order[]; syncedAt: number }>).detail;
+      const detail = (event as CustomEvent<{ orders: V2Order[]; hasMore: boolean; syncedAt: number }>).detail;
       setLastSync(new Date(detail.syncedAt));
       setOnline(true);
       if (filter === "WAITING_FULFILLMENT") {
-        setOrders(sortOrdersForFilter(detail.orders, filter));
+        if (detail.hasMore) {
+          if (!monitorRefreshInFlight.current) {
+            monitorRefreshInFlight.current = true;
+            void load(true).finally(() => { monitorRefreshInFlight.current = false; });
+          }
+          return;
+        }
+        requestSequence.current += 1;
+        commitPage(detail.orders, undefined, filter);
         setLoading(false);
+        setLoadingMore(false);
         setSyncing(false);
         setError("");
       }
     };
     window.addEventListener("xiongfei:waiting-orders", onWaitingOrders);
     return () => window.removeEventListener("xiongfei:waiting-orders", onWaitingOrders);
-  }, [filter]);
+  }, [filter, commitPage, load]);
 
   useEffect(() => {
-    const timer = filter === "WAITING_FULFILLMENT" ? undefined : window.setInterval(() => void load(true), 15000);
     const visible = () => document.visibilityState === "visible" && filter !== "WAITING_FULFILLMENT" && void load(true);
-    const goOnline = () => { setOnline(true); void load(true); };
+    const goOnline = () => { setOnline(true); filter === "WAITING_FULFILLMENT" ? retryOrderMonitor() : void load(true); };
     const goOffline = () => setOnline(false);
     document.addEventListener("visibilitychange", visible);
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
     return () => {
-      if (timer) window.clearInterval(timer);
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
     };
-  }, [load]);
+  }, [load, filter, retryOrderMonitor]);
 
   function toggleSound() {
     setNewOrderSoundEnabled(!newOrderSoundEnabled);
   }
 
   function selectFilter(next: Filter) {
-    const cached = readResourceCache<V2Order[]>(ordersCacheKey(next));
+    requestSequence.current += 1;
+    const cached = readOrderPageCache(next);
     setFilter(next);
-    setOrders(cached ?? []);
+    ordersRef.current = cached?.rows ?? [];
+    nextCursorRef.current = cached?.nextCursor;
+    setOrders(cached?.rows ?? []);
+    setNextCursor(cached?.nextCursor);
     setLoading(cached === undefined);
+    setLoadingMore(false);
+    setSyncing(false);
     setError("");
   }
 
@@ -155,7 +179,7 @@ export function OrdersPage() {
       if (pendingAction.type === "cancel") await api.cancelCouponOrder(session.token, pendingAction.order._id);
       if (pendingAction.type === "refund") await api.refundOrder(session.token, pendingAction.order._id);
       notify(pendingAction.type === "complete" ? "已完成出餐" : pendingAction.type === "cancel" ? "券订单已取消" : "退款已提交", "success");
-      invalidateResourceCache("dashboard", ...filters.map((item) => ordersCacheKey(item.value)));
+      invalidateResourceCache("dashboard", ...filters.map((item) => orderPageCacheKey(item.value)));
       setPendingAction(null);
       await load(true);
     } catch (caught) {
@@ -177,7 +201,7 @@ export function OrdersPage() {
   return (
     <div className="page-stack orders-page">
       <header className="page-header">
-        <div><p className="eyebrow">待出餐每 5 秒同步</p><h1>订单</h1><p>最早下单排在前面，支付、商品券和混合订单都会标明。</p></div>
+        <div><p className="eyebrow">待出餐每 5 秒同步</p><h1>订单</h1><p>待出餐从早到晚处理，历史订单优先显示最近记录。</p></div>
         <div className="header-actions">
           <Button tone={newOrderSoundEnabled ? "secondary" : "quiet"} onClick={toggleSound} title="新单会连续响铃并显示页面提醒">
             {newOrderSoundEnabled ? <BellRing size={16} /> : <Bell size={16} />}{newOrderSoundEnabled ? "新单提醒已开启" : "打开新单提醒"}
@@ -186,22 +210,22 @@ export function OrdersPage() {
         </div>
       </header>
 
-      {error && <div className="inline-alert" role="alert">{error}</div>}
+      {error && <div className="inline-alert alert-with-action" role="alert"><span>{error}</span><Button tone="secondary" onClick={() => load(true)}>重试</Button></div>}
 
       <div className="list-toolbar">
         <div className="segmented-tabs" role="tablist" aria-label="订单状态">
           {filters.map((item) => (
-            <button key={item.value} type="button" role="tab" aria-selected={filter === item.value} className={filter === item.value ? "is-active" : ""} onClick={() => selectFilter(item.value)}>{item.label}</button>
+            <button key={item.value} type="button" role="tab" aria-controls="merchant-order-list" aria-selected={filter === item.value} className={filter === item.value ? "is-active" : ""} onClick={() => selectFilter(item.value)}>{item.label}</button>
           ))}
         </div>
         <div className={`sync-strip ${!online ? "is-offline" : ""}`} role="status">
-          {!online ? <><WifiOff size={15} /><span>网络断开，等待恢复</span></> : <><span className="live-dot" /><span>{syncing ? "同步中…" : `已更新 ${lastSync ? lastSync.toLocaleTimeString("zh-CN", { hour12: false }) : "—"}`}</span></>}
+          {!online || orderMonitor.phase === "ERROR" ? <><WifiOff size={15} /><span>{!online ? "网络断开，等待恢复" : "新单同步中断"}</span></> : <><span className="live-dot" /><span>{syncing ? "同步中…" : `已更新 ${lastSync ? lastSync.toLocaleTimeString("zh-CN", { hour12: false }) : "—"}`}</span></>}
         </div>
-        <span className="sort-hint"><ArrowDownWideNarrow size={14} />最早优先</span>
-        <span className="list-count">{orders.length} 单</span>
+        <span className="sort-hint"><ArrowDownWideNarrow size={14} />{filter === "WAITING_FULFILLMENT" ? "最早优先" : "最近优先"}</span>
+        <span className="list-count">已加载 {orders.length} 单</span>
       </div>
 
-      <section className="order-list" aria-label="订单列表">
+      <section id="merchant-order-list" className="order-list" aria-label="订单列表" aria-busy={loading || syncing || loadingMore}>
         {loading && !orders.length && <OrderListSkeleton />}
         {!loading && orders.map((order) => (
           <article className="order-card" key={order._id}>
@@ -222,6 +246,9 @@ export function OrdersPage() {
                   </div>
                 ))}
               </div>
+              {order.status === "REFUNDING" && order.refundStatus === "ABNORMAL" && (
+                <div className="order-refund-alert" role="alert">退款异常，请到微信支付商户平台处理</div>
+              )}
               <footer className="order-card-footer">
                 <div className="order-total">
                   {order.paidAmount > 0
@@ -239,6 +266,7 @@ export function OrdersPage() {
           </article>
         ))}
         {!loading && !orders.length && <EmptyState title={emptyCopy[filter].title} detail={emptyCopy[filter].detail} icon={<ReceiptText size={26} />} />}
+        {!loading && nextCursor && <div className="load-more-row"><Button tone="secondary" loading={loadingMore} onClick={() => load(false, true)}>加载更多</Button></div>}
       </section>
 
       <Dialog open={Boolean(pendingAction)} title={actionTitle} description={actionDescription} onClose={() => !acting && setPendingAction(null)} width="small">

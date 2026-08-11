@@ -3,7 +3,7 @@
 ## 1. 准备
 
 - 已认证的小程序 AppID 与 CloudBase 环境
-- CloudBase CLI、Node.js 18+
+- CloudBase CLI、Node.js 20.19+（也支持 22.12+）
 - 正式收款前准备微信支付普通商户号、API 证书私钥、微信支付公钥和 32 字节 APIv3 密钥
 
 建议开发、体验、生产使用不同 CloudBase 环境和不同密钥。
@@ -28,13 +28,15 @@ npm run build:release
 - `v2-payment-notify`
 - `v2-refund-notify`
 
-部署脚本会把顾客、老板及回调函数超时设置为 10 秒，把定时对账函数设置为 60 秒，避免冷启动或批量对账被 3 秒默认超时中断。非上海环境执行前设置 `TCB_REGION`。
+部署脚本会把顾客及回调函数超时设置为 15 秒、老板函数设置为 30 秒、定时对账函数设置为 60 秒，覆盖支付、退款和批量对账所需时间。非上海环境执行前设置 `TCB_REGION`。
 
-仓库已提供跨平台部署命令，构建完成后执行：
+仓库已提供跨平台部署命令。命令会先确认 Git 工作区干净、当前账号能访问目标环境、五个函数名准确，再执行完整审查与发布构建；任一步失败都会停止后续部署：
 
 ```bash
 npm run deploy:functions -- <CloudBase 环境 ID>
 ```
+
+如确需发布尚未提交的紧急修复，显式设置 `ALLOW_DIRTY_DEPLOY=1` 后再执行，并自行记录发布提交。PowerShell 入口会调用同一份 Node.js 脚本，检查项保持一致。
 
 所有函数配置：
 
@@ -89,7 +91,7 @@ WECHAT_REFUND_NOTIFY_URL=<v2-refund-notify HTTPS 地址>
     "storeName": "祯好七福鼎肉片",
     "announcement": "新鲜现做，叫号取餐",
     "username": "owner",
-    "password": "<至少 8 位强密码>",
+    "password": "<至少 8 位，包含大小写字母和数字>",
     "displayName": "老板"
   }
 }
@@ -100,7 +102,7 @@ WECHAT_REFUND_NOTIFY_URL=<v2-refund-notify HTTPS 地址>
 忘记密码或更换老板微信不影响后台账号。使用 `setup.resetOwner` 和 `BOOTSTRAP_SECRET` 重设账号，旧登录会立即失效：
 
 ```json
-{"action":"setup.resetOwner","secret":"<BOOTSTRAP_SECRET>","payload":{"username":"owner","password":"<新强密码>","displayName":"老板"}}
+{"action":"setup.resetOwner","secret":"<BOOTSTRAP_SECRET>","payload":{"username":"owner","password":"<至少 8 位，包含大小写字母和数字>","displayName":"老板"}}
 ```
 
 ## 5. 商家网站
@@ -119,7 +121,7 @@ VITE_TCB_ENV_ID=<CloudBase 环境 ID>
 npm run deploy:admin -- <CloudBase 环境 ID>
 ```
 
-该命令会自动使用传入的环境 ID 重新构建后台，再发布构建产物，避免误传未配置 CloudBase 环境的旧文件。
+该命令会先运行完整审查，再使用传入的环境 ID 重新构建后台并发布，避免误传未配置 CloudBase 环境的旧文件。
 
 ## 6. 顾客小程序与摊位二维码
 

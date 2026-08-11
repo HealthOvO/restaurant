@@ -25,6 +25,8 @@ test("V2 customer API uses one trusted cloud function and never submits storeId"
   assert.match(source, /name:\s*"v2-customer-api"/);
   assert.doesNotMatch(source, /storeId|STORE_ID|staff/);
   assert.match(source, /order\.mockPay/);
+  assert.match(source, /ensureMember/);
+  assert.match(source, /invite\.resolve/);
 });
 
 test("active customer pages contain no legacy staff or AI-assistant wording", () => {
@@ -97,8 +99,18 @@ test("benefits coupon actions use a full-width layout without the clipped side r
 
 test("closing paid ordering does not disable issued coupons", () => {
   const benefits = fs.readFileSync(path.join(root, "pages", "benefits", "benefits.wxml"), "utf8");
-  const couponUse = fs.readFileSync(path.join(root, "pages", "coupon-use", "coupon-use.wxml"), "utf8");
-  assert.doesNotMatch(`${benefits}\n${couponUse}`, /businessOpen|暂停接单|恢复营业后可使用商品券/);
+  const home = fs.readFileSync(path.join(root, "pages", "home", "home.js"), "utf8");
+  assert.doesNotMatch(benefits, /businessOpen|暂停接单|恢复营业后可使用商品券/);
   assert.match(benefits, />使用商品券<\/button>/);
-  assert.match(couponUse, />确认使用<\/button>/);
+  assert.match(home, /paidCount > 0/);
+});
+
+test("legacy standalone coupon page and unused QR library are removed", () => {
+  assert.equal(fs.existsSync(path.join(root, "pages", "coupon-use", "coupon-use.js")), false);
+  assert.equal(fs.existsSync(path.join(root, "utils", "vendor", "qrcode.js")), false);
+});
+
+test("mini-program JavaScript has a repository syntax-check gate", () => {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(root, "..", "package.json"), "utf8"));
+  assert.match(packageJson.scripts["check:js"], /check-js\.mjs/);
 });

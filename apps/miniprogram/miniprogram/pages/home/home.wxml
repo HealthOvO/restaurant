@@ -85,16 +85,16 @@
         </view>
 
         <view wx:else class="coupon-menu-list">
-          <view wx:for="{{visibleCoupons}}" wx:key="_id" class="coupon-menu-card" data-id="{{item._id}}" bindtap="openCoupon">
+          <view wx:for="{{visibleCoupons}}" wx:key="_id" class="coupon-menu-card {{item.productReady ? '' : 'is-updating'}}" data-id="{{item._id}}" bindtap="openCoupon">
             <view class="coupon-ribbon">商品券</view>
             <view class="coupon-menu-main">
               <text class="coupon-menu-name">{{item.name}}</text>
-              <text class="coupon-menu-product">可兑 {{item.productName}}</text>
+              <text class="coupon-menu-product">{{item.productReady ? '可兑 ' + item.productName : item.unavailableText}}</text>
               <text class="coupon-menu-expiry">{{item.expiresText}}</text>
             </view>
             <view class="coupon-menu-side">
               <text class="coupon-original">{{item.originalPriceText}}</text>
-              <button class="coupon-add {{item.inCart ? 'is-added' : ''}}">{{item.inCart ? '已加入' : '使用'}}</button>
+              <button class="coupon-add {{item.inCart ? 'is-added' : ''}}" disabled="{{!item.productReady}}">{{item.inCart ? '已加入' : (item.productReady ? '使用' : '暂不可用')}}</button>
             </view>
           </view>
           <view wx:if="{{!visibleCoupons.length}}" class="catalog-empty">

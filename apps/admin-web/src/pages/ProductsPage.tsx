@@ -7,6 +7,7 @@ import { Dialog } from "../components/Dialog";
 import { EmptyState, PageError, PageLoading } from "../components/PageState";
 import { formatMoney } from "../lib/format";
 import { readResourceCache, writeResourceCache } from "../lib/resource-cache";
+import { MerchantApiError } from "../lib/api";
 
 const PRODUCTS_CACHE_KEY = "products";
 const CATEGORIES_CACHE_KEY = "categories";
@@ -29,6 +30,7 @@ const blankProduct = (categoryId = ""): V2ProductSaveInput => ({
 function productInput(product: V2Product): V2ProductSaveInput {
   return {
     id: product._id,
+    expectedVersion: product.version,
     categoryId: product.categoryId,
     name: product.name,
     description: product.description ?? "",
@@ -52,7 +54,7 @@ function newSpecGroup(index: number): V2SpecGroup {
 function validateProduct(form: V2ProductSaveInput): string {
   if (!form.categoryId) return "请选择商品分类";
   if (!form.name.trim()) return "请输入商品名称";
-  if (!Number.isInteger(form.basePrice) || form.basePrice < 0) return "商品价格必须是整数分";
+  if (!Number.isInteger(form.basePrice) || form.basePrice < 1) return "商品价格至少为 0.01 元";
   for (const group of form.specGroups) {
     if (!group.name.trim()) return "请填写规格组名称";
     if (!group.choices.length) return `${group.name}至少需要一个选项`;
@@ -74,6 +76,11 @@ export function ProductsPage() {
   const [categoryForm, setCategoryForm] = useState<V2CategorySaveInput | null>(null);
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryError, setCategoryError] = useState("");
+  const [updatingProductId, setUpdatingProductId] = useState<string | null>(null);
+
+  function productConflict(error: unknown): boolean {
+    return error instanceof MerchantApiError && ["VERSION_CONFLICT", "PRODUCT_VERSION_CONFLICT"].includes(error.code);
+  }
 
   const load = useCallback(async () => {
     if (!api || !session) return;
@@ -103,17 +110,34 @@ export function ProductsPage() {
       notify(form.id ? "商品已保存" : "商品已创建", "success");
       setForm(null);
       await load();
-    } catch (caught) { setFormError(caught instanceof Error ? caught.message : "保存失败"); }
+    } catch (caught) {
+      if (productConflict(caught)) {
+        setFormError("商品内容刚刚有更新，请关闭编辑后重新打开");
+        await load();
+      } else {
+        setFormError(caught instanceof Error ? caught.message : "保存失败");
+      }
+    }
     finally { setSaving(false); }
   }
 
   async function quickUpdate(product: V2Product, patch: Partial<V2ProductSaveInput>) {
     if (!api || !session) return;
+    setUpdatingProductId(product._id);
     try {
       await api.saveProduct(session.token, { ...productInput(product), ...patch });
       await load();
       notify(patch.soldOut !== undefined ? (patch.soldOut ? "已标记售罄" : "已恢复销售") : patch.enabled ? "商品已上架" : "商品已下架", "success");
-    } catch (caught) { notify(caught instanceof Error ? caught.message : "操作失败", "error"); }
+    } catch (caught) {
+      if (productConflict(caught)) {
+        await load();
+        notify("商品状态已有更新，请重新操作", "error");
+      } else {
+        notify(caught instanceof Error ? caught.message : "操作失败", "error");
+      }
+    } finally {
+      setUpdatingProductId(null);
+    }
   }
 
   async function saveCategory(event: FormEvent) {
@@ -184,9 +208,9 @@ export function ProductsPage() {
               </div>
               <div className="points-line"><span>顾客 +{product.buyerPointsPerUnit}/份</span><span>邀请奖励 +{product.inviterPointsPerUnit}/份</span></div>
               <div className="product-actions">
-                <Button tone="secondary" onClick={() => { setForm(productInput(product)); setFormError(""); }}><Pencil size={15} />编辑</Button>
-                <Button tone="quiet" onClick={() => quickUpdate(product, { soldOut: !product.soldOut })}>{product.soldOut ? "恢复销售" : "标记售罄"}</Button>
-                <Button tone="quiet" onClick={() => quickUpdate(product, { enabled: !product.enabled })}>{product.enabled ? "下架" : "上架"}</Button>
+                <Button tone="secondary" disabled={updatingProductId === product._id} onClick={() => { setForm(productInput(product)); setFormError(""); }}><Pencil size={15} />编辑</Button>
+                <Button tone="quiet" loading={updatingProductId === product._id} onClick={() => quickUpdate(product, { soldOut: !product.soldOut })}>{product.soldOut ? "恢复销售" : "标记售罄"}</Button>
+                <Button tone="quiet" disabled={updatingProductId === product._id} onClick={() => quickUpdate(product, { enabled: !product.enabled })}>{product.enabled ? "下架" : "上架"}</Button>
               </div>
             </div>
           </article>
@@ -244,7 +268,7 @@ function ProductForm({
         <div className="form-grid two-columns">
           <label className="field"><span>商品分类</span><select value={form.categoryId ?? ""} onChange={(event) => setForm({ ...form, categoryId: event.target.value })}><option value="" disabled>请选择分类</option>{categories.filter((category) => category.enabled || category._id === form.categoryId).map((category) => <option key={category._id} value={category._id}>{category.name}{category.enabled ? "" : "（已停用）"}</option>)}</select></label>
           <label className="field"><span>商品名称</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如：祯好七福鼎肉片" /></label>
-          <label className="field"><span>基础价格（元）</span><input type="number" min="0" step="0.01" value={(form.basePrice / 100).toFixed(2)} onChange={(event) => setForm({ ...form, basePrice: Math.round(Number(event.target.value || 0) * 100) })} /></label>
+          <label className="field"><span>基础价格（元）</span><input type="number" min="0.01" step="0.01" value={(form.basePrice / 100).toFixed(2)} onChange={(event) => setForm({ ...form, basePrice: Math.round(Number(event.target.value || 0) * 100) })} /></label>
           <label className="field field-span"><span>商品说明</span><textarea rows={2} value={form.description ?? ""} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="一句话说明口味或用料" /></label>
           <label className="field field-span"><span>图片地址</span><input value={form.imageUrl ?? ""} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} placeholder="https://..." /></label>
         </div>

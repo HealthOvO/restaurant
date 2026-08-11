@@ -44,6 +44,14 @@ function prepareCartItems(cart) {
   }));
 }
 
+function couponProduct(coupon, products) {
+  if (!coupon) return null;
+  return coupon.productSnapshot
+    || coupon.product
+    || (products || []).find((product) => product._id === coupon.productId)
+    || null;
+}
+
 function activeProductFrom(source, couponMode) {
   const product = JSON.parse(JSON.stringify(source));
   product.specGroups = (product.specGroups || []).map((group) => {
@@ -172,13 +180,18 @@ Page({
       ? []
       : this.data.products.filter((product) => !product.categoryId || product.categoryId === activeCategory._id || activeCategory._id === "default");
     const visibleCoupons = activeCategory.isCoupon
-      ? (home.coupons || []).map((coupon) => ({
-        ...coupon,
-        inCart: couponIds.has(coupon._id),
-        expiresText: dateText(coupon.expiresAt),
-        product: coupon.productSnapshot,
-        originalPriceText: money((coupon.productSnapshot && coupon.productSnapshot.basePrice) || 0)
-      }))
+      ? (home.coupons || []).map((coupon) => {
+        const product = couponProduct(coupon, this.data.products);
+        return {
+          ...coupon,
+          inCart: couponIds.has(coupon._id),
+          expiresText: dateText(coupon.expiresAt),
+          product,
+          productReady: Boolean(product),
+          unavailableText: coupon.unavailableReason || "暂时无法使用",
+          originalPriceText: money((product && product.basePrice) || 0)
+        };
+      })
       : [];
     this.setData({ activeCategoryName: activeCategory.name, visibleProducts, visibleCoupons });
   },
@@ -214,13 +227,18 @@ Page({
   openCoupon(event) {
     const couponId = event.currentTarget.dataset.id;
     const coupon = ((this.data.home && this.data.home.coupons) || []).find((item) => item._id === couponId);
-    if (!coupon || !coupon.productSnapshot) return;
+    const product = couponProduct(coupon, this.data.products);
+    if (!coupon) return;
+    if (!product) {
+      wx.showToast({ title: coupon.unavailableReason || "这张商品券暂时无法使用", icon: "none" });
+      return;
+    }
     if (this.data.cart.some((item) => item.kind === "COUPON" && item.couponId === couponId)) {
       this.setData({ cartOpen: true });
       return;
     }
     this.setData({
-      activeProduct: activeProductFrom(coupon.productSnapshot, true),
+      activeProduct: activeProductFrom(product, true),
       activeCoupon: coupon,
       activeMode: "COUPON",
       quantity: 1
@@ -288,6 +306,7 @@ Page({
     try {
       if (this.data.activeMode === "COUPON") {
         const coupon = this.data.activeCoupon;
+        const originalUnitPrice = product.basePrice + selectedChoices.reduce((total, choice) => total + Number(choice.priceDelta || 0), 0);
         nextCart = addCouponLine(this.data.cart, {
           couponId: coupon._id,
           couponName: coupon.name,
@@ -295,7 +314,7 @@ Page({
           productName: coupon.productName,
           imageUrl: product.imageUrl,
           basePrice: product.basePrice,
-          originalUnitPrice: product.basePrice,
+          originalUnitPrice,
           selections,
           selectedChoices
         });

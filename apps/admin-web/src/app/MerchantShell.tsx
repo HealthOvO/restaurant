@@ -5,13 +5,16 @@ import {
   BarChart3,
   BellRing,
   ChevronLeft,
+  CircleCheck,
   Menu,
   PackageOpen,
   ReceiptText,
+  RefreshCw,
   Settings,
   ShoppingBag,
   TicketPercent,
   Users,
+  WifiOff,
   X
 } from "lucide-react";
 import { useMerchant } from "./MerchantContext";
@@ -26,7 +29,7 @@ const navigation = [
 ];
 
 export function MerchantShell() {
-  const { session, logout, newOrderNotice, dismissNewOrderNotice } = useMerchant();
+  const { session, logout, newOrderNotice, dismissNewOrderNotice, orderMonitor, retryOrderMonitor } = useMerchant();
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const active = navigation.find((item) => location.pathname.startsWith(item.to));
@@ -71,12 +74,28 @@ export function MerchantShell() {
           <span className="mobile-header-spacer" />
         </header>
         <main className="workspace-content">
+          <section className={`order-monitor-bar monitor-${orderMonitor.phase.toLowerCase()}`} role={orderMonitor.phase === "ERROR" ? "alert" : undefined} aria-live={orderMonitor.phase === "ERROR" ? "assertive" : "off"}>
+            <span className="order-monitor-icon" aria-hidden="true">
+              {orderMonitor.phase === "ERROR" ? <WifiOff size={17} /> : <CircleCheck size={17} />}
+            </span>
+            <div>
+              <strong>{orderMonitor.phase === "ERROR" ? "接单同步中断" : orderMonitor.phase === "CONNECTING" || orderMonitor.phase === "IDLE" ? "正在连接订单" : "接单正常"}</strong>
+              <span>
+                {orderMonitor.phase === "ERROR"
+                  ? orderMonitor.error
+                  : orderMonitor.phase === "ONLINE"
+                    ? `待出餐 ${orderMonitor.waitingCount}${orderMonitor.hasMore ? "+" : ""} 笔 · ${orderMonitor.lastSyncedAt ? new Date(orderMonitor.lastSyncedAt).toLocaleTimeString("zh-CN", { hour12: false }) : "刚刚"}更新`
+                    : "正在准备新单提醒"}
+              </span>
+            </div>
+            {orderMonitor.phase === "ERROR" && <div className="order-monitor-actions"><button type="button" onClick={retryOrderMonitor}><RefreshCw size={14} />重试</button><button type="button" onClick={logout}>退出登录</button></div>}
+          </section>
           {newOrderNotice && (
             <aside className="new-order-alert" role="alert" aria-live="assertive">
               <span className="new-order-alert-icon"><BellRing size={21} aria-hidden="true" /></span>
               <div>
-                <strong>收到 {newOrderNotice.count} 笔新订单</strong>
-                <span>{newOrderNotice.pickupNumbers.length ? `取餐号 ${newOrderNotice.pickupNumbers.join("、")}，已按下单时间排队` : "已放入待出餐队列"}</span>
+                <strong>{newOrderNotice.kind === "NEW" ? `收到 ${newOrderNotice.count} 笔新订单` : `当前有 ${newOrderNotice.count}${newOrderNotice.hasMore ? "+" : ""} 笔待出餐`}</strong>
+                <span>{newOrderNotice.pickupNumbers.length ? `取餐号 ${newOrderNotice.pickupNumbers.join("、")}${newOrderNotice.count > newOrderNotice.pickupNumbers.length || newOrderNotice.hasMore ? " 等" : ""}，已按下单时间排队` : "已放入待出餐队列"}</span>
               </div>
               <Link to="/orders" onClick={dismissNewOrderNotice}>查看订单<ArrowRight size={15} /></Link>
               <button className="icon-button" type="button" aria-label="关闭新单提醒" onClick={dismissNewOrderNotice}><X size={17} /></button>

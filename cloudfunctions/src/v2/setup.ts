@@ -3,15 +3,23 @@ import { DomainError, v2OwnerLoginSchema, type V2Category, type V2ExchangeItem, 
 import { z } from "zod";
 import type { V2Repository } from "./repository";
 
+const strongPasswordSchema = z.string()
+  .min(8, "密码至少 8 位")
+  .max(128)
+  .regex(/[a-z]/, "密码至少包含一个小写字母")
+  .regex(/[A-Z]/, "密码至少包含一个大写字母")
+  .regex(/[0-9]/, "密码至少包含一个数字");
+
 const initializeSchema = z.object({
   storeName: z.string().trim().min(1).max(40),
   announcement: z.string().trim().max(200).default("新鲜现做，叫号取餐"),
   username: z.string().trim().min(3).max(32),
-  password: z.string().min(8).max(128),
+  password: strongPasswordSchema,
   displayName: z.string().trim().min(1).max(24).default("老板")
 });
 
 const resetOwnerSchema = v2OwnerLoginSchema.extend({
+  password: strongPasswordSchema,
   displayName: z.string().trim().min(1).max(24).default("老板")
 });
 

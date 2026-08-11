@@ -9,7 +9,7 @@ import type {
 } from "./types";
 
 function requireInteger(value: number, field: string, minimum = 0): number {
-  if (!Number.isInteger(value) || value < minimum) {
+  if (!Number.isSafeInteger(value) || value < minimum) {
     throw new DomainError("INVALID_AMOUNT", `${field}必须是大于等于 ${minimum} 的整数`);
   }
   return value;
@@ -79,6 +79,15 @@ function priceLine(product: V2Product, input: V2CartLineInput, lineIndex: number
   const buyerPointsPerUnit = product.pointsEnabled && !couponMode ? requireInteger(product.buyerPointsPerUnit, "本人积分") : 0;
   const inviterPointsPerUnit = product.pointsEnabled && !couponMode ? requireInteger(product.inviterPointsPerUnit, "邀请积分") : 0;
 
+  for (const [value, field] of [
+    [unitPrice, "商品单价"],
+    [lineTotal, "商品金额"],
+    [buyerPointsPerUnit * quantity, "本人积分"],
+    [inviterPointsPerUnit * quantity, "邀请积分"]
+  ] as const) {
+    if (!Number.isSafeInteger(value)) throw new DomainError("INVALID_AMOUNT", `${field}超出可用范围`);
+  }
+
   return {
     lineId: `line-${lineIndex + 1}`,
     productId: product._id,
@@ -117,12 +126,18 @@ export function quoteV2Order(products: V2Product[], inputs: V2CartLineInput[]): 
   if (itemCount > 99) {
     throw new DomainError("QUANTITY_LIMIT", "单笔订单最多购买 99 份");
   }
+  const payableAmount = lineItems.reduce((total, item) => total + item.lineTotal, 0);
+  const buyerPoints = lineItems.reduce((total, item) => total + item.buyerPointsTotal, 0);
+  const inviterPoints = lineItems.reduce((total, item) => total + item.inviterPointsTotal, 0);
+  if (![payableAmount, buyerPoints, inviterPoints].every(Number.isSafeInteger)) {
+    throw new DomainError("INVALID_AMOUNT", "订单金额或积分超出可用范围");
+  }
   return {
     lineItems,
     itemCount,
-    payableAmount: lineItems.reduce((total, item) => total + item.lineTotal, 0),
-    buyerPoints: lineItems.reduce((total, item) => total + item.buyerPointsTotal, 0),
-    inviterPoints: lineItems.reduce((total, item) => total + item.inviterPointsTotal, 0)
+    payableAmount,
+    buyerPoints,
+    inviterPoints
   };
 }
 

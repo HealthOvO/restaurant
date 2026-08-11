@@ -2,7 +2,6 @@
   <view class="checkout-heading">
     <text class="eyebrow">核对购物车</text>
     <view class="page-title">确认订单</view>
-    <text>付费商品与商品券会生成同一个取餐号</text>
   </view>
 
   <view wx:if="{{cart.length}}" class="checkout-card surface">

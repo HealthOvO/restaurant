@@ -8,7 +8,8 @@ App({
     envId: CLOUD_ENV_ID,
     source: "direct",
     home: null,
-    cart: []
+    cart: [],
+    bootstrapPromise: null
   },
 
   onLaunch(options) {
@@ -18,10 +19,13 @@ App({
     wx.cloud.init({ env: CLOUD_ENV_ID, traceUser: true });
     this.globalData.cart = loadCart();
     this.captureSource(options);
-    api.getHome().then((home) => {
+    const bootstrapPromise = api.getHome().then((home) => {
       this.globalData.home = home;
       writeCache("home", home);
+      this.preloadTabs(home);
+      return home;
     }).catch(() => undefined);
+    this.globalData.bootstrapPromise = bootstrapPromise;
   },
 
   onShow(options) {
@@ -37,5 +41,15 @@ App({
     } else {
       this.globalData.source = wx.getStorageSync("v2-entry-source") || "direct";
     }
+  },
+
+  preloadTabs(home) {
+    api.listOrders().then((orders) => writeCache("orders", orders || [])).catch(() => undefined);
+    Promise.all([api.listCoupons(), api.listPoints()]).then((results) => {
+      writeCache("benefits", { home, coupons: results[0] || [], points: results[1] });
+    }).catch(() => undefined);
+    api.getInviteOverview().then((overview) => {
+      writeCache("profile", { home, overview });
+    }).catch(() => undefined);
   }
 });

@@ -120,6 +120,16 @@ describe("V2 pricing", () => {
       couponItems: [{ couponId: "coupon-1", selections: [] }, { couponId: "coupon-1", selections: [] }]
     })).toThrow("同一张商品券不能重复使用");
   });
+
+  it("keeps coupon settlement within the callback transaction budget", () => {
+    const couponItems = Array.from({ length: 6 }, (_, index) => ({ couponId: `coupon-${index}`, selections: [] }));
+    expect(() => v2OrderCreateSchema.parse({
+      requestId: "coupon-limit-request",
+      expectedPayableAmount: 0,
+      expectedBuyerPoints: 0,
+      couponItems
+    })).toThrow("单笔订单最多使用 5 张商品券");
+  });
 });
 
 describe("V2 business day and state", () => {
@@ -135,6 +145,8 @@ describe("V2 business day and state", () => {
 
   it("enforces order transitions", () => {
     expect(transitionV2Order("PENDING_PAYMENT", "WAITING_FULFILLMENT")).toBe("WAITING_FULFILLMENT");
+    expect(transitionV2Order("REFUNDING", "WAITING_FULFILLMENT")).toBe("WAITING_FULFILLMENT");
+    expect(transitionV2Order("REFUNDING", "COMPLETED")).toBe("COMPLETED");
     expect(() => transitionV2Order("CANCELLED", "WAITING_FULFILLMENT")).toThrow();
   });
 
@@ -161,6 +173,9 @@ describe("V2 product schema", () => {
     expect(parsed.basePrice).toBe(1500);
     expect(() => v2ProductSaveSchema.parse({ ...parsed, buyerPointsPerUnit: 0.1 })).toThrow();
     expect(() => v2ProductSaveSchema.parse({ ...parsed, specGroups: [product.specGroups[0], product.specGroups[0]] })).toThrow("规格组 ID 不能重复");
+    expect(() => v2ProductSaveSchema.parse({ ...parsed, basePrice: 0 })).toThrow();
+    expect(() => v2ProductSaveSchema.parse({ ...parsed, id: "product-fuding" })).toThrow("商品版本缺失");
+    expect(v2ProductSaveSchema.parse({ ...parsed, id: "product-fuding", expectedVersion: 1 }).expectedVersion).toBe(1);
   });
 });
 

@@ -4,18 +4,29 @@ import { createMerchantApi, MerchantApiError, type MerchantApi } from "../lib/ap
 import { playNewOrderAlert } from "../lib/new-order-alert";
 import { loadNewOrderSoundEnabled, saveNewOrderSoundEnabled } from "../lib/preferences";
 import { clearOwnerSession, loadOwnerSession, saveOwnerSession } from "../lib/session";
-import { clearResourceCache, writeResourceCache } from "../lib/resource-cache";
+import { clearResourceCache } from "../lib/resource-cache";
 import { ToastViewport, type ToastMessage } from "../components/Toast";
 
 export interface NewOrderNotice {
   count: number;
   pickupNumbers: string[];
+  kind: "CURRENT" | "NEW";
+  hasMore?: boolean;
+}
+
+export interface OrderMonitorState {
+  phase: "IDLE" | "CONNECTING" | "ONLINE" | "ERROR";
+  waitingCount: number;
+  hasMore?: boolean;
+  lastSyncedAt?: number;
+  error?: string;
 }
 
 interface MerchantContextValue {
   ready: boolean;
   api: MerchantApi | null;
   session: V2OwnerSession | null;
+  sessionNotice: string;
   login(username: string, password: string): Promise<void>;
   logout(): void;
   notify(message: string, tone?: ToastMessage["tone"]): void;
@@ -24,9 +35,15 @@ interface MerchantContextValue {
   setNewOrderSoundEnabled(enabled: boolean): void;
   newOrderNotice: NewOrderNotice | null;
   dismissNewOrderNotice(): void;
+  orderMonitor: OrderMonitorState;
+  retryOrderMonitor(): void;
 }
 
 const MerchantContext = createContext<MerchantContextValue | null>(null);
+
+function waitingSettledAt(order: V2Order): string {
+  return order.settledAt ?? order.createdAt;
+}
 
 export function MerchantProvider({ children }: { children: ReactNode }) {
   const [api, setApi] = useState<MerchantApi | null>(null);
@@ -35,12 +52,40 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [newOrderSoundEnabled, setNewOrderSoundEnabledState] = useState(loadNewOrderSoundEnabled);
   const [newOrderNotice, setNewOrderNotice] = useState<NewOrderNotice | null>(null);
+  const [sessionNotice, setSessionNotice] = useState("");
+  const [orderMonitor, setOrderMonitor] = useState<OrderMonitorState>({ phase: "IDLE", waitingCount: 0 });
+  const [monitorRevision, setMonitorRevision] = useState(0);
   const seenWaitingIds = useRef<Set<string>>(new Set());
   const waitingBaselineReady = useRef(false);
+  const latestWaitingKey = useRef<{ settledAt: string; orderNo: string } | null>(null);
+  const soundEnabledRef = useRef(newOrderSoundEnabled);
+  const soundWarningShown = useRef(false);
+
+  const notify = useCallback((message: string, tone: ToastMessage["tone"] = "neutral") => {
+    const toast = { id: crypto.randomUUID(), message, tone };
+    setToasts((current) => [...current, toast]);
+    window.setTimeout(() => setToasts((current) => current.filter((item) => item.id !== toast.id)), 3600);
+  }, []);
+
+  const expireOwnerSession = useCallback(() => {
+    clearOwnerSession();
+    clearResourceCache();
+    setSession(null);
+    setSessionNotice("登录已失效，请重新登录");
+    seenWaitingIds.current = new Set();
+    waitingBaselineReady.current = false;
+    latestWaitingKey.current = null;
+    setNewOrderNotice(null);
+    setOrderMonitor({ phase: "IDLE", waitingCount: 0 });
+  }, []);
+
+  useEffect(() => {
+    soundEnabledRef.current = newOrderSoundEnabled;
+  }, [newOrderSoundEnabled]);
 
   useEffect(() => {
     let active = true;
-    createMerchantApi()
+    createMerchantApi(expireOwnerSession)
       .then(async (createdApi) => {
         if (!active) return;
         setApi(createdApi);
@@ -49,44 +94,80 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
             await createdApi.profile(session.token);
           } catch (error) {
             if (error instanceof MerchantApiError && error.code === "UNAUTHORIZED") {
-              clearOwnerSession();
-              clearResourceCache();
-              setSession(null);
+              expireOwnerSession();
             }
           }
         }
       })
       .finally(() => active && setReady(true));
     return () => { active = false; };
-  }, []);
+  }, [expireOwnerSession]);
 
   useEffect(() => {
     if (!api || !session) return;
     let active = true;
     let running = false;
+    setOrderMonitor((current) => ({ ...current, phase: "CONNECTING", error: undefined }));
 
     const syncWaitingOrders = async () => {
       if (running) return;
       running = true;
       try {
-        const rows = (await api.listOrders(session.token, "WAITING_FULFILLMENT"))
+        const page = await api.listOrders(session.token, "WAITING_FULFILLMENT", undefined, 100, "RECENT");
+        const rows = page.rows
           .slice()
-          .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.orderNo.localeCompare(right.orderNo));
+          .sort((left, right) => waitingSettledAt(left).localeCompare(waitingSettledAt(right)) || left.orderNo.localeCompare(right.orderNo));
         if (!active) return;
-        writeResourceCache("orders:WAITING_FULFILLMENT", rows);
-        const nextIds = new Set(rows.map((order) => order._id));
-        const added = waitingBaselineReady.current ? rows.filter((order) => !seenWaitingIds.current.has(order._id)) : [];
-        seenWaitingIds.current = nextIds;
-        waitingBaselineReady.current = true;
-        if (added.length) {
-          setNewOrderNotice({ count: added.length, pickupNumbers: added.map((order) => order.pickupNumber).filter((value): value is string => Boolean(value)) });
-          if (newOrderSoundEnabled) playNewOrderAlert();
+        const hadBaseline = waitingBaselineReady.current;
+        const previousLatest = latestWaitingKey.current;
+        const added = hadBaseline
+          ? rows.filter((order) => !seenWaitingIds.current.has(order._id) && (!previousLatest || waitingSettledAt(order) >= previousLatest.settledAt))
+          : [];
+        for (const order of rows) seenWaitingIds.current.add(order._id);
+        while (seenWaitingIds.current.size > 500) {
+          const oldestId = seenWaitingIds.current.values().next().value as string | undefined;
+          if (!oldestId) break;
+          seenWaitingIds.current.delete(oldestId);
         }
-        window.dispatchEvent(new CustomEvent<{ orders: V2Order[]; syncedAt: number }>("xiongfei:waiting-orders", {
-          detail: { orders: rows, syncedAt: Date.now() }
+        const newest = rows[rows.length - 1];
+        const newestSettledAt = newest ? waitingSettledAt(newest) : undefined;
+        if (newest && newestSettledAt && (!previousLatest || newestSettledAt > previousLatest.settledAt || (newestSettledAt === previousLatest.settledAt && newest.orderNo > previousLatest.orderNo))) {
+          latestWaitingKey.current = { settledAt: newestSettledAt, orderNo: newest.orderNo };
+        }
+        waitingBaselineReady.current = true;
+        const syncedAt = Date.now();
+        setOrderMonitor({ phase: "ONLINE", waitingCount: rows.length, hasMore: Boolean(page.nextCursor), lastSyncedAt: syncedAt });
+        if (!hadBaseline && rows.length) {
+          setNewOrderNotice({
+            kind: "CURRENT",
+            count: rows.length,
+            hasMore: Boolean(page.nextCursor),
+            pickupNumbers: rows.map((order) => order.pickupNumber).filter((value): value is string => Boolean(value)).slice(0, 6)
+          });
+        }
+        if (added.length) {
+          setNewOrderNotice({ kind: "NEW", count: added.length, pickupNumbers: added.map((order) => order.pickupNumber).filter((value): value is string => Boolean(value)).slice(0, 6) });
+          if (soundEnabledRef.current) {
+            void playNewOrderAlert().then((played) => {
+              if (!played && !soundWarningShown.current) {
+                soundWarningShown.current = true;
+                notify("浏览器没有播放提醒音，请检查标签页声音权限", "error");
+              }
+            });
+          }
+        }
+        window.dispatchEvent(new CustomEvent<{ orders: V2Order[]; hasMore: boolean; syncedAt: number }>("xiongfei:waiting-orders", {
+          detail: { orders: rows, hasMore: Boolean(page.nextCursor), syncedAt }
         }));
-      } catch {
-        // The order page keeps its own visible retry state; the global monitor retries automatically.
+      } catch (error) {
+        if (!active) return;
+        setOrderMonitor((current) => ({
+          ...current,
+          phase: "ERROR",
+          error: error instanceof MerchantApiError && error.code === "UNAUTHORIZED"
+            ? "登录已失效"
+            : "暂时无法同步新订单，请检查网络后重试"
+        }));
       } finally {
         running = false;
       }
@@ -104,24 +185,22 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
     };
-  }, [api, session, newOrderSoundEnabled]);
+  }, [api, session, monitorRevision, notify]);
 
   useEffect(() => {
-    document.title = newOrderNotice ? `(${newOrderNotice.count} 笔新单) 祯好七福鼎肉片 · 商家后台` : "祯好七福鼎肉片 · 商家后台";
+    document.title = newOrderNotice ? `(${newOrderNotice.count} 笔${newOrderNotice.kind === "NEW" ? "新单" : "待出餐"}) 祯好七福鼎肉片 · 商家后台` : "祯好七福鼎肉片 · 商家后台";
     return () => { document.title = "祯好七福鼎肉片 · 商家后台"; };
   }, [newOrderNotice]);
-
-  const notify = useCallback((message: string, tone: ToastMessage["tone"] = "neutral") => {
-    const toast = { id: crypto.randomUUID(), message, tone };
-    setToasts((current) => [...current, toast]);
-    window.setTimeout(() => setToasts((current) => current.filter((item) => item.id !== toast.id)), 3600);
-  }, []);
 
   const login = useCallback(async (username: string, password: string) => {
     if (!api) throw new MerchantApiError("后台还没准备好，请稍等一下");
     const next = await api.login(username, password);
     clearResourceCache();
     saveOwnerSession(next);
+    setSessionNotice("");
+    seenWaitingIds.current = new Set();
+    waitingBaselineReady.current = false;
+    latestWaitingKey.current = null;
     setSession(next);
   }, [api]);
 
@@ -129,24 +208,37 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
     clearOwnerSession();
     clearResourceCache();
     setSession(null);
+    setSessionNotice("");
     seenWaitingIds.current = new Set();
     waitingBaselineReady.current = false;
+    latestWaitingKey.current = null;
     setNewOrderNotice(null);
+    setOrderMonitor({ phase: "IDLE", waitingCount: 0 });
   }, []);
 
   const setNewOrderSoundEnabled = useCallback((enabled: boolean) => {
     setNewOrderSoundEnabledState(enabled);
     saveNewOrderSoundEnabled(enabled);
-    if (enabled) playNewOrderAlert();
-  }, []);
+    soundWarningShown.current = false;
+    if (enabled) {
+      void playNewOrderAlert().then((played) => {
+        if (!played) {
+          soundWarningShown.current = true;
+          notify("浏览器没有播放声音，请检查网站声音权限", "error");
+        }
+      });
+    }
+  }, [notify]);
 
   const dismissNewOrderNotice = useCallback(() => setNewOrderNotice(null), []);
+  const retryOrderMonitor = useCallback(() => setMonitorRevision((value) => value + 1), []);
 
   const value = useMemo<MerchantContextValue>(() => ({
-    ready, api, session, login, logout, notify,
+    ready, api, session, sessionNotice, login, logout, notify,
     newOrderSoundEnabled, setNewOrderSoundEnabled, newOrderNotice, dismissNewOrderNotice,
+    orderMonitor, retryOrderMonitor,
     isMockMode: import.meta.env.DEV && import.meta.env.VITE_API_MODE === "mock"
-  }), [ready, api, session, login, logout, notify, newOrderSoundEnabled, setNewOrderSoundEnabled, newOrderNotice, dismissNewOrderNotice]);
+  }), [ready, api, session, sessionNotice, login, logout, notify, newOrderSoundEnabled, setNewOrderSoundEnabled, newOrderNotice, dismissNewOrderNotice, orderMonitor, retryOrderMonitor]);
 
   return (
     <MerchantContext.Provider value={value}>

@@ -14,6 +14,7 @@ const eventSchema = z.object({
     "coupon.exchange",
     "coupon.listMine",
     "coupon.use",
+    "invite.resolve",
     "invite.bind",
     "invite.overview"
   ]),
@@ -37,6 +38,7 @@ export async function main(event: unknown) {
       case "coupon.exchange": return application.exchangeCoupon(openId, payload);
       case "coupon.listMine": return application.memberCoupons(openId);
       case "coupon.use": return application.useCoupon(openId, payload);
+      case "invite.resolve": return application.resolveInvite(openId, payload);
       case "invite.bind": return application.bindInvite(openId, payload);
       case "invite.overview": return application.inviteOverview(openId);
     }

@@ -2,58 +2,149 @@ const api = require("../../services/v2");
 const { invalidateCache } = require("../../utils/v2-cache");
 const { clearCart } = require("../../utils/v2-cart");
 
+const MAX_QUERY_ATTEMPTS = 12;
+
+function retryDelay(attempts) {
+  return Math.min(3000, 900 + attempts * 250);
+}
+
 Page({
   data: {
     orderId: "",
     loading: true,
     order: null,
     error: "",
-    attempts: 0
+    attempts: 0,
+    progressText: "请稍等，不要重复支付。"
   },
 
   onLoad(options) {
     const orderId = options && options.orderId ? options.orderId : "";
+    this.visible = true;
     this.setData({ orderId });
-    this.query();
+    this.startPolling(true);
+  },
+
+  onShow() {
+    this.visible = true;
+    if (this.hasShown && !this.terminal && !this.polling) this.startPolling(false);
+    this.hasShown = true;
+  },
+
+  onHide() {
+    this.pausePolling();
   },
 
   onUnload() {
+    this.pausePolling();
+  },
+
+  pausePolling() {
+    this.visible = false;
+    this.pollToken = Number(this.pollToken || 0) + 1;
+    this.polling = false;
     if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
   },
 
   query() {
+    return this.startPolling(true);
+  },
+
+  startPolling(resetAttempts) {
     if (!this.data.orderId) {
       this.setData({ loading: false, error: "订单信息不完整" });
       return Promise.resolve();
     }
-    return api.queryPayment(this.data.orderId).then((order) => {
+    if (this.polling) return this.queryRequest || Promise.resolve();
+    if (resetAttempts) {
+      this.terminal = false;
+      this.setData({ loading: true, error: "", attempts: 0, progressText: "请稍等，不要重复支付。" });
+    } else {
+      this.setData({ loading: true, error: "", progressText: "正在继续确认支付结果。" });
+    }
+    this.visible = true;
+    this.polling = true;
+    const token = Number(this.pollToken || 0) + 1;
+    this.pollToken = token;
+    return this.pollOnce(token);
+  },
+
+  pollOnce(token) {
+    if (!this.polling || token !== this.pollToken) return Promise.resolve();
+    const request = api.queryPayment(this.data.orderId).then((order) => {
+      if (token !== this.pollToken) return;
       if (order.status === "WAITING_FULFILLMENT" || order.status === "COMPLETED") {
-        clearCart();
-        wx.removeStorageSync("v2-checkout-request");
-        invalidateCache("home", "orders", "benefits", "profile");
-        this.setData({ loading: false, order, error: "" });
+        this.finishSuccess(order);
         return;
       }
       if (order.status === "CANCELLED") {
         wx.removeStorageSync("v2-checkout-request");
-        this.setData({ loading: false, order, error: "订单未支付，已关闭" });
+        this.finishTerminal(order, "订单未支付，已关闭");
         return;
       }
       if (order.status === "REFUNDING") {
-        this.setData({ loading: false, order, error: "退款正在处理中，请稍后查看" });
+        this.finalizeSubmittedCart();
+        this.finishTerminal(order, "退款正在处理中，请稍后查看");
         return;
       }
       if (order.status === "REFUNDED") {
-        this.setData({ loading: false, order, error: "订单已退款，本单发放的积分已回收" });
+        this.finalizeSubmittedCart();
+        this.finishTerminal(order, "订单已退款，本单发放的积分已回收");
         return;
       }
-      const attempts = this.data.attempts + 1;
-      this.setData({ attempts, order });
-      if (attempts < 8) this.timer = setTimeout(() => this.query(), 1200);
-      else this.setData({ loading: false, error: "支付结果还在确认，可稍后到订单页查看" });
+      this.continueOrStop(token, order, "");
     }).catch((error) => {
-      this.setData({ loading: false, error: error.message || "支付结果查询失败" });
+      if (token !== this.pollToken) return;
+      this.continueOrStop(token, this.data.order, error && error.message ? error.message : "网络连接不稳定");
+    }).finally(() => {
+      if (this.queryRequest === request) this.queryRequest = null;
     });
+    this.queryRequest = request;
+    return request;
+  },
+
+  continueOrStop(token, order, networkError) {
+    const attempts = this.data.attempts + 1;
+    const canRetry = attempts < MAX_QUERY_ATTEMPTS && this.visible !== false;
+    this.setData({
+      attempts,
+      order,
+      progressText: networkError ? "网络不稳定，正在重新连接。" : "支付结果还在确认，请稍等。"
+    });
+    if (canRetry) {
+      if (this.timer) clearTimeout(this.timer);
+      this.timer = setTimeout(() => {
+        this.timer = null;
+        this.pollOnce(token);
+      }, retryDelay(attempts));
+      return;
+    }
+    this.polling = false;
+    this.setData({
+      loading: false,
+      error: networkError ? "暂时无法查询支付结果，请重新查询" : "支付结果还在确认，可稍后到订单页查看"
+    });
+  },
+
+  finalizeSubmittedCart() {
+    clearCart();
+    wx.removeStorageSync("v2-checkout-request");
+    invalidateCache("home", "orders", "benefits", "profile");
+  },
+
+  finishSuccess(order) {
+    this.finalizeSubmittedCart();
+    this.terminal = true;
+    this.polling = false;
+    this.setData({ loading: false, order, error: "" });
+  },
+
+  finishTerminal(order, message) {
+    invalidateCache("home", "orders", "benefits", "profile");
+    this.terminal = true;
+    this.polling = false;
+    this.setData({ loading: false, order, error: message });
   },
 
   goOrders() {

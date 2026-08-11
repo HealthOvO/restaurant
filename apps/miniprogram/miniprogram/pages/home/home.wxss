@@ -55,6 +55,7 @@ button::after { border: 0; }
 .coupon-menu-list { padding: 2rpx 20rpx 20rpx; }
 .coupon-menu-card { position: relative; display: flex; min-height: 176rpx; align-items: center; gap: 16rpx; margin-bottom: 18rpx; padding: 24rpx 20rpx 20rpx 24rpx; overflow: hidden; background: #fff8ec; border: 1rpx solid #e5d5bb; border-radius: 20rpx; box-shadow: 0 5rpx 18rpx rgba(82,58,40,.06); }
 .coupon-menu-card::after { position: absolute; top: -14rpx; bottom: -14rpx; right: 116rpx; border-left: 2rpx dashed #dfc9aa; content: ""; }
+.coupon-menu-card.is-updating { opacity: .7; }
 .coupon-ribbon { position: absolute; top: 0; left: 0; padding: 6rpx 17rpx 7rpx; color: #fff; background: #a9402b; border-radius: 0 0 14rpx 0; font-size: 17rpx; font-weight: 700; }
 .coupon-menu-main { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 6rpx; padding-top: 12rpx; padding-right: 4rpx; }
 .coupon-menu-name { overflow: hidden; font-size: 27rpx; font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
@@ -64,6 +65,7 @@ button::after { border: 0; }
 .coupon-original { color: #8a6954; font-size: 20rpx; font-weight: 650; }
 .coupon-add { display: flex; width: 84rpx; min-width: 84rpx; max-width: 84rpx; height: 54rpx; min-height: 54rpx; flex: 0 0 84rpx; align-items: center; justify-content: center; padding: 0; color: #fff; background: #a9402b; border-radius: 16rpx; font-size: 20rpx; font-weight: 700; line-height: 1; }
 .coupon-add.is-added { color: #6e6259; background: #e9e1d8; }
+.coupon-add[disabled] { color: #756a61; background: #e5ded6; }
 .catalog-empty { display: flex; min-height: 240rpx; align-items: center; justify-content: center; flex-direction: column; gap: 18rpx; padding: 40rpx 20rpx; color: #887b71; font-size: 22rpx; text-align: center; }
 .catalog-empty button { width: 180rpx; max-width: 180rpx; min-height: 68rpx; padding: 0 18rpx; color: #a9402b; background: transparent; border: 1rpx solid #cdb8a9; border-radius: 16rpx; font-size: 21rpx; }
 .catalog-bottom-space { height: 180rpx; }

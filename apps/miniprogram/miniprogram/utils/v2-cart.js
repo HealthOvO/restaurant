@@ -1,6 +1,8 @@
 const STORAGE_KEY = "fuding-cart-v2";
 const CHECKOUT_REQUEST_KEY = "v2-checkout-request";
 const MAX_CART_QUANTITY = 99;
+const MAX_PAID_LINE_ITEMS = 30;
+const MAX_COUPON_ITEMS = 5;
 
 function loadCart() {
   const value = wx.getStorageSync(STORAGE_KEY);
@@ -50,6 +52,17 @@ function couponKey(couponId) {
   return `coupon|${couponId}`;
 }
 
+function validateCartLimits(cart) {
+  const rows = Array.isArray(cart) ? cart : [];
+  const summary = cartSummary(rows);
+  const paidLineCount = rows.filter((item) => lineKind(item) === "PAID").length;
+  const couponCount = rows.filter((item) => lineKind(item) === "COUPON").length;
+  if (summary.count > MAX_CART_QUANTITY) return `购物车最多放 ${MAX_CART_QUANTITY} 份`;
+  if (paidLineCount > MAX_PAID_LINE_ITEMS) return `购物车最多选择 ${MAX_PAID_LINE_ITEMS} 种商品规格`;
+  if (couponCount > MAX_COUPON_ITEMS) return `每单最多使用 ${MAX_COUPON_ITEMS} 张商品券`;
+  return "";
+}
+
 function normalizeSelections(product, source, couponMode) {
   const groups = product.specGroups || [];
   const groupById = new Map(groups.map((group) => [group.id, group]));
@@ -91,13 +104,20 @@ function reconcileCart(cart, products, coupons) {
   let changed = false;
   let removedCount = 0;
   let totalQuantity = 0;
+  let paidLineCount = 0;
+  let couponCount = 0;
 
   for (const source of Array.isArray(cart) ? cart : []) {
     const kind = lineKind(source);
     if (kind === "COUPON") {
       const coupon = couponById.get(source.couponId);
-      const product = coupon && coupon.productSnapshot;
-      if (!coupon || coupon.status !== "AVAILABLE" || !product || totalQuantity >= MAX_CART_QUANTITY) {
+      const product = coupon && (coupon.productSnapshot || coupon.product || productById.get(coupon.productId));
+      if (!coupon || coupon.status !== "AVAILABLE" || totalQuantity >= MAX_CART_QUANTITY || couponCount >= MAX_COUPON_ITEMS) {
+        changed = true;
+        removedCount += 1;
+        continue;
+      }
+      if (!product) {
         changed = true;
         removedCount += 1;
         continue;
@@ -126,6 +146,7 @@ function reconcileCart(cart, products, coupons) {
       };
       next.push(normalized);
       totalQuantity += 1;
+      couponCount += 1;
       if (JSON.stringify(normalized) !== JSON.stringify(source)) changed = true;
       continue;
     }
@@ -162,7 +183,13 @@ function reconcileCart(cart, products, coupons) {
       duplicate.quantity += quantity;
       changed = true;
     } else {
+      if (paidLineCount >= MAX_PAID_LINE_ITEMS) {
+        changed = true;
+        removedCount += 1;
+        continue;
+      }
       next.push(normalized);
+      paidLineCount += 1;
     }
     totalQuantity += quantity;
     if (quantity !== source.quantity || JSON.stringify(normalized) !== JSON.stringify(source)) changed = true;
@@ -180,6 +207,12 @@ function addCartLine(cart, line) {
   }
   const key = selectionKey(line.productId, line.selections);
   const existingIndex = cart.findIndex((item) => lineKind(item) === "PAID" && item.key === key);
+  const paidLineCount = cart.filter((item) => lineKind(item) === "PAID").length;
+  if (existingIndex < 0 && paidLineCount >= MAX_PAID_LINE_ITEMS) {
+    const error = new Error(`购物车最多选择 ${MAX_PAID_LINE_ITEMS} 种商品规格`);
+    error.code = "CART_PAID_LINE_LIMIT";
+    throw error;
+  }
   if (existingIndex >= 0) {
     const next = [...cart];
     next[existingIndex] = { ...next[existingIndex], kind: "PAID", quantity: next[existingIndex].quantity + line.quantity };
@@ -200,6 +233,11 @@ function addCouponLine(cart, line) {
     error.code = "CART_QUANTITY_LIMIT";
     throw error;
   }
+  if (cart.filter((item) => lineKind(item) === "COUPON").length >= MAX_COUPON_ITEMS) {
+    const error = new Error(`每单最多使用 ${MAX_COUPON_ITEMS} 张商品券`);
+    error.code = "CART_COUPON_LIMIT";
+    throw error;
+  }
   return [...cart, { ...line, kind: "COUPON", key: couponKey(line.couponId), quantity: 1, unitPrice: 0, buyerPointsPerUnit: 0 }];
 }
 
@@ -208,12 +246,14 @@ function changeCartQuantity(cart, key, offset) {
   if (index < 0) return cart;
   const item = cart[index];
   if (lineKind(item) === "COUPON") return offset < 0 ? cart.filter((row) => row.key !== key) : cart;
-  if (offset > 0 && cartSummary(cart).count >= MAX_CART_QUANTITY) {
+  const delta = Number(offset || 0);
+  if (!Number.isInteger(delta)) return cart;
+  if (delta > 0 && cartSummary(cart).count + delta > MAX_CART_QUANTITY) {
     const error = new Error(`购物车最多放 ${MAX_CART_QUANTITY} 份`);
     error.code = "CART_QUANTITY_LIMIT";
     throw error;
   }
-  const quantity = item.quantity + Number(offset || 0);
+  const quantity = item.quantity + delta;
   if (quantity <= 0) return cart.filter((row) => row.key !== key);
   return cart.map((row) => row.key === key ? { ...row, quantity: Math.min(99, quantity) } : row);
 }
@@ -228,11 +268,14 @@ function createRequestId(prefix) {
 
 module.exports = {
   MAX_CART_QUANTITY,
+  MAX_PAID_LINE_ITEMS,
+  MAX_COUPON_ITEMS,
   loadCart,
   saveCart,
   clearCart,
   lineKind,
   cartSummary,
+  validateCartLimits,
   addCartLine,
   addCouponLine,
   changeCartQuantity,

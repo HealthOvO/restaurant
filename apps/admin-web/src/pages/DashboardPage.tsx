@@ -10,11 +10,17 @@ import { formatDateTime, formatMoney } from "../lib/format";
 import { readResourceCache, writeResourceCache } from "../lib/resource-cache";
 
 const DASHBOARD_CACHE_KEY = "dashboard";
+interface DashboardCache { stats: V2DashboardStats; orders: V2Order[]; waitingHasMore?: boolean }
+
+export function formatSignedPoints(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
+}
 
 export function DashboardPage() {
   const { api, session } = useMerchant();
-  const [stats, setStats] = useState<V2DashboardStats | null>(() => readResourceCache<{ stats: V2DashboardStats; orders: V2Order[] }>(DASHBOARD_CACHE_KEY)?.stats ?? null);
-  const [orders, setOrders] = useState<V2Order[]>(() => readResourceCache<{ stats: V2DashboardStats; orders: V2Order[] }>(DASHBOARD_CACHE_KEY)?.orders ?? []);
+  const [stats, setStats] = useState<V2DashboardStats | null>(() => readResourceCache<DashboardCache>(DASHBOARD_CACHE_KEY)?.stats ?? null);
+  const [orders, setOrders] = useState<V2Order[]>(() => readResourceCache<DashboardCache>(DASHBOARD_CACHE_KEY)?.orders ?? []);
+  const [waitingHasMore, setWaitingHasMore] = useState(() => Boolean(readResourceCache<DashboardCache>(DASHBOARD_CACHE_KEY)?.waitingHasMore));
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(() => readResourceCache(DASHBOARD_CACHE_KEY) === undefined);
 
@@ -23,13 +29,16 @@ export function DashboardPage() {
     setRefreshing(true);
     setError("");
     try {
-      const [nextStats, nextOrders] = await Promise.all([
+      const [nextStats, nextOrdersPage] = await Promise.all([
         api.getDashboard(session.token),
-        api.listOrders(session.token, "WAITING_FULFILLMENT")
+        api.listOrders(session.token, "WAITING_FULFILLMENT", undefined, 100)
       ]);
-      writeResourceCache(DASHBOARD_CACHE_KEY, { stats: nextStats, orders: nextOrders });
+      const nextOrders = nextOrdersPage.rows;
+      const hasMore = Boolean(nextOrdersPage.nextCursor);
+      writeResourceCache(DASHBOARD_CACHE_KEY, { stats: nextStats, orders: nextOrders, waitingHasMore: hasMore });
       setStats(nextStats);
       setOrders(nextOrders);
+      setWaitingHasMore(hasMore);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "数据加载失败");
     } finally {
@@ -44,7 +53,7 @@ export function DashboardPage() {
 
   const primaryMetrics = [
     { label: "支付金额", value: formatMoney(stats.paymentAmount), detail: `${stats.paymentOrderCount} 笔支付订单`, icon: Banknote, tone: "red" },
-    { label: "待出餐", value: String(orders.length), detail: "当前需要处理", icon: ReceiptText, tone: "amber" },
+    { label: "待出餐", value: `${orders.length}${waitingHasMore ? "+" : ""}`, detail: waitingHasMore ? "至少这些订单待处理" : "当前需要处理", icon: ReceiptText, tone: "amber" },
     { label: "已完成", value: String(stats.completedOrderCount), detail: "今日完成订单", icon: CheckCheck, tone: "green" },
     { label: "券订单", value: String(stats.couponOrderCount), detail: "免费取餐订单", icon: TicketPercent, tone: "blue" }
   ];
@@ -74,7 +83,7 @@ export function DashboardPage() {
       <div className="dashboard-grid">
         <section className="panel dashboard-orders">
           <header className="section-heading">
-            <div><h2>待出餐</h2><p>{orders.length ? `${orders.length} 单等待处理` : "暂时没有新单"}</p></div>
+            <div><h2>待出餐</h2><p>{orders.length ? `${orders.length}${waitingHasMore ? "+" : ""} 单等待处理` : "暂时没有新单"}</p></div>
             <Link className="text-link" to="/orders">查看全部<ArrowRight size={15} /></Link>
           </header>
           <div className="compact-order-list">
@@ -94,8 +103,8 @@ export function DashboardPage() {
         <section className="panel points-summary">
           <header className="section-heading"><div><h2>积分情况</h2><p>今日发放与消耗</p></div><Coins size={20} aria-hidden="true" /></header>
           <dl className="summary-list">
-            <div><dt>下单获得</dt><dd>+{stats.buyerPointsIssued}</dd></div>
-            <div><dt>邀请奖励</dt><dd>+{stats.inviterPointsIssued}</dd></div>
+            <div><dt>下单获得</dt><dd>{formatSignedPoints(stats.buyerPointsIssued)}</dd></div>
+            <div><dt>邀请奖励</dt><dd>{formatSignedPoints(stats.inviterPointsIssued)}</dd></div>
             <div><dt>换券使用</dt><dd>-{stats.exchangePointsSpent}</dd></div>
           </dl>
           <div className="summary-divider" />

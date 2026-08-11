@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DomainError, v2SessionSchema, type V2OrderStatus } from "@restaurant/shared";
+import { DomainError, v2OwnerOrderListSchema, v2SessionSchema } from "@restaurant/shared";
 import { createV2Runtime, v2Response } from "../v2/handler";
 import { loginV2Owner, requireV2Owner } from "../v2/owner-auth";
 
@@ -26,10 +26,6 @@ const eventSchema = z.object({
   payload: z.record(z.unknown()).default({})
 });
 
-const allowedOrderStatuses = new Set<V2OrderStatus>([
-  "WAITING_FULFILLMENT", "COMPLETED", "CANCELLED", "REFUNDING", "REFUNDED"
-]);
-
 export async function main(event: unknown) {
   return v2Response(async () => {
     const { action, payload } = eventSchema.parse(event);
@@ -45,10 +41,13 @@ export async function main(event: unknown) {
       case "auth.profile": return { _id: owner._id, username: owner.username, displayName: owner.displayName };
       case "dashboard.get": return application.ownerDashboard();
       case "orders.list": {
-        const status = typeof body.status === "string" && allowedOrderStatuses.has(body.status as V2OrderStatus)
-          ? body.status as V2OrderStatus
-          : undefined;
-        return application.ownerOrders(status);
+        const input = v2OwnerOrderListSchema.parse(payload);
+        return application.ownerOrders({
+          status: input.status === "ALL" ? undefined : input.status,
+          direction: input.direction,
+          cursor: input.cursor,
+          limit: input.limit
+        });
       }
       case "orders.complete": return application.completeOrder(String(body.orderId ?? ""));
       case "orders.cancelCoupon": return application.cancelCouponOrder(String(body.orderId ?? ""));

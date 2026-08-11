@@ -56,7 +56,7 @@ export function SettingsPage() {
           <label className="field"><span>今日公告</span><textarea rows={3} value={form.announcement ?? ""} onChange={(event) => setForm({ ...form, announcement: event.target.value })} placeholder="例如：每日现打，售完即止" /></label>
         </section>
         <section className="panel settings-section">
-          <header><span className="settings-icon"><Power size={20} /></span><div><h2>接单状态</h2><p>关闭后不能新下单或用券，积分换券不受影响。</p></div></header>
+          <header><span className="settings-icon"><Power size={20} /></span><div><h2>接单状态</h2><p>暂停后停止付费下单；纯商品券订单和积分换券仍可使用。</p></div></header>
           <label className={`business-toggle ${form.businessOpen ? "is-open" : ""}`}>
             <input type="checkbox" checked={form.businessOpen} onChange={(event) => setForm({ ...form, businessOpen: event.target.checked })} />
             <span className="business-toggle-track"><i /></span>

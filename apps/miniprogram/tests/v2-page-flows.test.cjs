@@ -53,6 +53,39 @@ function wxMock() {
   };
 }
 
+test("member reads wait for the first home bootstrap instead of racing it", async () => {
+  const servicePath = require.resolve(path.join(root, "services", "v2.js"));
+  const previousWx = global.wx;
+  const actions = [];
+  let finishHome;
+  global.wx = {
+    cloud: {
+      callFunction({ data }) {
+        actions.push(data.action);
+        if (data.action === "home.get") {
+          return new Promise((resolve) => { finishHome = () => resolve({ result: { ok: true, data: { products: [] } } }); });
+        }
+        return Promise.resolve({ result: { ok: true, data: [] } });
+      }
+    }
+  };
+  delete require.cache[servicePath];
+  try {
+    const api = require(servicePath);
+    const homeRequest = api.getHome();
+    const ordersRequest = api.listOrders();
+    await Promise.resolve();
+    assert.deepEqual(actions, ["home.get"]);
+    finishHome();
+    await homeRequest;
+    await ordersRequest;
+    assert.deepEqual(actions, ["home.get", "order.listMine"]);
+  } finally {
+    delete require.cache[servicePath];
+    if (previousWx === undefined) delete global.wx; else global.wx = previousWx;
+  }
+});
+
 test("home tab reuses fresh data without another loading request", async () => {
   const wx = wxMock();
   const cache = require(path.join(root, "utils", "v2-cache"));
@@ -181,20 +214,22 @@ test("checkout completes mock payment before opening the result page", async () 
   const loaded = loadPage("pages/checkout/checkout.js", {
     "../../services/v2": {
       createOrder: async (payload) => { orderPayload = payload; return { order: { _id: "order-1", status: "PENDING_PAYMENT" }, payParams: { mode: "MOCK" } }; },
-      mockPay: async (orderId) => calls.push(orderId)
+      mockPay: async (orderId) => calls.push(`pay:${orderId}`),
+      queryPayment: async (orderId) => { calls.push(`query:${orderId}`); return { _id: orderId, status: "WAITING_FULFILLMENT" }; }
     },
     "../../utils/v2-cart": {
       cartSummary: () => ({ count: 1, amount: 1500, points: 2 }),
       clearCart: () => {},
       createRequestId: () => "order-request-123",
       loadCart: () => [],
-      saveCart: () => {}
+      saveCart: () => {},
+      validateCartLimits: () => ""
     }
   }, wx);
   try {
     loaded.page.setData({ cart: [{ productId: "p1", quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2, amountText: "¥15.00" } });
     await loaded.page.submitOrder();
-    assert.deepEqual(calls, ["order-1"]);
+    assert.deepEqual(calls, ["pay:order-1", "query:order-1"]);
     assert.equal(orderPayload.expectedPayableAmount, 1500);
     assert.equal(orderPayload.expectedBuyerPoints, 2);
     assert.equal(wx.redirects[0].url, "/pages/payment-result/payment-result?orderId=order-1");
@@ -207,11 +242,12 @@ test("checkout sends paid lines and coupon lines in one order", async () => {
   const loaded = loadPage("pages/checkout/checkout.js", {
     "../../services/v2": {
       createOrder: async (value) => { payload = value; return { order: { _id: "mixed-order", status: "PENDING_PAYMENT" }, payParams: { mode: "MOCK" } }; },
-      mockPay: async () => {}
+      mockPay: async () => {},
+      queryPayment: async () => ({ _id: "mixed-order", status: "WAITING_FULFILLMENT" })
     },
     "../../utils/v2-cart": {
       cartSummary: () => ({ count: 2, paidCount: 1, couponCount: 1, amount: 1500, discount: 1500, points: 10 }),
-      clearCart: () => {}, createRequestId: () => "mixed-order-request", loadCart: () => [], saveCart: () => {}
+      clearCart: () => {}, createRequestId: () => "mixed-order-request", loadCart: () => [], saveCart: () => {}, validateCartLimits: () => ""
     }
   }, wx);
   try {
@@ -240,14 +276,16 @@ test("checkout replaces a closed idempotency key before creating a new payment",
           ? { order: { _id: "closed-order", status: "CANCELLED" } }
           : { order: { _id: "new-order", status: "PENDING_PAYMENT" }, payParams: { mode: "MOCK" } };
       },
-      mockPay: async () => {}
+      mockPay: async () => {},
+      queryPayment: async () => ({ _id: "new-order", status: "WAITING_FULFILLMENT" })
     },
     "../../utils/v2-cart": {
       cartSummary: () => ({ count: 1, amount: 1500, points: 2 }),
       clearCart: () => {},
       createRequestId: () => `order-request-${++sequence}`,
       loadCart: () => [],
-      saveCart: () => {}
+      saveCart: () => {},
+      validateCartLimits: () => ""
     }
   }, wx);
   try {
@@ -259,27 +297,29 @@ test("checkout replaces a closed idempotency key before creating a new payment",
   } finally { loaded.restore(); }
 });
 
-test("checkout clears a stale cart when the server detects a quote change", async () => {
+test("checkout refreshes a stale cart without discarding valid lines", async () => {
   const wx = wxMock();
-  let clearCount = 0;
+  let savedCart = null;
   const loaded = loadPage("pages/checkout/checkout.js", {
     "../../services/v2": {
-      createOrder: async () => { const error = new Error("商品价格或积分已更新"); error.code = "ORDER_QUOTE_CHANGED"; throw error; }
+      createOrder: async () => { const error = new Error("商品价格或积分已更新"); error.code = "ORDER_QUOTE_CHANGED"; throw error; },
+      getHome: async () => ({ products: [{ _id: "p1" }], coupons: [] })
     },
     "../../utils/v2-cart": {
-      cartSummary: () => ({ count: 0, amount: 0, points: 0 }),
-      clearCart: () => { clearCount += 1; },
+      cartSummary: (cart) => ({ count: cart.length, amount: 1500, points: 2 }),
       createRequestId: () => "order-request-stale",
       loadCart: () => [],
-      saveCart: () => {}
+      reconcileCart: (cart) => ({ cart, changed: true, removedCount: 0 }),
+      saveCart: (cart) => { savedCart = cart; },
+      validateCartLimits: () => ""
     }
   }, wx);
   try {
     loaded.page.setData({ cart: [{ productId: "p1", quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
     await loaded.page.submitOrder();
-    assert.equal(clearCount, 1);
-    assert.equal(loaded.page.data.cart.length, 0);
-    assert.equal(wx.modals[0].title, "商品信息有更新");
+    assert.equal(savedCart.length, 1);
+    assert.equal(loaded.page.data.cart.length, 1);
+    assert.equal(wx.modals[0].title, "购物车已更新");
   } finally { loaded.restore(); }
 });
 
@@ -333,46 +373,117 @@ test("benefits prepares a clear points gap and keeps usable coupons first", () =
   } finally { loaded.restore(); }
 });
 
-test("coupon order submits selected free specs and opens pickup result", async () => {
+test("invite binding resolves the inviter and asks for permanent confirmation first", async () => {
   const wx = wxMock();
-  let payload;
-  const loaded = loadPage("pages/coupon-use/coupon-use.js", {
+  const calls = [];
+  const loaded = loadPage("pages/profile/profile.js", {
     "../../services/v2": {
-      useCoupon: async (value) => { payload = value; return { _id: "coupon-order-1" }; }
+      resolveInvite: async (inviteCode) => { calls.push(`resolve:${inviteCode}`); return { memberCode: "M100", nickname: "小陈" }; },
+      bindInvite: async (inviteCode) => { calls.push(`bind:${inviteCode}`); },
+      getHome: async () => ({ member: { pointsBalance: 0 } }),
+      getInviteOverview: async () => ({ inviteCode: "SELF", inviter: { memberCode: "M100" }, invitees: [] })
     },
-    "../../utils/v2-cart": { createRequestId: () => "coupon-request-123" }
+    "../../utils/v2-format": { dateTime: (value) => value }
   }, wx);
   try {
-    loaded.page.setData({
-      couponId: "coupon-1",
-      businessOpen: false,
-      product: { specGroups: [{ id: "spice", required: true, choices: [{ id: "mild", selected: true }] }] }
-    });
-    await loaded.page.submit();
-    assert.deepEqual(payload.selections, [{ groupId: "spice", choiceIds: ["mild"] }]);
-    assert.equal(wx.redirects[0].url, "/pages/payment-result/payment-result?orderId=coupon-order-1");
+    loaded.page.setData({ inviteInput: "ABC123", overview: { inviter: null, invitees: [] } });
+    await loaded.page.bindInvite();
+    assert.deepEqual(calls.slice(0, 2), ["resolve:ABC123", "bind:ABC123"]);
+    assert.match(wx.modals[0].content, /邀请人：小陈/);
+    assert.match(wx.modals[0].content, /无法更改/);
   } finally { loaded.restore(); }
 });
 
-test("coupon use renders its issued product snapshot after the live product is disabled", async () => {
+test("home can configure a legacy coupon from the live product fallback", () => {
   const wx = wxMock();
-  const snapshot = {
-    _id: "product-1",
-    name: "祯好七福鼎肉片",
-    specGroups: [{ id: "spice", mode: "SINGLE", required: true, choices: [{ id: "mild", enabled: true, priceDelta: 0, isDefault: true }] }]
-  };
-  const loaded = loadPage("pages/coupon-use/coupon-use.js", {
-    "../../services/v2": {
-      getHome: async () => ({ config: { businessOpen: true }, products: [] }),
-      listCoupons: async () => [{ _id: "coupon-1", productId: "product-1", status: "AVAILABLE", productSnapshot: snapshot }]
-    },
-    "../../utils/v2-cart": { createRequestId: () => "coupon-request-123" }
+  const loaded = loadPage("pages/home/home.js", {
+    "../../services/v2": { getHome: async () => ({}) },
+    "../../utils/v2-cart": {
+      cartSummary: () => ({ count: 0, amount: 0, points: 0 }),
+      loadCart: () => [], reconcileCart: (cart) => ({ cart, changed: false, removedCount: 0 }), saveCart: () => {}
+    }
   }, wx);
   try {
-    loaded.page.setData({ couponId: "coupon-1" });
-    await loaded.page.loadCoupon();
-    assert.equal(loaded.page.data.product.name, "祯好七福鼎肉片");
-    assert.equal(loaded.page.data.product.specGroups[0].choices[0].selected, true);
+    loaded.page.setData({
+      home: { coupons: [{ _id: "coupon-1", productId: "product-1", productName: "祯好七福鼎肉片" }] },
+      products: [{
+        _id: "product-1", name: "祯好七福鼎肉片", basePrice: 1500,
+        specGroups: [{ id: "spice", mode: "SINGLE", required: true, choices: [{ id: "mild", enabled: true, priceDelta: 0, isDefault: true }] }]
+      }],
+      cart: []
+    });
+    loaded.page.openCoupon({ currentTarget: { dataset: { id: "coupon-1" } } });
+    assert.equal(loaded.page.data.activeProduct.name, "祯好七福鼎肉片");
+    assert.equal(loaded.page.data.activeProduct.specGroups[0].choices[0].selected, true);
+  } finally { loaded.restore(); }
+});
+
+test("requestPayment failure still queries the authoritative order result", async () => {
+  const wx = wxMock();
+  wx.requestPayment = (options) => options.fail({ errMsg: "requestPayment:fail system error" });
+  const calls = [];
+  const loaded = loadPage("pages/checkout/checkout.js", {
+    "../../services/v2": {
+      createOrder: async () => ({ order: { _id: "payment-failed", status: "PENDING_PAYMENT" }, payParams: { timeStamp: "1", nonceStr: "n", package: "prepay_id=x", paySign: "s" } }),
+      queryPayment: async () => { calls.push("query"); return { _id: "payment-failed", status: "PENDING_PAYMENT" }; },
+      cancelPayment: async () => { calls.push("cancel"); return { _id: "payment-failed", status: "CANCELLED" }; }
+    },
+    "../../utils/v2-cart": {
+      cartSummary: () => ({ count: 1, amount: 1500, points: 2 }), createRequestId: () => "payment-failed-request",
+      loadCart: () => [], saveCart: () => {}, validateCartLimits: () => ""
+    }
+  }, wx);
+  try {
+    loaded.page.setData({ cart: [{ productId: "p1", quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
+    await loaded.page.submitOrder();
+    assert.deepEqual(calls, ["query"]);
+    assert.equal(wx.redirects[0].url, "/pages/payment-result/payment-result?orderId=payment-failed");
+  } finally { loaded.restore(); }
+});
+
+test("an explicit payment cancellation closes only after server confirmation", async () => {
+  const wx = wxMock();
+  wx.requestPayment = (options) => options.fail({ errMsg: "requestPayment:fail cancel" });
+  const calls = [];
+  const loaded = loadPage("pages/checkout/checkout.js", {
+    "../../services/v2": {
+      createOrder: async () => ({ order: { _id: "payment-cancelled", status: "PENDING_PAYMENT" }, payParams: { timeStamp: "1", nonceStr: "n", package: "prepay_id=x", paySign: "s" } }),
+      queryPayment: async () => { calls.push("query"); return { _id: "payment-cancelled", status: "PENDING_PAYMENT" }; },
+      cancelPayment: async () => { calls.push("cancel"); return { _id: "payment-cancelled", status: "CANCELLED" }; }
+    },
+    "../../utils/v2-cart": {
+      cartSummary: () => ({ count: 1, amount: 1500, points: 2 }), createRequestId: () => "payment-cancelled-request",
+      loadCart: () => [], saveCart: () => {}, validateCartLimits: () => ""
+    }
+  }, wx);
+  try {
+    loaded.page.setData({ cart: [{ productId: "p1", quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
+    await loaded.page.submitOrder();
+    assert.deepEqual(calls, ["query", "cancel"]);
+    assert.equal(wx.redirects[0].url, "/pages/payment-result/payment-result?orderId=payment-cancelled");
+  } finally { loaded.restore(); }
+});
+
+test("a cancel callback never closes an order already confirmed as paid", async () => {
+  const wx = wxMock();
+  wx.requestPayment = (options) => options.fail({ errMsg: "requestPayment:fail cancel" });
+  let cancelCalls = 0;
+  const loaded = loadPage("pages/checkout/checkout.js", {
+    "../../services/v2": {
+      createOrder: async () => ({ order: { _id: "cancel-but-paid", status: "PENDING_PAYMENT" }, payParams: { timeStamp: "1", nonceStr: "n", package: "prepay_id=x", paySign: "s" } }),
+      queryPayment: async () => ({ _id: "cancel-but-paid", status: "WAITING_FULFILLMENT" }),
+      cancelPayment: async () => { cancelCalls += 1; return { _id: "cancel-but-paid", status: "CANCELLED" }; }
+    },
+    "../../utils/v2-cart": {
+      cartSummary: () => ({ count: 1, amount: 1500, points: 2 }), createRequestId: () => "cancel-but-paid-request",
+      loadCart: () => [], saveCart: () => {}, validateCartLimits: () => ""
+    }
+  }, wx);
+  try {
+    loaded.page.setData({ cart: [{ productId: "p1", quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
+    await loaded.page.submitOrder();
+    assert.equal(cancelCalls, 0);
+    assert.equal(wx.redirects[0].url, "/pages/payment-result/payment-result?orderId=cancel-but-paid");
   } finally { loaded.restore(); }
 });
 
@@ -408,9 +519,11 @@ test("unified coupon checkout clears the submitted cart after pickup creation", 
 
 test("refunded payment result stops polling and never renders earned points as a success", async () => {
   const wx = wxMock();
+  let clearCount = 0;
+  wx.setStorageSync("v2-checkout-request", "request-refunded");
   const loaded = loadPage("pages/payment-result/payment-result.js", {
     "../../services/v2": { queryPayment: async () => ({ _id: "order-refunded", source: "WECHAT_PAY", status: "REFUNDED", pickupNumber: "020", buyerPoints: 10 }) },
-    "../../utils/v2-cart": { clearCart: () => {} }
+    "../../utils/v2-cart": { clearCart: () => { clearCount += 1; } }
   }, wx);
   try {
     loaded.page.setData({ orderId: "order-refunded" });
@@ -418,5 +531,52 @@ test("refunded payment result stops polling and never renders earned points as a
     assert.equal(loaded.page.data.loading, false);
     assert.equal(loaded.page.data.attempts, 0);
     assert.match(loaded.page.data.error, /积分已回收/);
+    assert.equal(clearCount, 1);
+    assert.equal(wx.getStorageSync("v2-checkout-request"), undefined);
+  } finally { loaded.restore(); }
+});
+
+test("payment result keeps only one query in flight", async () => {
+  const wx = wxMock();
+  let finishQuery;
+  let calls = 0;
+  const loaded = loadPage("pages/payment-result/payment-result.js", {
+    "../../services/v2": {
+      queryPayment: () => {
+        calls += 1;
+        return new Promise((resolve) => { finishQuery = resolve; });
+      }
+    },
+    "../../utils/v2-cart": { clearCart: () => {} }
+  }, wx);
+  try {
+    loaded.page.setData({ orderId: "order-one-query" });
+    const first = loaded.page.query();
+    const second = loaded.page.query();
+    assert.equal(first, second);
+    assert.equal(calls, 1);
+    finishQuery({ _id: "order-one-query", status: "WAITING_FULFILLMENT", pickupNumber: "021" });
+    await first;
+    assert.equal(loaded.page.data.order.pickupNumber, "021");
+  } finally { loaded.restore(); }
+});
+
+test("manual payment-result retry resets an exhausted attempt counter", async () => {
+  const wx = wxMock();
+  const loaded = loadPage("pages/payment-result/payment-result.js", {
+    "../../services/v2": { queryPayment: async () => ({ _id: "order-retry", status: "WAITING_FULFILLMENT", pickupNumber: "022" }) },
+    "../../utils/v2-cart": { clearCart: () => {} }
+  }, wx);
+  try {
+    loaded.page.setData({ orderId: "order-retry", attempts: 11 });
+    loaded.page.visible = true;
+    loaded.page.polling = true;
+    loaded.page.pollToken = 1;
+    loaded.page.continueOrStop(1, null, "网络连接失败");
+    assert.equal(loaded.page.data.loading, false);
+    assert.equal(loaded.page.polling, false);
+    await loaded.page.query();
+    assert.equal(loaded.page.data.attempts, 0);
+    assert.equal(loaded.page.data.order.pickupNumber, "022");
   } finally { loaded.restore(); }
 });

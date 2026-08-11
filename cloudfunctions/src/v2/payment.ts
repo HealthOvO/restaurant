@@ -12,18 +12,24 @@ export interface V2PayParams {
 }
 
 export interface V2PaymentQueryResult {
-  status: "SUCCESS" | "NOTPAY" | "CLOSED";
+  status: "SUCCESS" | "NOTPAY" | "CLOSED" | "NOT_FOUND";
   transactionId?: string;
 }
 
 export interface V2RefundProviderResult {
-  status: "PROCESSING" | "SUCCESS" | "CLOSED" | "ABNORMAL";
+  status: "PROCESSING" | "SUCCESS" | "CLOSED" | "ABNORMAL" | "NOT_FOUND";
   refundId?: string;
+}
+
+export interface V2RefundSubmissionFailure {
+  kind: "RETRYABLE" | "REJECTED_RETRY_AFTER_FIX" | "REJECTED_PERMANENT";
+  code: string;
+  message: string;
 }
 
 export interface V2PaymentProvider {
   readonly mode: "MOCK" | "WECHAT";
-  prepare(order: V2Order): Promise<V2PayParams>;
+  prepare(order: V2Order, expiresAt?: string): Promise<V2PayParams>;
   query(outTradeNo: string): Promise<V2PaymentQueryResult>;
   close(outTradeNo: string): Promise<void>;
   refund(order: V2Order, outRefundNo: string): Promise<V2RefundProviderResult>;
@@ -62,6 +68,62 @@ export interface WeChatNotificationHeaders {
   signature: string;
   timestamp: string;
   nonce: string;
+}
+
+export function isWeChatPayBusinessError(error: unknown, code: string): boolean {
+  return error instanceof DomainError &&
+    error.code === "WECHAT_PAY_API_ERROR" &&
+    error.meta?.wechatCode === code;
+}
+
+const RETRYABLE_REFUND_CODES = new Set(["SYSTEM_ERROR", "FREQUENCY_LIMITED"]);
+const RETRY_AFTER_FIX_REFUND_CODES = new Set(["NOT_ENOUGH", "NO_AUTH", "SIGN_ERROR", "MCH_NOT_EXISTS"]);
+const PERMANENT_REFUND_CODES = new Set([
+  "PARAM_ERROR",
+  "INVALID_REQUEST",
+  "USER_ACCOUNT_ABNORMAL",
+  "RESOURCE_NOT_EXISTS",
+  "ORDER_NOT_EXIST",
+  "TRADE_OVERDUE"
+]);
+
+const REFUND_FAILURE_MESSAGES: Record<string, string> = {
+  NOT_ENOUGH: "商户退款余额不足，微信未受理退款；充值后可重新发起",
+  NO_AUTH: "商户暂无退款权限，微信未受理退款；处理商户平台限制后可重新发起",
+  SIGN_ERROR: "微信支付签名配置有误，微信未受理退款；修复配置后可重新发起",
+  MCH_NOT_EXISTS: "微信支付商户号配置有误，微信未受理退款；修复配置后可重新发起",
+  PARAM_ERROR: "退款参数有误，微信未受理退款，请联系技术人员处理",
+  INVALID_REQUEST: "当前退款请求不符合微信支付规则，微信未受理退款，请联系技术人员处理",
+  USER_ACCOUNT_ABNORMAL: "顾客微信支付账户异常，微信未受理退款，请与顾客协商其他退款方式",
+  RESOURCE_NOT_EXISTS: "微信未找到原支付订单，退款未受理，请核对支付记录",
+  ORDER_NOT_EXIST: "微信未找到原支付订单，退款未受理，请核对支付记录",
+  TRADE_OVERDUE: "订单已超过微信支付可退款期限，请与顾客协商其他退款方式"
+};
+
+export function classifyV2RefundSubmissionError(error: unknown): V2RefundSubmissionFailure {
+  if (error instanceof DomainError && error.code === "WECHAT_PAY_API_ERROR") {
+    const code = String(error.meta?.wechatCode || "UNKNOWN_WECHAT_ERROR");
+    const providerMessage = String(error.meta?.wechatMessage || "");
+    const message = REFUND_FAILURE_MESSAGES[code] || providerMessage || `微信退款请求失败（${code}）`;
+    if (RETRYABLE_REFUND_CODES.has(code)) return { kind: "RETRYABLE", code, message };
+    if (RETRY_AFTER_FIX_REFUND_CODES.has(code)) return { kind: "REJECTED_RETRY_AFTER_FIX", code, message };
+    if (PERMANENT_REFUND_CODES.has(code)) return { kind: "REJECTED_PERMANENT", code, message };
+    // Unknown provider failures may have happened after WeChat accepted the request.
+    // Query the durable refund number before deciding whether it is safe to resubmit.
+    return { kind: "RETRYABLE", code, message };
+  }
+  if (error instanceof DomainError && error.code === "WECHAT_PAY_NOT_CONFIGURED") {
+    return {
+      kind: "REJECTED_RETRY_AFTER_FIX",
+      code: error.code,
+      message: "微信支付商户配置未完成，退款未提交；完成配置后可重新发起"
+    };
+  }
+  return {
+    kind: "RETRYABLE",
+    code: error instanceof DomainError ? error.code : "SUBMISSION_RESULT_UNKNOWN",
+    message: error instanceof Error ? error.message : "退款提交结果暂时无法确认"
+  };
 }
 
 function requiredEnv(name: string): string {
@@ -241,7 +303,7 @@ export class WeChatV2PaymentProvider implements V2PaymentProvider {
           "Wechatpay-Serial": config.wechatPayPublicKeyId
         },
         body: body === undefined ? undefined : rawBody,
-        signal: AbortSignal.timeout(8000)
+        signal: AbortSignal.timeout(5000)
       });
     } catch {
       throw new DomainError("WECHAT_PAY_UNAVAILABLE", "微信支付服务暂时不可用，请稍后重试");
@@ -257,13 +319,24 @@ export class WeChatV2PaymentProvider implements V2PaymentProvider {
     }
     if (!response.ok) {
       let code = "";
-      try { code = String((JSON.parse(responseBody) as { code?: string }).code || ""); } catch { code = ""; }
-      throw new DomainError("WECHAT_PAY_API_ERROR", `微信支付请求失败${code ? `（${code}）` : ""}`);
+      let wechatMessage = "";
+      try {
+        const errorBody = JSON.parse(responseBody) as { code?: string; message?: string };
+        code = String(errorBody.code || "");
+        wechatMessage = String(errorBody.message || "");
+      } catch {
+        code = "";
+      }
+      throw new DomainError(
+        "WECHAT_PAY_API_ERROR",
+        `微信支付请求失败${code ? `（${code}）` : ""}`,
+        { wechatCode: code || undefined, wechatMessage: wechatMessage || undefined, httpStatus: response.status }
+      );
     }
     return (responseBody ? JSON.parse(responseBody) : undefined) as T;
   }
 
-  async prepare(order: V2Order): Promise<V2PayParams> {
+  async prepare(order: V2Order, expiresAt?: string): Promise<V2PayParams> {
     const config = this.config();
     const result = await this.api<{ prepay_id: string }>("POST", "/v3/pay/transactions/jsapi", {
       appid: config.appId,
@@ -271,6 +344,7 @@ export class WeChatV2PaymentProvider implements V2PaymentProvider {
       description: order.lineItems.map((item) => item.productName).join("、").slice(0, 40) || "小吃点餐",
       out_trade_no: order.orderNo,
       notify_url: config.paymentNotifyUrl,
+      ...(expiresAt ? { time_expire: expiresAt } : {}),
       amount: { total: order.payableAmount, currency: "CNY" },
       payer: { openid: order.memberOpenId }
     });
@@ -290,23 +364,32 @@ export class WeChatV2PaymentProvider implements V2PaymentProvider {
 
   async query(outTradeNo: string): Promise<V2PaymentQueryResult> {
     const config = this.config();
-    const result = await this.api<{ trade_state: string; transaction_id?: string }>(
-      "GET",
-      `/v3/pay/transactions/out-trade-no/${encodeURIComponent(outTradeNo)}?mchid=${encodeURIComponent(config.mchId)}`
-    );
+    let result: { trade_state: string; transaction_id?: string };
+    try {
+      result = await this.api<{ trade_state: string; transaction_id?: string }>(
+        "GET",
+        `/v3/pay/transactions/out-trade-no/${encodeURIComponent(outTradeNo)}?mchid=${encodeURIComponent(config.mchId)}`
+      );
+    } catch (error) {
+      if (isWeChatPayBusinessError(error, "ORDER_NOT_EXIST")) return { status: "NOT_FOUND" };
+      throw error;
+    }
     if (result.trade_state === "SUCCESS") return { status: "SUCCESS", transactionId: result.transaction_id };
     if (result.trade_state === "CLOSED") return { status: "CLOSED" };
     return { status: "NOTPAY" };
   }
 
   async close(outTradeNo: string): Promise<void> {
-    await this.api<void>("POST", `/v3/pay/transactions/out-trade-no/${encodeURIComponent(outTradeNo)}/close`, { mchid: this.config().mchId });
+    try {
+      await this.api<void>("POST", `/v3/pay/transactions/out-trade-no/${encodeURIComponent(outTradeNo)}/close`, { mchid: this.config().mchId });
+    } catch (error) {
+      if (isWeChatPayBusinessError(error, "ORDER_NOT_EXIST")) return;
+      throw error;
+    }
   }
 
   async refund(order: V2Order, outRefundNo: string): Promise<V2RefundProviderResult> {
     const config = this.config();
-    const payment = await this.query(order.orderNo);
-    if (payment.status !== "SUCCESS") throw new DomainError("ORDER_NOT_REFUNDABLE", "微信支付订单状态不允许退款");
     const result = await this.api<{ status: V2RefundProviderResult["status"]; refund_id?: string }>("POST", "/v3/refund/domestic/refunds", {
       out_trade_no: order.orderNo,
       out_refund_no: outRefundNo,
@@ -318,10 +401,18 @@ export class WeChatV2PaymentProvider implements V2PaymentProvider {
   }
 
   async queryRefund(outRefundNo: string): Promise<V2RefundProviderResult> {
-    const result = await this.api<{ status: V2RefundProviderResult["status"]; refund_id?: string }>(
-      "GET",
-      `/v3/refund/domestic/refunds/${encodeURIComponent(outRefundNo)}`
-    );
+    let result: { status: V2RefundProviderResult["status"]; refund_id?: string };
+    try {
+      result = await this.api<{ status: V2RefundProviderResult["status"]; refund_id?: string }>(
+        "GET",
+        `/v3/refund/domestic/refunds/${encodeURIComponent(outRefundNo)}`
+      );
+    } catch (error) {
+      if (isWeChatPayBusinessError(error, "RESOURCE_NOT_EXISTS") || isWeChatPayBusinessError(error, "ORDER_NOT_EXIST")) {
+        return { status: "NOT_FOUND" };
+      }
+      throw error;
+    }
     return { status: result.status, refundId: result.refund_id };
   }
 }

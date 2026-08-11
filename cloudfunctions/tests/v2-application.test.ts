@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getRounds } from "bcryptjs";
-import type { V2ExchangeItem, V2Member, V2Order, V2OwnerAccount, V2Product, V2StoreConfig } from "@restaurant/shared";
+import { DomainError, type V2ExchangeItem, type V2Member, type V2Order, type V2OwnerAccount, type V2PointLedger, type V2Product, type V2StoreConfig } from "@restaurant/shared";
 import { V2Application, type V2Clock } from "../src/v2/application";
 import { loginV2Owner, hashV2OwnerPassword, requireV2Owner } from "../src/v2/owner-auth";
 import { MockV2PaymentProvider, type V2PaymentProvider } from "../src/v2/payment";
-import { InMemoryV2Repository, v2DocumentSetOptions, withoutV2DocumentId } from "../src/v2/repository";
+import { InMemoryV2Repository, isV2DocumentNotFoundError, v2DocumentSetOptions, withoutV2DocumentId } from "../src/v2/repository";
 import { initializeV2Store, resetV2Owner } from "../src/v2/setup";
 
 const nowIso = "2026-08-09T10:00:00.000Z";
@@ -159,6 +159,42 @@ describe("V2 customer menu", () => {
     await repository.saveProduct({ ...product, enabled: false, version: 2 });
     expect((await application.home(buyer.openId)).products).toHaveLength(0);
   });
+
+  it("initializes one deterministic member under concurrent first requests", async () => {
+    const repository = new InMemoryV2Repository("store-main", { storeConfig: [storeConfig] });
+    const application = new V2Application(repository, new MockV2PaymentProvider(), clock);
+    const [first, second] = await Promise.all([
+      application.bootstrapMember("openid-first-visit"),
+      application.bootstrapMember("openid-first-visit")
+    ]);
+    expect(first._id).toBe(second._id);
+    expect(repository.snapshot().members.size).toBe(1);
+  });
+
+  it("rejects one of two concurrent edits based on the same product version", async () => {
+    const { application, repository } = setup();
+    const input = {
+      id: product._id,
+      expectedVersion: product.version,
+      name: product.name,
+      description: product.description,
+      basePrice: product.basePrice,
+      enabled: product.enabled,
+      soldOut: product.soldOut,
+      sortOrder: product.sortOrder,
+      pointsEnabled: product.pointsEnabled,
+      buyerPointsPerUnit: product.buyerPointsPerUnit,
+      inviterPointsPerUnit: product.inviterPointsPerUnit,
+      specGroups: product.specGroups
+    };
+    const results = await Promise.allSettled([
+      application.saveProduct({ ...input, name: "版本更新 A" }),
+      application.saveProduct({ ...input, name: "版本更新 B" })
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect((await repository.getProduct(product._id))?.version).toBe(product.version + 1);
+  });
 });
 
 describe("V2 payment settlement", () => {
@@ -254,12 +290,80 @@ describe("V2 payment settlement", () => {
       const firstOrder = await tx.getOrder(first.order._id);
       const secondOrder = await tx.getOrder(second.order._id);
       if (!firstOrder || !secondOrder) throw new Error("missing order");
-      await tx.saveOrder({ ...firstOrder, createdAt: "2026-08-09T09:00:00.000Z" });
-      await tx.saveOrder({ ...secondOrder, createdAt: "2026-08-09T09:05:00.000Z" });
+      await tx.saveOrder({
+        ...firstOrder,
+        createdAt: "2026-08-09T09:00:00.000Z",
+        settledAt: "2026-08-09T09:20:00.000Z"
+      });
+      await tx.saveOrder({
+        ...secondOrder,
+        createdAt: "2026-08-09T09:05:00.000Z",
+        settledAt: "2026-08-09T09:10:00.000Z"
+      });
     });
 
-    expect((await application.ownerOrders("WAITING_FULFILLMENT")).map((order) => order._id)).toEqual([first.order._id, second.order._id]);
-    expect((await application.ownerOrders()).map((order) => order._id)).toEqual([second.order._id, first.order._id]);
+    expect((await application.ownerOrders({ status: "WAITING_FULFILLMENT" })).rows.map((order) => order._id)).toEqual([first.order._id, second.order._id]);
+    expect((await application.ownerOrders()).rows.map((order) => order._id)).toEqual([second.order._id, first.order._id]);
+    expect((await application.ownerOrders({ status: "WAITING_FULFILLMENT", direction: "RECENT" })).rows.map((order) => order._id)).toEqual([first.order._id, second.order._id]);
+    const firstPage = await application.ownerOrders({ status: "WAITING_FULFILLMENT", limit: 1 });
+    const queueCursor = JSON.parse(Buffer.from(firstPage.nextCursor!, "base64url").toString("utf8"));
+    expect(queueCursor).toMatchObject({
+      sortField: "createdAt",
+      sortAt: "2026-08-09T09:00:00.000Z",
+      direction: "asc",
+      orderNo: first.order.orderNo
+    });
+    await expect(application.ownerOrders({
+      status: "WAITING_FULFILLMENT",
+      direction: "RECENT",
+      limit: 1,
+      cursor: firstPage.nextCursor
+    })).rejects.toThrow("分页位置无效");
+    const recentPage = await application.ownerOrders({ status: "WAITING_FULFILLMENT", direction: "RECENT", limit: 1 });
+    expect(JSON.parse(Buffer.from(recentPage.nextCursor!, "base64url").toString("utf8"))).toMatchObject({
+      sortField: "settledAt",
+      sortAt: "2026-08-09T09:20:00.000Z",
+      direction: "desc",
+      orderNo: first.order.orderNo
+    });
+    await application.completeOrder(firstPage.rows[0]._id);
+    const secondPage = await application.ownerOrders({ status: "WAITING_FULFILLMENT", limit: 1, cursor: firstPage.nextCursor });
+    expect(firstPage.rows.map((order) => order._id)).toEqual([first.order._id]);
+    expect(secondPage.rows.map((order) => order._id)).toEqual([second.order._id]);
+    expect(secondPage.nextCursor).toBeUndefined();
+  });
+
+  it("surfaces an older-created order in the recent waiting feed after delayed settlement", async () => {
+    const { application, repository, buyer } = setup();
+    const created = await application.createPaymentOrder(buyer.openId, {
+      requestId: "order-delayed-settlement",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    });
+    await repository.runTransaction(async (tx) => {
+      const order = await tx.getOrder(created.order._id);
+      if (!order) throw new Error("missing order");
+      await tx.saveOrder({ ...order, createdAt: "2026-08-09T08:00:00.000Z" });
+    });
+    expect((await application.ownerOrders({ status: "WAITING_FULFILLMENT", direction: "RECENT" })).rows).toEqual([]);
+
+    await repository.runTransaction(async (tx) => {
+      const order = await tx.getOrder(created.order._id);
+      if (!order) throw new Error("missing order");
+      await tx.saveOrder({
+        ...order,
+        status: "WAITING_FULFILLMENT",
+        paymentStatus: "SUCCESS",
+        settledAt: "2026-08-09T10:30:00.000Z",
+        updatedAt: "2026-08-09T10:30:00.000Z"
+      });
+    });
+
+    const recent = await application.ownerOrders({ status: "WAITING_FULFILLMENT", direction: "RECENT" });
+    expect(recent.rows.map((order) => order._id)).toEqual([created.order._id]);
+    expect(recent.rows[0].createdAt).toBe("2026-08-09T08:00:00.000Z");
+    expect(recent.rows[0].settledAt).toBe("2026-08-09T10:30:00.000Z");
   });
 
   it("returns the same order when the same checkout request is retried", async () => {
@@ -280,6 +384,81 @@ describe("V2 payment settlement", () => {
     expect(repository.snapshot().payments.size).toBe(1);
   });
 
+  it("retries WeChat prepay for the same durable local order after the first request fails", async () => {
+    class RetryPrepayProvider extends MockV2PaymentProvider {
+      calls = 0;
+      expiries: Array<string | undefined> = [];
+      override async prepare(order: V2Order, expiresAt?: string) {
+        this.calls += 1;
+        this.expiries.push(expiresAt);
+        if (this.calls === 1) throw new Error("prepay unavailable");
+        return super.prepare(order);
+      }
+    }
+    const payments = new RetryPrepayProvider();
+    const { application, repository, buyer } = setup(0, payments);
+    const payload = {
+      requestId: "retry-wechat-prepay",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    };
+
+    await expect(application.createPaymentOrder(buyer.openId, payload)).rejects.toThrow("prepay unavailable");
+    expect(repository.snapshot().orders.size).toBe(1);
+    expect(repository.snapshot().payments.size).toBe(1);
+    const retried = await application.createPaymentOrder(buyer.openId, payload);
+    expect(retried.order.status).toBe("PENDING_PAYMENT");
+    expect(retried.payParams?.mode).toBe("MOCK");
+    expect(payments.expiries).toEqual(["2026-08-09T10:15:00.000Z", "2026-08-09T10:15:00.000Z"]);
+  });
+
+  it("uses the winning transaction's payment expiry for concurrent duplicate checkout", async () => {
+    let releaseInitialReads!: () => void;
+    const initialReadsReady = new Promise<void>((resolve) => { releaseInitialReads = resolve; });
+    class BarrierRepository extends InMemoryV2Repository {
+      initialOrderReads = 0;
+      override async getOrder(id: string) {
+        this.initialOrderReads += 1;
+        if (this.initialOrderReads === 2) releaseInitialReads();
+        if (this.initialOrderReads <= 2) await initialReadsReady;
+        return super.getOrder(id);
+      }
+    }
+    class CaptureExpiryProvider extends MockV2PaymentProvider {
+      expiries: Array<string | undefined> = [];
+      override async prepare(order: V2Order, expiresAt?: string) {
+        this.expiries.push(expiresAt);
+        return super.prepare(order);
+      }
+    }
+    const repository = new BarrierRepository("store-main", {
+      storeConfig: [storeConfig],
+      products: [product],
+      exchangeItems: [exchangeItem],
+      members: [member("member-race", "openid-race", "RACE0001")]
+    });
+    const times = [new Date("2026-08-09T10:00:00.000Z"), new Date("2026-08-09T10:05:00.000Z")];
+    const raceClock: V2Clock = { now: () => times.shift() ?? new Date("2026-08-09T10:05:00.000Z") };
+    const payments = new CaptureExpiryProvider();
+    const application = new V2Application(repository, payments, raceClock);
+    const payload = {
+      requestId: "concurrent-expiry-request",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    };
+
+    const [first, second] = await Promise.all([
+      application.createPaymentOrder("openid-race", payload),
+      application.createPaymentOrder("openid-race", payload)
+    ]);
+    const persistedPayment = await repository.getPayment(first.order._id);
+    expect(second.order._id).toBe(first.order._id);
+    expect(payments.expiries).toHaveLength(2);
+    expect(new Set(payments.expiries)).toEqual(new Set([persistedPayment?.expiresAt]));
+  });
+
   it("rolls back both balances once and allows negative points", async () => {
     const { application, repository, buyer, inviter } = setup(-25);
     const created = await application.createPaymentOrder(buyer.openId, {
@@ -289,6 +468,11 @@ describe("V2 payment settlement", () => {
       lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
     });
     await application.confirmPaidOrder(created.order._id, "MOCK");
+    await repository.runTransaction(async (tx) => {
+      const order = await tx.getOrder(created.order._id);
+      if (!order) throw new Error("missing order");
+      await tx.saveOrder({ ...order, businessDate: "2026-08-08" });
+    });
     const [first, second] = await Promise.all([
       application.refundOrder(created.order._id),
       application.refundOrder(created.order._id)
@@ -300,6 +484,175 @@ describe("V2 payment settlement", () => {
     expect((await repository.getMemberById(inviter._id))?.pointsBalance).toBe(0);
     expect((await repository.listPointLedgerByMember(buyer._id))).toHaveLength(2);
     expect((await repository.getPayment(created.order._id))?.status).toBe("REFUND");
+    expect((await application.ownerDashboard()).refundCount).toBe(1);
+    expect((await application.inviteOverview(inviter.openId)).invitees[0]?.contributedPoints).toBe(0);
+  });
+
+  it("persists the refund intent before calling WeChat and keeps it recoverable when submission is uncertain", async () => {
+    let repository!: InMemoryV2Repository;
+    class FailingRefundProvider extends MockV2PaymentProvider {
+      override async refund(order: V2Order, outRefundNo: string) {
+        const persistedOrder = await repository.getOrder(order._id);
+        const persistedRefund = persistedOrder?.activeRefundId ? await repository.getRefund(persistedOrder.activeRefundId) : null;
+        expect(persistedOrder).toMatchObject({ status: "REFUNDING", refundStatus: "PROCESSING" });
+        expect(persistedRefund).toMatchObject({ outRefundNo, status: "PROCESSING" });
+        throw new Error("connection closed after submission");
+      }
+    }
+    const payments = new FailingRefundProvider();
+    const context = setup(0, payments);
+    repository = context.repository;
+    const created = await context.application.createPaymentOrder(context.buyer.openId, {
+      requestId: "refund-intent-before-network",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    });
+    await context.application.confirmPaidOrder(created.order._id, "MOCK");
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const refunding = await context.application.refundOrder(created.order._id);
+    errorLog.mockRestore();
+
+    expect(refunding).toMatchObject({ status: "REFUNDING", refundStatus: "PROCESSING" });
+    expect(repository.snapshot().refunds.size).toBe(1);
+    expect((await repository.getMemberById(context.buyer._id))?.pointsBalance).toBe(10);
+  });
+
+  it("queries an uncertain refund, resubmits the same durable refund number, and settles once", async () => {
+    class RecoveringRefundProvider extends MockV2PaymentProvider {
+      submissions = 0;
+      refundNumbers: string[] = [];
+      override async refund(_order: V2Order, outRefundNo: string) {
+        this.submissions += 1;
+        this.refundNumbers.push(outRefundNo);
+        if (this.submissions === 1) throw new Error("submission result unknown");
+        return { status: "SUCCESS" as const, refundId: "wx-refund-recovered" };
+      }
+      override async queryRefund() { return { status: "NOT_FOUND" as const }; }
+    }
+    const payments = new RecoveringRefundProvider();
+    const { application, repository, buyer } = setup(0, payments);
+    const created = await application.createPaymentOrder(buyer.openId, {
+      requestId: "refund-reconciliation-recovery",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    });
+    await application.confirmPaidOrder(created.order._id, "MOCK");
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    await application.refundOrder(created.order._id);
+    errorLog.mockRestore();
+    const refundId = (await repository.getOrder(created.order._id))!.activeRefundId!;
+    for (let cycle = 0; cycle < 2; cycle += 1) {
+      await repository.runTransaction(async (tx) => {
+        const refund = await tx.getRefund(refundId);
+        if (!refund) throw new Error("missing refund");
+        await tx.saveRefund({ ...refund, nextQueryAt: "2026-08-09T09:59:00.000Z" });
+      });
+      await application.reconcileRefunds();
+    }
+
+    expect((await repository.getOrder(created.order._id))?.status).toBe("REFUNDED");
+    expect(new Set(payments.refundNumbers).size).toBe(1);
+    expect((await repository.listPointLedgerByMember(buyer._id)).filter((row) => row.type === "PURCHASE_REFUND")).toHaveLength(1);
+  });
+
+  it("keeps a real WeChat ABNORMAL refund for query and manual handling without ordinary resubmission", async () => {
+    class AbnormalRefundProvider extends MockV2PaymentProvider {
+      submissions = 0;
+      queries = 0;
+      queryStatus: "ABNORMAL" | "SUCCESS" = "ABNORMAL";
+      override async refund() {
+        this.submissions += 1;
+        return { status: "ABNORMAL" as const, refundId: "wx-abnormal-refund" };
+      }
+      override async queryRefund() {
+        this.queries += 1;
+        return { status: this.queryStatus, refundId: "wx-abnormal-refund" };
+      }
+    }
+    const payments = new AbnormalRefundProvider();
+    const { application, repository, buyer } = setup(0, payments);
+    const created = await application.createPaymentOrder(buyer.openId, {
+      requestId: "real-abnormal-refund",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    });
+    await application.confirmPaidOrder(created.order._id, "MOCK");
+
+    const abnormal = await application.refundOrder(created.order._id);
+    expect(abnormal).toMatchObject({ status: "REFUNDING", refundStatus: "ABNORMAL" });
+    const refundId = abnormal.activeRefundId!;
+    expect(await repository.getRefund(refundId)).toMatchObject({
+      providerErrorCode: "ABNORMAL",
+      providerErrorMessage: "退款异常，请到微信支付商户平台处理",
+      recoveryAction: "MANUAL"
+    });
+    await expect(application.refundOrder(created.order._id)).rejects.toThrow("退款异常，请到微信支付商户平台处理");
+    expect(payments.submissions).toBe(1);
+
+    await repository.runTransaction(async (tx) => {
+      const refund = await tx.getRefund(refundId);
+      if (!refund) throw new Error("missing refund");
+      await tx.saveRefund({ ...refund, nextQueryAt: "2026-08-09T09:59:00.000Z" });
+    });
+    await application.reconcileRefunds();
+    expect(payments).toMatchObject({ submissions: 1, queries: 1 });
+    expect((await repository.getRefund(refundId))?.nextQueryAt).toBe("2026-08-09T10:30:00.000Z");
+
+    payments.queryStatus = "SUCCESS";
+    await repository.runTransaction(async (tx) => {
+      const refund = await tx.getRefund(refundId);
+      if (!refund) throw new Error("missing refund");
+      await tx.saveRefund({ ...refund, nextQueryAt: "2026-08-09T09:59:00.000Z" });
+    });
+    await application.reconcileRefunds();
+    expect((await repository.getOrder(created.order._id))?.status).toBe("REFUNDED");
+    expect(payments.submissions).toBe(1);
+  });
+
+  it("closes a definitively rejected refund, restores the order, and reports the provider reason", async () => {
+    class RejectedThenSuccessProvider extends MockV2PaymentProvider {
+      reject = true;
+      override async refund(_order: V2Order, outRefundNo: string) {
+        if (this.reject) {
+          throw new DomainError("WECHAT_PAY_API_ERROR", "refund rejected", {
+            wechatCode: "USER_ACCOUNT_ABNORMAL",
+            wechatMessage: "user account closed"
+          });
+        }
+        return { status: "SUCCESS" as const, refundId: `wx-${outRefundNo}` };
+      }
+    }
+    const payments = new RejectedThenSuccessProvider();
+    const { application, repository, buyer } = setup(0, payments);
+    const created = await application.createPaymentOrder(buyer.openId, {
+      requestId: "rejected-refund-request",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    });
+    await application.confirmPaidOrder(created.order._id, "MOCK");
+    await application.completeOrder(created.order._id);
+
+    await expect(application.refundOrder(created.order._id)).rejects.toMatchObject({
+      code: "REFUND_REJECTED",
+      meta: { providerCode: "USER_ACCOUNT_ABNORMAL", failureKind: "REJECTED_PERMANENT" }
+    });
+    const restored = await repository.getOrder(created.order._id);
+    expect(restored).toMatchObject({ status: "COMPLETED", refundStatus: "CLOSED" });
+    expect(await repository.getRefund(restored!.activeRefundId!)).toMatchObject({
+      providerErrorCode: "USER_ACCOUNT_ABNORMAL",
+      recoveryAction: undefined
+    });
+    expect((await repository.getMemberById(buyer._id))?.pointsBalance).toBe(10);
+
+    payments.reject = false;
+    const refunded = await application.refundOrder(created.order._id);
+    expect(refunded.status).toBe("REFUNDED");
+    expect(refunded.refundAttempt).toBe(2);
+    expect((await repository.getMemberById(buyer._id))?.pointsBalance).toBe(0);
   });
 
   it("moves a NOTPAY reconciliation forward instead of querying the same batch forever", async () => {
@@ -342,6 +695,39 @@ describe("V2 payment settlement", () => {
     await application.reconcilePayments();
     expect((await repository.getOrder(created.order._id))?.status).toBe("CANCELLED");
     expect((await repository.getPayment(created.order._id))?.status).toBe("CLOSED");
+  });
+
+  it("closes an expired local order and releases coupons when WeChat reports ORDER_NOT_EXIST", async () => {
+    class MissingPaymentProvider extends MockV2PaymentProvider {
+      closeCalls = 0;
+      override async query() { return { status: "NOT_FOUND" as const }; }
+      override async close() { this.closeCalls += 1; }
+    }
+    const payments = new MissingPaymentProvider();
+    const { application, repository, buyer } = setup(100, payments);
+    const coupon = await application.exchangeCoupon(buyer.openId, {
+      requestId: "coupon-for-missing-prepay",
+      exchangeItemId: exchangeItem._id,
+      expectedVersion: exchangeItem.version,
+      expectedPointsCost: exchangeItem.pointsCost
+    });
+    const created = await application.createPaymentOrder(buyer.openId, {
+      requestId: "local-order-without-wechat-prepay",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }],
+      couponItems: [{ couponId: coupon._id, selections: [{ groupId: "spice", choiceIds: ["none"] }, { groupId: "extras", choiceIds: [] }] }]
+    });
+    await repository.runTransaction(async (tx) => {
+      const payment = await tx.getPayment(created.order._id);
+      if (!payment) throw new Error("missing payment");
+      await tx.savePayment({ ...payment, expiresAt: "2026-08-09T09:59:00.000Z", nextQueryAt: "2026-08-09T09:59:00.000Z" });
+    });
+
+    await application.reconcilePayments();
+    expect((await repository.getOrder(created.order._id))?.status).toBe("CANCELLED");
+    expect((await repository.getCoupon(coupon._id))?.status).toBe("AVAILABLE");
+    expect(payments.closeCalls).toBe(0);
   });
 
   it("continues reconciling later payments after one query fails", async () => {
@@ -452,6 +838,38 @@ describe("V2 payment settlement", () => {
 });
 
 describe("V2 coupons", () => {
+  it("enriches a legacy coupon from its disabled product so it remains usable", async () => {
+    const { application, repository, buyer } = setup(100);
+    const coupon = await application.exchangeCoupon(buyer.openId, {
+      requestId: "legacy-coupon-fallback",
+      exchangeItemId: exchangeItem._id,
+      expectedVersion: exchangeItem.version,
+      expectedPointsCost: exchangeItem.pointsCost
+    });
+    await repository.runTransaction(async (tx) => {
+      const current = await tx.getCoupon(coupon._id);
+      if (!current) throw new Error("missing coupon");
+      await tx.saveCoupon({ ...current, productSnapshot: undefined });
+    });
+    await repository.saveProduct({ ...product, enabled: false, soldOut: true, version: 2 });
+
+    const home = await application.home(buyer.openId);
+    expect(home.products).toHaveLength(0);
+    expect(home.coupons[0]).toMatchObject({
+      _id: coupon._id,
+      product: { _id: product._id, enabled: true, soldOut: false }
+    });
+    expect((await application.memberCoupons(buyer.openId))[0]).toHaveProperty("product._id", product._id);
+    const used = await application.createPaymentOrder(buyer.openId, {
+      requestId: "use-legacy-coupon-fallback",
+      expectedPayableAmount: 0,
+      expectedBuyerPoints: 0,
+      lineItems: [],
+      couponItems: [{ couponId: coupon._id, selections: [{ groupId: "spice", choiceIds: ["none"] }, { groupId: "extras", choiceIds: [] }] }]
+    });
+    expect(used.order).toMatchObject({ status: "WAITING_FULFILLMENT", source: "COUPON" });
+  });
+
   it("combines a coupon with paid items, reserves it once, and restores it after refund", async () => {
     const { application, repository, buyer } = setup(100);
     const coupon = await application.exchangeCoupon(buyer.openId, {
@@ -677,6 +1095,43 @@ describe("V2 coupons", () => {
 });
 
 describe("V2 invite graph", () => {
+  it("keeps contribution totals correct beyond the bounded ledger display", async () => {
+    const inviter = member("inviter-many-ledgers", "openid-many-ledgers", "MANYLEDG");
+    const invitee = member("invitee-many-ledgers", "openid-invitee-many", "MANYINVT");
+    const pointLedger: V2PointLedger[] = Array.from({ length: 101 }, (_, index) => ({
+      _id: `reward-${index}`,
+      storeId: "store-main",
+      memberId: inviter._id,
+      type: "INVITE_REWARD",
+      amount: 1,
+      balanceAfter: index + 1,
+      relatedMemberId: invitee._id,
+      businessDate: "2026-08-09",
+      note: "邀请奖励",
+      createdAt: new Date(Date.parse(nowIso) + index).toISOString(),
+      updatedAt: nowIso
+    }));
+    const repository = new InMemoryV2Repository("store-main", { members: [inviter, invitee], pointLedger });
+    expect(await repository.listPointLedgerByMember(inviter._id)).toHaveLength(100);
+    expect((await repository.inviteContributionTotals(inviter._id))[invitee._id]).toBe(101);
+  });
+
+  it("resolves an inviter for confirmation without writing the irreversible relation", async () => {
+    const alice = member("alice-preview", "openid-alice-preview", "ALICEPRE");
+    const bob = member("bob-preview", "openid-bob-preview", "BOBPREV1");
+    const repository = new InMemoryV2Repository("store-main", {
+      storeConfig: [storeConfig], products: [product], members: [alice, bob]
+    });
+    const application = new V2Application(repository, new MockV2PaymentProvider(), clock);
+
+    await expect(application.resolveInvite(alice.openId, { inviteCode: bob.inviteCode })).resolves.toEqual({
+      memberCode: bob.memberCode,
+      nickname: undefined
+    });
+    expect(await repository.getInviteRelation(alice._id)).toBeNull();
+    expect((await repository.getMemberById(alice._id))?.inviterMemberId).toBeUndefined();
+  });
+
   it("serializes mutual binding and prevents a cycle", async () => {
     const alice = member("alice", "openid-alice", "ALICE001");
     const bob = member("bob", "openid-bob", "BOB00001");
@@ -747,20 +1202,20 @@ describe("V2 store setup", () => {
     const result = await initializeV2Store(repository, {
       storeName: "祯好七福鼎肉片",
       username: "owner",
-      password: "strong-password",
+      password: "Strong-password1",
       displayName: "老板"
     }, new Date(nowIso));
     expect(result.store.businessOpen).toBe(false);
     expect(result.product.buyerPointsPerUnit).toBe(10);
     expect(result.exchange.pointsCost).toBe(100);
     await expect(initializeV2Store(repository, {
-      storeName: "重复摊位", username: "other", password: "another-password"
+      storeName: "重复摊位", username: "other", password: "Another-password1"
     })).rejects.toThrow("不能重复执行");
 
-    const session = await loginV2Owner(repository, { username: "owner", password: "strong-password" }, new Date(nowIso));
-    await resetV2Owner(repository, { username: "new-owner", password: "new-strong-password", displayName: "新老板" }, new Date(nowIso));
+    const session = await loginV2Owner(repository, { username: "owner", password: "Strong-password1" }, new Date(nowIso));
+    await resetV2Owner(repository, { username: "new-owner", password: "New-strong-password1", displayName: "新老板" }, new Date(nowIso));
     await expect(requireV2Owner(repository, session.token)).rejects.toThrow("登录已失效");
-    await expect(loginV2Owner(repository, { username: "new-owner", password: "new-strong-password" }, new Date(nowIso))).resolves.toBeTruthy();
+    await expect(loginV2Owner(repository, { username: "new-owner", password: "New-strong-password1" }, new Date(nowIso))).resolves.toBeTruthy();
   });
 });
 
@@ -773,5 +1228,11 @@ describe("V2 CloudBase document writes", () => {
     expect(v2DocumentSetOptions({ _id: "member-1", storeId: "store-main", pointsBalance: 10 })).toEqual({
       data: { storeId: "store-main", pointsBalance: 10 }
     });
+  });
+
+  it("distinguishes a missing document from database and permission failures", () => {
+    expect(isV2DocumentNotFoundError(Object.assign(new Error("document.get:fail document with _id member-1 does not exist"), { errCode: -1 }))).toBe(true);
+    expect(isV2DocumentNotFoundError(Object.assign(new Error("document.get:fail permission denied"), { errCode: -502003 }))).toBe(false);
+    expect(isV2DocumentNotFoundError(Object.assign(new Error("document.get:fail network timeout"), { errCode: -502001 }))).toBe(false);
   });
 });

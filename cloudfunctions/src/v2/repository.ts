@@ -70,6 +70,8 @@ export interface V2Transaction {
   saveMember(member: V2Member): Promise<void>;
   getInviteRelation(inviteeMemberId: string): Promise<V2InviteRelation | null>;
   saveInviteRelation(relation: V2InviteRelation): Promise<void>;
+  getProduct(id: string): Promise<V2Product | null>;
+  saveProduct(product: V2Product): Promise<void>;
   getOrder(id: string): Promise<V2Order | null>;
   saveOrder(order: V2Order): Promise<void>;
   getPayment(id: string): Promise<V2Payment | null>;
@@ -83,6 +85,18 @@ export interface V2Transaction {
   getOwnerLoginAttempt(id: string): Promise<V2OwnerLoginAttempt | null>;
   saveOwnerLoginAttempt(attempt: V2OwnerLoginAttempt): Promise<void>;
   nextPickupNumber(businessDate: string, now: string): Promise<number>;
+}
+
+export interface V2OwnerOrderPageQuery {
+  status?: V2Order["status"];
+  cursor?: string;
+  limit?: number;
+  direction?: "QUEUE" | "RECENT";
+}
+
+export interface V2OwnerOrderPage {
+  rows: V2Order[];
+  nextCursor?: string;
 }
 
 export interface V2Repository {
@@ -111,9 +125,10 @@ export interface V2Repository {
   getRefundByOutRefundNo(outRefundNo: string): Promise<V2Refund | null>;
   getCoupon(id: string): Promise<V2Coupon | null>;
   listOrdersByMember(memberId: string): Promise<V2Order[]>;
-  listOwnerOrders(status?: V2Order["status"]): Promise<V2Order[]>;
+  listOwnerOrders(query?: V2OwnerOrderPageQuery): Promise<V2OwnerOrderPage>;
   listCouponsByMember(memberId: string): Promise<V2Coupon[]>;
   listPointLedgerByMember(memberId: string): Promise<V2PointLedger[]>;
+  inviteContributionTotals(memberId: string): Promise<Record<string, number>>;
   searchMembers(query: string): Promise<V2Member[]>;
   getOwnerByUsername(username: string): Promise<V2OwnerAccount | null>;
   getOwnerById(id: string): Promise<V2OwnerAccount | null>;
@@ -205,14 +220,98 @@ function values<T extends { _id: string }>(map: RecordMap<T>): T[] {
   return Array.from(map.values(), cloneValue);
 }
 
-function sortOwnerOrders(rows: V2Order[], status?: V2Order["status"]): V2Order[] {
-  const oldestFirst = status === "WAITING_FULFILLMENT";
+type V2OwnerOrderSortField = "createdAt" | "settledAt";
+type V2OwnerOrderSortDirection = "asc" | "desc";
+
+interface V2OwnerOrderSort {
+  field: V2OwnerOrderSortField;
+  direction: V2OwnerOrderSortDirection;
+}
+
+function ownerOrderSort(query: V2OwnerOrderPageQuery = {}): V2OwnerOrderSort {
+  if (query.status === "WAITING_FULFILLMENT") {
+    return query.direction === "RECENT"
+      ? { field: "settledAt", direction: "desc" }
+      : { field: "createdAt", direction: "asc" };
+  }
+  return { field: "createdAt", direction: "desc" };
+}
+
+function ownerOrderSortAt(order: V2Order, field: V2OwnerOrderSortField): string {
+  const value = order[field];
+  if (typeof value !== "string" || !value) {
+    throw new DomainError("ORDER_SORT_FIELD_MISSING", "订单排序信息不完整");
+  }
+  return value;
+}
+
+function sortOwnerOrders(rows: V2Order[], query: V2OwnerOrderPageQuery = {}): V2Order[] {
+  const sort = ownerOrderSort(query);
+  const multiplier = sort.direction === "asc" ? 1 : -1;
   return rows.sort((left, right) => {
-    const byTime = left.createdAt.localeCompare(right.createdAt);
-    if (byTime !== 0) return oldestFirst ? byTime : -byTime;
+    const byTime = ownerOrderSortAt(left, sort.field).localeCompare(ownerOrderSortAt(right, sort.field));
+    if (byTime !== 0) return byTime * multiplier;
     const byNumber = left.orderNo.localeCompare(right.orderNo);
-    return oldestFirst ? byNumber : -byNumber;
+    return byNumber * multiplier;
   });
+}
+
+interface V2OwnerOrderCursor {
+  sortField: V2OwnerOrderSortField;
+  sortAt: string;
+  direction: V2OwnerOrderSortDirection;
+  orderNo: string;
+}
+
+function encodeOwnerOrderCursor(order: V2Order, sort: V2OwnerOrderSort): string {
+  return Buffer.from(JSON.stringify({
+    sortField: sort.field,
+    sortAt: ownerOrderSortAt(order, sort.field),
+    direction: sort.direction,
+    orderNo: order.orderNo
+  }), "utf8").toString("base64url");
+}
+
+function decodeOwnerOrderCursor(cursor: string | undefined, expected: V2OwnerOrderSort): V2OwnerOrderCursor | undefined {
+  if (!cursor) return undefined;
+  try {
+    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<V2OwnerOrderCursor>;
+    if (
+      value.sortField !== expected.field
+      || value.direction !== expected.direction
+      || typeof value.sortAt !== "string"
+      || !value.sortAt
+      || typeof value.orderNo !== "string"
+      || !value.orderNo
+    ) throw new Error("invalid cursor");
+    return {
+      sortField: value.sortField,
+      sortAt: value.sortAt,
+      direction: value.direction,
+      orderNo: value.orderNo
+    };
+  } catch {
+    throw new DomainError("INVALID_CURSOR", "分页位置无效，请刷新后重试");
+  }
+}
+
+function isAfterOwnerOrderCursor(order: V2Order, cursor: V2OwnerOrderCursor): boolean {
+  const timeComparison = ownerOrderSortAt(order, cursor.sortField).localeCompare(cursor.sortAt);
+  if (timeComparison !== 0) return cursor.direction === "asc" ? timeComparison > 0 : timeComparison < 0;
+  const numberComparison = order.orderNo.localeCompare(cursor.orderNo);
+  return cursor.direction === "asc" ? numberComparison > 0 : numberComparison < 0;
+}
+
+function ownerOrderPage(rows: V2Order[], query: V2OwnerOrderPageQuery = {}): V2OwnerOrderPage {
+  const limit = Math.min(100, Math.max(1, query.limit ?? 50));
+  const sort = ownerOrderSort(query);
+  const cursor = decodeOwnerOrderCursor(query.cursor, sort);
+  const sorted = sortOwnerOrders(rows, query).filter((order) => !cursor || isAfterOwnerOrderCursor(order, cursor));
+  const pageRows = sorted.slice(0, limit);
+  return {
+    rows: pageRows,
+    nextCursor: pageRows.length < sorted.length ? encodeOwnerOrderCursor(pageRows[pageRows.length - 1], sort) : undefined
+  };
 }
 
 function createMemoryTransaction(data: InMemoryData, storeId: string): V2Transaction {
@@ -221,6 +320,8 @@ function createMemoryTransaction(data: InMemoryData, storeId: string): V2Transac
     saveMember: async (member) => mapSet(data.members, member),
     getInviteRelation: async (id) => mapGet(data.inviteRelations, id),
     saveInviteRelation: async (relation) => mapSet(data.inviteRelations, relation),
+    getProduct: async (id) => mapGet(data.products, id),
+    saveProduct: async (product) => mapSet(data.products, product),
     getOrder: async (id) => mapGet(data.orders, id),
     saveOrder: async (order) => mapSet(data.orders, order),
     getPayment: async (id) => mapGet(data.payments, id),
@@ -296,13 +397,26 @@ export class InMemoryV2Repository implements V2Repository {
   async getRefund(id: string) { return mapGet(this.data.refunds, id); }
   async getRefundByOutRefundNo(outRefundNo: string) { return values(this.data.refunds).find((item) => item.outRefundNo === outRefundNo) ?? null; }
   async getCoupon(id: string) { return mapGet(this.data.coupons, id); }
-  async listOrdersByMember(memberId: string) { return values(this.data.orders).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
-  async listOwnerOrders(status?: V2Order["status"]) { return sortOwnerOrders(values(this.data.orders).filter((item) => !status || item.status === status), status); }
-  async listCouponsByMember(memberId: string) { return values(this.data.coupons).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
-  async listPointLedgerByMember(memberId: string) { return values(this.data.pointLedger).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
+  async listOrdersByMember(memberId: string) { return values(this.data.orders).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50); }
+  async listOwnerOrders(query: V2OwnerOrderPageQuery = {}) {
+    const visibleStatuses: V2Order["status"][] = ["WAITING_FULFILLMENT", "COMPLETED", "CANCELLED", "REFUNDING", "REFUNDED"];
+    return ownerOrderPage(values(this.data.orders).filter((item) => query.status ? item.status === query.status : visibleStatuses.includes(item.status)), query);
+  }
+  async listCouponsByMember(memberId: string) { return values(this.data.coupons).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50); }
+  async listPointLedgerByMember(memberId: string) { return values(this.data.pointLedger).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 100); }
+  async inviteContributionTotals(memberId: string) {
+    return values(this.data.pointLedger)
+      .filter((item) => item.memberId === memberId && item.relatedMemberId && (item.type === "INVITE_REWARD" || item.type === "INVITE_REWARD_REFUND"))
+      .reduce<Record<string, number>>((totals, item) => {
+        totals[item.relatedMemberId!] = (totals[item.relatedMemberId!] ?? 0) + item.amount;
+        return totals;
+      }, {});
+  }
   async searchMembers(query: string) {
     const normalized = query.trim().toLowerCase();
-    return values(this.data.members).filter((item) => !normalized || [item.memberCode, item.inviteCode, item.nickname].some((value) => value?.toLowerCase().includes(normalized)));
+    const recent = values(this.data.members).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    if (!normalized) return recent.slice(0, 50);
+    return recent.filter((item) => item.memberCode.toLowerCase() === normalized || item.inviteCode.toLowerCase() === normalized || item.nickname?.toLowerCase().includes(normalized)).slice(0, 50);
   }
   async getOwnerByUsername(username: string) { return values(this.data.ownerAccounts).find((item) => item.username === username) ?? null; }
   async getOwnerById(id: string) { return mapGet(this.data.ownerAccounts, id); }
@@ -317,7 +431,8 @@ export class InMemoryV2Repository implements V2Repository {
     const orders = values(this.data.orders).filter((item) => item.businessDate === date);
     const ledger = values(this.data.pointLedger).filter((item) => item.businessDate === date);
     const members = values(this.data.members).filter((item) => businessDateAt(new Date(item.createdAt), dayBoundaryTime) === date);
-    return dashboardFromRows(date, orders, ledger, members.length);
+    const refundCount = values(this.data.orders).filter((item) => item.status === "REFUNDED" && item.refundedAt && businessDateAt(new Date(item.refundedAt), dayBoundaryTime) === date).length;
+    return dashboardFromRows(date, orders, ledger, members.length, refundCount);
   }
 
   async runTransaction<T>(callback: (transaction: V2Transaction) => Promise<T>): Promise<T> {
@@ -346,7 +461,7 @@ export class InMemoryV2Repository implements V2Repository {
   snapshot(): Readonly<InMemoryData> { return cloneData(this.data); }
 }
 
-function dashboardFromRows(date: string, orders: V2Order[], ledger: V2PointLedger[], newMemberCount: number): V2DashboardStats {
+function dashboardFromRows(date: string, orders: V2Order[], ledger: V2PointLedger[], newMemberCount: number, refundCount: number): V2DashboardStats {
   const paymentOrders = orders.filter((order) => order.paidAmount > 0 && Boolean(order.settledAt) && order.status !== "CANCELLED");
   return {
     businessDate: date,
@@ -354,10 +469,10 @@ function dashboardFromRows(date: string, orders: V2Order[], ledger: V2PointLedge
     couponOrderCount: orders.filter((order) => (order.source === "COUPON" || order.source === "MIXED" || (order.couponApplications?.length ?? 0) > 0) && order.status !== "CANCELLED").length,
     paymentAmount: paymentOrders.reduce((total, order) => total + order.paidAmount, 0),
     completedOrderCount: orders.filter((order) => order.status === "COMPLETED").length,
-    refundCount: orders.filter((order) => order.status === "REFUNDED").length,
+    refundCount,
     newMemberCount,
-    buyerPointsIssued: ledger.filter((row) => row.type === "PURCHASE").reduce((total, row) => total + row.amount, 0),
-    inviterPointsIssued: ledger.filter((row) => row.type === "INVITE_REWARD").reduce((total, row) => total + row.amount, 0),
+    buyerPointsIssued: ledger.filter((row) => row.type === "PURCHASE" || row.type === "PURCHASE_REFUND").reduce((total, row) => total + row.amount, 0),
+    inviterPointsIssued: ledger.filter((row) => row.type === "INVITE_REWARD" || row.type === "INVITE_REWARD_REFUND").reduce((total, row) => total + row.amount, 0),
     exchangePointsSpent: Math.abs(ledger.filter((row) => row.type === "COUPON_EXCHANGE").reduce((total, row) => total + row.amount, 0))
   };
 }
@@ -369,8 +484,23 @@ type CloudTransaction = {
 function collection(name: string) { return cloud.database().collection(name); }
 function command() { return cloud.database().command; }
 
+export function isV2DocumentNotFoundError(error: unknown): boolean {
+  const value = error as { errCode?: unknown; message?: unknown; errMsg?: unknown } | null;
+  const message = String(value?.message ?? value?.errMsg ?? "");
+  return value?.errCode === -1 && /^document\.get:fail document with _id .+ does not exist$/.test(message);
+}
+
+async function readDocument(get: () => Promise<{ data?: unknown }>): Promise<{ data?: unknown } | null> {
+  try {
+    return await get();
+  } catch (error) {
+    if (isV2DocumentNotFoundError(error)) return null;
+    throw error;
+  }
+}
+
 async function cloudGet<T extends { storeId: string }>(name: string, id: string, storeId: string): Promise<T | null> {
-  const result = await collection(name).doc(id).get().catch(() => null);
+  const result = await readDocument(() => collection(name).doc(id).get());
   const row = result?.data as T | undefined;
   return row?.storeId === storeId ? row : null;
 }
@@ -387,6 +517,18 @@ async function cloudList<T>(name: string, where: Record<string, unknown>): Promi
   }
 }
 
+async function cloudOrderedList<T>(
+  name: string,
+  where: Record<string, unknown> | unknown,
+  field: string,
+  direction: "asc" | "desc",
+  limit: number,
+  skip = 0
+): Promise<T[]> {
+  const result = await collection(name).where(where).orderBy(field, direction).skip(skip).limit(limit).get();
+  return (result.data ?? []) as T[];
+}
+
 export function withoutV2DocumentId<T extends { _id: string }>(row: T): Omit<T, "_id"> {
   const { _id: _documentId, ...data } = row;
   return data;
@@ -401,14 +543,14 @@ async function cloudSave<T extends { _id: string }>(name: string, row: T): Promi
 }
 
 async function txGet<T extends { storeId: string }>(tx: CloudTransaction, name: string, id: string, storeId: string): Promise<T | null> {
-  const result = await tx.collection(name).doc(id).get().catch(() => null);
+  const result = await readDocument(() => tx.collection(name).doc(id).get());
   const row = result?.data as T | undefined;
   return row?.storeId === storeId ? row : null;
 }
 
 async function txSave<T extends { _id: string; storeId: string }>(tx: CloudTransaction, name: string, row: T, storeId: string): Promise<void> {
   const document = tx.collection(name).doc(row._id);
-  const result = await document.get().catch(() => null);
+  const result = await readDocument(() => document.get());
   const existing = result?.data as { storeId?: string } | undefined;
   if (existing && existing.storeId !== storeId) {
     throw new DomainError("STORE_SCOPE_VIOLATION", "数据不属于当前门店");
@@ -454,14 +596,64 @@ export class CloudV2Repository implements V2Repository {
   async getRefund(id: string) { return cloudGet<V2Refund>(V2_COLLECTIONS.refunds, id, this.storeId); }
   async getRefundByOutRefundNo(outRefundNo: string) { return (await cloudList<V2Refund>(V2_COLLECTIONS.refunds, { storeId: this.storeId, outRefundNo }))[0] ?? null; }
   async getCoupon(id: string) { return cloudGet<V2Coupon>(V2_COLLECTIONS.coupons, id, this.storeId); }
-  async listOrdersByMember(memberId: string) { return (await cloudList<V2Order>(V2_COLLECTIONS.orders, { storeId: this.storeId, memberId })).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
-  async listOwnerOrders(status?: V2Order["status"]) { return sortOwnerOrders(await cloudList<V2Order>(V2_COLLECTIONS.orders, { storeId: this.storeId, ...(status ? { status } : {}) }), status); }
-  async listCouponsByMember(memberId: string) { return (await cloudList<V2Coupon>(V2_COLLECTIONS.coupons, { storeId: this.storeId, memberId })).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
-  async listPointLedgerByMember(memberId: string) { return (await cloudList<V2PointLedger>(V2_COLLECTIONS.pointLedger, { storeId: this.storeId, memberId })).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
+  async listOrdersByMember(memberId: string) { return cloudOrderedList<V2Order>(V2_COLLECTIONS.orders, { storeId: this.storeId, memberId }, "createdAt", "desc", 50); }
+  async listOwnerOrders(query: V2OwnerOrderPageQuery = {}) {
+    const limit = Math.min(100, Math.max(1, query.limit ?? 50));
+    const sort = ownerOrderSort(query);
+    const cursor = decodeOwnerOrderCursor(query.cursor, sort);
+    const _ = command();
+    const visibleStatuses: V2Order["status"][] = ["WAITING_FULFILLMENT", "COMPLETED", "CANCELLED", "REFUNDING", "REFUNDED"];
+    const comparison = (value: string) => sort.direction === "asc" ? _.gt(value) : _.lt(value);
+    const fetchStatus = async (status: V2Order["status"]) => {
+      const baseWhere = { storeId: this.storeId, status };
+      const where = cursor
+        ? _.or([
+            { ...baseWhere, [sort.field]: comparison(cursor.sortAt) },
+            { ...baseWhere, [sort.field]: _.eq(cursor.sortAt), orderNo: comparison(cursor.orderNo) }
+          ])
+        : baseWhere;
+      const result = await collection(V2_COLLECTIONS.orders)
+        .where(where)
+        .orderBy(sort.field, sort.direction)
+        .orderBy("orderNo", sort.direction)
+        .limit(limit + 1)
+        .get();
+      return (result.data ?? []) as V2Order[];
+    };
+    const batches = await Promise.all((query.status ? [query.status] : visibleStatuses).map(fetchStatus));
+    const rows = sortOwnerOrders(batches.flat(), query).slice(0, limit + 1);
+    const pageRows = rows.slice(0, limit);
+    return {
+      rows: pageRows,
+      nextCursor: rows.length > limit ? encodeOwnerOrderCursor(pageRows[pageRows.length - 1], sort) : undefined
+    };
+  }
+  async listCouponsByMember(memberId: string) { return cloudOrderedList<V2Coupon>(V2_COLLECTIONS.coupons, { storeId: this.storeId, memberId }, "createdAt", "desc", 50); }
+  async listPointLedgerByMember(memberId: string) { return cloudOrderedList<V2PointLedger>(V2_COLLECTIONS.pointLedger, { storeId: this.storeId, memberId }, "createdAt", "desc", 100); }
+  async inviteContributionTotals(memberId: string) {
+    const _ = command();
+    const $ = _.aggregate;
+    const result = await collection(V2_COLLECTIONS.pointLedger)
+      .aggregate()
+      .match({ storeId: this.storeId, memberId, type: _.in(["INVITE_REWARD", "INVITE_REWARD_REFUND"]) })
+      .group({ _id: "$relatedMemberId", total: $.sum("$amount") })
+      .end();
+    return ((result.list ?? []) as Array<{ _id?: string; total?: number }>).reduce<Record<string, number>>((totals, item) => {
+      if (item._id) totals[item._id] = item.total ?? 0;
+      return totals;
+    }, {});
+  }
   async searchMembers(query: string) {
-    const rows = await cloudList<V2Member>(V2_COLLECTIONS.members, { storeId: this.storeId });
-    const normalized = query.toLowerCase();
-    return rows.filter((item) => !normalized || [item.memberCode, item.inviteCode, item.nickname].some((value) => value?.toLowerCase().includes(normalized)));
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return cloudOrderedList<V2Member>(V2_COLLECTIONS.members, { storeId: this.storeId }, "createdAt", "desc", 50);
+    const [memberCodeMatches, inviteCodeMatches, recent] = await Promise.all([
+      collection(V2_COLLECTIONS.members).where({ storeId: this.storeId, memberCode: query.trim().toUpperCase() }).limit(50).get(),
+      collection(V2_COLLECTIONS.members).where({ storeId: this.storeId, inviteCode: query.trim().toUpperCase() }).limit(50).get(),
+      cloudOrderedList<V2Member>(V2_COLLECTIONS.members, { storeId: this.storeId }, "createdAt", "desc", 200)
+    ]);
+    const exact = [...(memberCodeMatches.data ?? []), ...(inviteCodeMatches.data ?? [])] as V2Member[];
+    const nicknameMatches = recent.filter((item) => item.nickname?.toLowerCase().includes(normalized));
+    return Array.from(new Map([...exact, ...nicknameMatches].map((item) => [item._id, item])).values()).slice(0, 50);
   }
   async getOwnerByUsername(username: string) { return (await cloudList<V2OwnerAccount>(V2_COLLECTIONS.ownerAccounts, { storeId: this.storeId, username }))[0] ?? null; }
   async getOwnerById(id: string) { return cloudGet<V2OwnerAccount>(V2_COLLECTIONS.ownerAccounts, id, this.storeId); }
@@ -480,12 +672,23 @@ export class CloudV2Repository implements V2Repository {
   }
   async dashboard(now: Date, dayBoundaryTime: string) {
     const date = businessDateAt(now, dayBoundaryTime);
-    const [orders, ledger, members] = await Promise.all([
+    const start = new Date(`${date}T${dayBoundaryTime}:00+08:00`);
+    const end = new Date(start.getTime() + 86_400_000);
+    const _ = command();
+    const createdAtRange = _.gte(start.toISOString()).and(_.lt(end.toISOString()));
+    const [orders, ledger, memberCount, refundedOrders] = await Promise.all([
       cloudList<V2Order>(V2_COLLECTIONS.orders, { storeId: this.storeId, businessDate: date }),
       cloudList<V2PointLedger>(V2_COLLECTIONS.pointLedger, { storeId: this.storeId, businessDate: date }),
-      cloudList<V2Member>(V2_COLLECTIONS.members, { storeId: this.storeId })
+      collection(V2_COLLECTIONS.members).where({ storeId: this.storeId, createdAt: createdAtRange }).count(),
+      cloudList<V2Order>(V2_COLLECTIONS.orders, { storeId: this.storeId, status: "REFUNDED", refundedAt: _.gte(start.toISOString()).and(_.lt(end.toISOString())) })
     ]);
-    return dashboardFromRows(date, orders, ledger, members.filter((member) => businessDateAt(new Date(member.createdAt), dayBoundaryTime) === date).length);
+    return dashboardFromRows(
+      date,
+      orders,
+      ledger,
+      memberCount.total ?? 0,
+      refundedOrders.length
+    );
   }
 
   async runTransaction<T>(callback: (transaction: V2Transaction) => Promise<T>): Promise<T> {
@@ -494,6 +697,8 @@ export class CloudV2Repository implements V2Repository {
       saveMember: (row) => txSave(tx, V2_COLLECTIONS.members, row, this.storeId),
       getInviteRelation: (id) => txGet<V2InviteRelation>(tx, V2_COLLECTIONS.inviteRelations, id, this.storeId),
       saveInviteRelation: (row) => txSave(tx, V2_COLLECTIONS.inviteRelations, row, this.storeId),
+      getProduct: (id) => txGet<V2Product>(tx, V2_COLLECTIONS.products, id, this.storeId),
+      saveProduct: (row) => txSave(tx, V2_COLLECTIONS.products, row, this.storeId),
       getOrder: (id) => txGet<V2Order>(tx, V2_COLLECTIONS.orders, id, this.storeId),
       saveOrder: (row) => txSave(tx, V2_COLLECTIONS.orders, row, this.storeId),
       getPayment: (id) => txGet<V2Payment>(tx, V2_COLLECTIONS.payments, id, this.storeId),

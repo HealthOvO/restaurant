@@ -183,6 +183,11 @@ export interface V2Order extends V2BaseRecord {
   refundedAt?: string;
 }
 
+export interface V2CursorPage<T> {
+  rows: T[];
+  nextCursor?: string;
+}
+
 export interface V2Payment extends V2BaseRecord {
   orderId: string;
   outTradeNo: string;
@@ -203,6 +208,9 @@ export interface V2Refund extends V2BaseRecord {
   status: V2RefundStatus;
   nextQueryAt: string;
   queryCount: number;
+  providerErrorCode?: string;
+  providerErrorMessage?: string;
+  recoveryAction?: "QUERY" | "RESUBMIT" | "MANUAL";
   confirmedBy?: "CALLBACK" | "OWNER_QUERY" | "JOB" | "MOCK";
 }
 

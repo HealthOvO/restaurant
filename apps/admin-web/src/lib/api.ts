@@ -1,5 +1,6 @@
 import type {
   V2DashboardStats,
+  V2CursorPage,
   V2Category,
   V2CategorySaveInput,
   V2ExchangeItem,
@@ -18,7 +19,7 @@ export interface MerchantApi {
   login(username: string, password: string): Promise<V2OwnerSession>;
   profile(token: string): Promise<V2OwnerSession["owner"]>;
   getDashboard(token: string): Promise<V2DashboardStats>;
-  listOrders(token: string, status?: V2Order["status"]): Promise<V2Order[]>;
+  listOrders(token: string, status?: V2Order["status"], cursor?: string, limit?: number, direction?: "QUEUE" | "RECENT"): Promise<V2CursorPage<V2Order>>;
   completeOrder(token: string, orderId: string): Promise<V2Order>;
   cancelCouponOrder(token: string, orderId: string): Promise<V2Order>;
   refundOrder(token: string, orderId: string): Promise<V2Order>;
@@ -95,7 +96,10 @@ const cloudApi: MerchantApi = {
   login: (username, password) => callOwner("auth.login", { username, password }),
   profile: (sessionToken) => callOwner("auth.profile", { sessionToken }),
   getDashboard: (sessionToken) => callOwner("dashboard.get", { sessionToken }),
-  listOrders: (sessionToken, status) => callOwner("orders.list", { sessionToken, status }),
+  listOrders: async (sessionToken, status, cursor, limit = 50, direction = "QUEUE") => {
+    const result = await callOwner<V2CursorPage<V2Order> | V2Order[]>("orders.list", { sessionToken, status, cursor, limit, direction });
+    return Array.isArray(result) ? { rows: result } : result;
+  },
   completeOrder: (sessionToken, orderId) => callOwner("orders.complete", { sessionToken, orderId }),
   cancelCouponOrder: (sessionToken, orderId) => callOwner("orders.cancelCoupon", { sessionToken, orderId }),
   refundOrder: (sessionToken, orderId) => callOwner("orders.refund", { sessionToken, orderId }),
@@ -111,11 +115,25 @@ const cloudApi: MerchantApi = {
   saveStoreConfig: (sessionToken, input) => callOwner("config.save", { sessionToken, ...input })
 };
 
-export async function createMerchantApi(): Promise<MerchantApi> {
+function withUnauthorizedHandler(api: MerchantApi, onUnauthorized?: () => void): MerchantApi {
+  if (!onUnauthorized) return api;
+  return new Proxy(api, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => Promise.resolve(value.apply(target, args)).catch((error: unknown) => {
+        if (error instanceof MerchantApiError && error.code === "UNAUTHORIZED") onUnauthorized();
+        throw error;
+      });
+    }
+  });
+}
+
+export async function createMerchantApi(onUnauthorized?: () => void): Promise<MerchantApi> {
   if (import.meta.env.DEV && import.meta.env.VITE_API_MODE === "mock") {
     const { mockMerchantApi } = await import("../mocks/mockApi");
-    return mockMerchantApi;
+    return withUnauthorizedHandler(mockMerchantApi, onUnauthorized);
   }
   void cloudApp().catch(() => undefined);
-  return cloudApi;
+  return withUnauthorizedHandler(cloudApi, onUnauthorized);
 }

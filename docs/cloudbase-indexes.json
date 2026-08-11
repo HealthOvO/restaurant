@@ -2,7 +2,8 @@
   {"collection":"v2_members","indexes":[
     {"name":"idx_store_openid_unique","fields":[{"name":"storeId","direction":1},{"name":"openId","direction":1}],"unique":true},
     {"name":"idx_store_invite_code_unique","fields":[{"name":"storeId","direction":1},{"name":"inviteCode","direction":1}],"unique":true},
-    {"name":"idx_store_member_code_unique","fields":[{"name":"storeId","direction":1},{"name":"memberCode","direction":1}],"unique":true}
+    {"name":"idx_store_member_code_unique","fields":[{"name":"storeId","direction":1},{"name":"memberCode","direction":1}],"unique":true},
+    {"name":"idx_store_created","fields":[{"name":"storeId","direction":1},{"name":"createdAt","direction":-1}]}
   ]},
   {"collection":"v2_invite_relations","indexes":[
     {"name":"idx_store_invitee_unique","fields":[{"name":"storeId","direction":1},{"name":"inviteeMemberId","direction":1}],"unique":true},
@@ -25,8 +26,11 @@
   {"collection":"v2_orders","indexes":[
     {"name":"idx_store_order_no_unique","fields":[{"name":"storeId","direction":1},{"name":"orderNo","direction":1}],"unique":true},
     {"name":"idx_store_status_created","fields":[{"name":"storeId","direction":1},{"name":"status","direction":1},{"name":"createdAt","direction":-1}]},
+    {"name":"idx_store_status_created_order","fields":[{"name":"storeId","direction":1},{"name":"status","direction":1},{"name":"createdAt","direction":-1},{"name":"orderNo","direction":-1}]},
+    {"name":"idx_store_status_settled_order","fields":[{"name":"storeId","direction":1},{"name":"status","direction":1},{"name":"settledAt","direction":-1},{"name":"orderNo","direction":-1}]},
     {"name":"idx_store_member_created","fields":[{"name":"storeId","direction":1},{"name":"memberId","direction":1},{"name":"createdAt","direction":-1}]},
-    {"name":"idx_store_business_date","fields":[{"name":"storeId","direction":1},{"name":"businessDate","direction":1}]}
+    {"name":"idx_store_business_date","fields":[{"name":"storeId","direction":1},{"name":"businessDate","direction":1}]},
+    {"name":"idx_store_status_refunded","fields":[{"name":"storeId","direction":1},{"name":"status","direction":1},{"name":"refundedAt","direction":1}]}
   ]},
   {"collection":"v2_payments","indexes":[
     {"name":"idx_store_out_trade_no_unique","fields":[{"name":"storeId","direction":1},{"name":"outTradeNo","direction":1}],"unique":true},

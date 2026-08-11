@@ -5,6 +5,19 @@ const { dateTime } = require("../../utils/v2-format");
 const PROFILE_CACHE_KEY = "profile";
 const PROFILE_CACHE_MS = 30_000;
 
+function confirmPermanentBinding(inviter) {
+  if (!inviter || (!inviter.nickname && !inviter.memberCode)) return Promise.reject(new Error("没有找到对应的邀请人"));
+  const inviterName = inviter.nickname || inviter.memberCode;
+  return new Promise((resolve) => wx.showModal({
+    title: "确认邀请人",
+    content: `邀请人：${inviterName}\n绑定后将无法更改，请确认邀请码无误。`,
+    confirmText: "永久绑定",
+    confirmColor: "#A9402B",
+    success: (result) => resolve(Boolean(result.confirm)),
+    fail: () => resolve(false)
+  }));
+}
+
 Page({
   data: { loading: true, error: "", home: null, overview: null, inviteInput: "", binding: false },
 
@@ -51,9 +64,12 @@ Page({
 
   async bindInvite() {
     if (this.data.binding || !this.data.inviteInput || (this.data.overview && this.data.overview.inviter)) return;
+    const inviteCode = this.data.inviteInput;
     this.setData({ binding: true });
     try {
-      await api.bindInvite(this.data.inviteInput);
+      const inviter = await api.resolveInvite(inviteCode);
+      if (this.data.inviteInput !== inviteCode || !(await confirmPermanentBinding(inviter))) return;
+      await api.bindInvite(inviteCode);
       this.setData({ inviteInput: "" });
       invalidateCache(PROFILE_CACHE_KEY);
       wx.showToast({ title: "绑定成功", icon: "success" });

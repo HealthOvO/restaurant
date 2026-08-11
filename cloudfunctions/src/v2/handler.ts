@@ -30,7 +30,10 @@ export async function v2Response<T>(operation: () => Promise<T>): Promise<V2ApiS
       return { ok: false, code: error.code, message: error.message, requestId };
     }
     if (error && typeof error === "object" && "issues" in error) {
-      return { ok: false, code: "INVALID_INPUT", message: "提交内容不完整或格式不正确", requestId };
+      const issues = (error as { issues?: Array<{ message?: unknown }> }).issues;
+      const firstMessage = typeof issues?.[0]?.message === "string" ? issues[0].message.trim() : "";
+      const message = /[\u3400-\u9fff]/u.test(firstMessage) ? firstMessage : "提交内容不完整或格式不正确";
+      return { ok: false, code: "INVALID_INPUT", message, requestId };
     }
     console.error("[v2] unexpected error", { requestId, error });
     return { ok: false, code: "INTERNAL_ERROR", message: "操作没有完成，请稍后再试", requestId };

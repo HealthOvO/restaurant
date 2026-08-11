@@ -14,7 +14,18 @@ test("cart merges identical selections and calculates integer points", () => {
   };
   delete require.cache[cartPath];
   try {
-    const { addCartLine, addCouponLine, cartSummary, loadCart, reconcileCart, saveCart } = require(cartPath);
+    const {
+      MAX_COUPON_ITEMS,
+      MAX_PAID_LINE_ITEMS,
+      addCartLine,
+      addCouponLine,
+      cartSummary,
+      changeCartQuantity,
+      loadCart,
+      reconcileCart,
+      saveCart,
+      validateCartLimits
+    } = require(cartPath);
     const base = { productId: "p1", unitPrice: 1600, buyerPointsPerUnit: 3, selections: [{ groupId: "spice", choiceIds: ["mild"] }] };
     const first = addCartLine([], { ...base, quantity: 2 });
     const merged = addCartLine(first, { ...base, quantity: 1 });
@@ -31,6 +42,10 @@ test("cart merges identical selections and calculates integer points", () => {
       selections: [{ groupId: "spice", choiceIds: ["hot"] }],
       quantity: 40
     }), /最多放 99 份/);
+    assert.throws(() => changeCartQuantity([
+      { ...base, key: "first", quantity: 50 },
+      { ...base, key: "second", quantity: 48 }
+    ], "first", 2), /最多放 99 份/);
 
     const stale = [{
       key: "p1|spice:mild",
@@ -67,6 +82,36 @@ test("cart merges identical selections and calculates integer points", () => {
     assert.throws(() => addCouponLine(withCoupon, {
       couponId: "coupon-1", productId: "p1", productName: "祯好七福鼎肉片", selections: []
     }), /已经在购物车/);
+
+    let paidLines = [];
+    for (let index = 0; index < MAX_PAID_LINE_ITEMS; index += 1) {
+      paidLines = addCartLine(paidLines, { ...base, productId: `p-${index}`, quantity: 1 });
+    }
+    assert.throws(() => addCartLine(paidLines, { ...base, productId: "p-over-limit", quantity: 1 }), /最多选择 30 种/);
+    assert.match(validateCartLimits([...paidLines, { ...base, kind: "PAID", productId: "p-malformed", quantity: 1 }]), /最多选择 30 种/);
+
+    let couponLines = [];
+    for (let index = 0; index < MAX_COUPON_ITEMS; index += 1) {
+      couponLines = addCouponLine(couponLines, { couponId: `coupon-${index}`, productId: "p1", productName: "肉片", selections: [] });
+    }
+    assert.throws(() => addCouponLine(couponLines, { couponId: "coupon-over-limit", productId: "p1", productName: "肉片", selections: [] }), /最多使用 5 张/);
+
+    const legacyCoupon = reconcileCart([{
+      kind: "COUPON", couponId: "legacy-coupon", productId: "p1", productName: "肉片",
+      basePrice: 1500, selections: [{ groupId: "spice", choiceIds: ["mild"] }], selectedChoices: []
+    }], [{
+      _id: "p1", name: "祯好七福鼎肉片", enabled: true, soldOut: false, basePrice: 1500,
+      specGroups: [{ id: "spice", name: "辣度", mode: "SINGLE", required: true, choices: [{ id: "mild", name: "微辣", enabled: true, priceDelta: 0 }] }]
+    }], [{ _id: "legacy-coupon", productId: "p1", productName: "祯好七福鼎肉片", name: "旧版肉片券", status: "AVAILABLE" }]);
+    assert.equal(legacyCoupon.cart.length, 1);
+    assert.equal(legacyCoupon.cart[0].couponName, "旧版肉片券");
+
+    const orphanCoupon = reconcileCart([{
+      kind: "COUPON", couponId: "orphan-coupon", productId: "deleted-product", productName: "已删除商品",
+      selections: [], selectedChoices: []
+    }], [], [{ _id: "orphan-coupon", productId: "deleted-product", productName: "已删除商品", name: "旧券", status: "AVAILABLE" }]);
+    assert.equal(orphanCoupon.cart.length, 0);
+    assert.equal(orphanCoupon.removedCount, 1);
   } finally {
     delete require.cache[cartPath];
     if (previousWx === undefined) delete global.wx; else global.wx = previousWx;

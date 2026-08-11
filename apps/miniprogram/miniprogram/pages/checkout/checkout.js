@@ -1,5 +1,14 @@
 const api = require("../../services/v2");
-const { cartSummary, changeCartQuantity, clearCart, createRequestId, loadCart, removeCartLine, saveCart } = require("../../utils/v2-cart");
+const {
+  cartSummary,
+  changeCartQuantity,
+  createRequestId,
+  loadCart,
+  reconcileCart,
+  removeCartLine,
+  saveCart,
+  validateCartLimits
+} = require("../../utils/v2-cart");
 
 function money(cents) {
   return `¥${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -15,6 +24,55 @@ function prepareCart(cart) {
     specText: (item.selectedChoices || []).map((choice) => choice.choiceName).join(" · ") || "标准规格"
   }));
 }
+
+function requestWechatPayment(payParams) {
+  return new Promise((resolve) => {
+    try {
+      wx.requestPayment({
+        timeStamp: payParams.timeStamp,
+        nonceStr: payParams.nonceStr,
+        package: payParams.package,
+        signType: payParams.signType || "RSA",
+        paySign: payParams.paySign,
+        success: () => resolve({ kind: "SUCCESS" }),
+        fail: (error) => resolve({
+          kind: error && error.errMsg && String(error.errMsg).includes("cancel") ? "CANCELLED" : "FAILED",
+          error
+        })
+      });
+    } catch (error) {
+      resolve({ kind: "FAILED", error });
+    }
+  });
+}
+
+function hasSettled(status) {
+  return ["WAITING_FULFILLMENT", "COMPLETED", "REFUNDING", "REFUNDED", "CANCELLED"].includes(status);
+}
+
+function queryPaymentSoon(orderId, waitForConfirmation) {
+  const request = api.queryPayment(orderId);
+  if (waitForConfirmation) return request;
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(null), 1600);
+  });
+  return Promise.race([request, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+const CART_REFRESH_ERRORS = new Set([
+  "ORDER_QUOTE_CHANGED",
+  "COUPON_EXPIRED",
+  "COUPON_NOT_FOUND",
+  "COUPON_PRODUCT_UNAVAILABLE",
+  "COUPON_UNAVAILABLE",
+  "PRODUCT_NOT_FOUND",
+  "PRODUCT_UNAVAILABLE",
+  "SPEC_REQUIRED",
+  "SPEC_UNAVAILABLE"
+]);
 
 Page({
   data: {
@@ -67,15 +125,58 @@ Page({
     this.syncCart(next);
   },
 
+  async refreshChangedCart(rawCart) {
+    try {
+      const home = await api.getHome();
+      const reconciled = reconcileCart(rawCart, home.products || [], home.coupons || []);
+      saveCart(reconciled.cart);
+      getApp().globalData.cart = reconciled.cart;
+      this.syncCart(reconciled.cart);
+      wx.showModal({
+        title: "购物车已更新",
+        content: reconciled.cart.length ? "商品信息刚刚有变化，请重新确认后下单。" : "已选内容暂时无法下单，请返回菜单重新选择。",
+        showCancel: false,
+        confirmText: "知道了"
+      });
+    } catch (_refreshError) {
+      this.setData({ error: "菜单信息刚刚有变化，请返回点餐页刷新后再试" });
+    }
+  },
+
+  async confirmPaymentResult(orderId, outcome) {
+    let order = null;
+    try {
+      order = await queryPaymentSoon(orderId, outcome.kind === "CANCELLED");
+    } catch (_queryError) {
+      // The result page keeps querying when this immediate check is unavailable.
+    }
+    if (outcome.kind === "CANCELLED" && (!order || !hasSettled(order.status))) {
+      try {
+        order = await api.cancelPayment(orderId);
+      } catch (_cancelError) {
+        // cancelPayment verifies the WeChat order before closing; reconciliation remains the fallback.
+      }
+    }
+    wx.redirectTo({ url: `/pages/payment-result/payment-result?orderId=${orderId}` });
+  },
+
   async submitOrder() {
     if (this.data.submitting || !this.data.cart.length) return;
+    const initialCart = this.rawCart && this.rawCart.length
+      ? this.rawCart
+      : (this.data.cart && this.data.cart.length ? this.data.cart : loadCart());
+    const limitError = validateCartLimits(initialCart);
+    if (limitError) {
+      wx.showToast({ title: limitError, icon: "none" });
+      return;
+    }
     this.setData({ submitting: true, error: "" });
     const requestKey = "v2-checkout-request";
     let requestId = wx.getStorageSync(requestKey) || createRequestId("order");
     wx.setStorageSync(requestKey, requestId);
     let created = null;
     try {
-      const rawCart = this.rawCart && this.rawCart.length ? this.rawCart : this.data.cart;
+      const rawCart = initialCart;
       const paidLines = rawCart.filter((item) => item.kind !== "COUPON");
       const couponLines = rawCart.filter((item) => item.kind === "COUPON");
       const payload = {
@@ -96,57 +197,25 @@ Page({
         wx.redirectTo({ url: `/pages/payment-result/payment-result?orderId=${created.order._id}` });
         return;
       }
+      let outcome;
       if (created.payParams && created.payParams.mode === "MOCK") {
-        await api.mockPay(created.order._id);
+        try {
+          await api.mockPay(created.order._id);
+          outcome = { kind: "SUCCESS" };
+        } catch (error) {
+          outcome = { kind: "FAILED", error };
+        }
       } else {
-        await new Promise((resolve, reject) => wx.requestPayment({
-          timeStamp: created.payParams.timeStamp,
-          nonceStr: created.payParams.nonceStr,
-          package: created.payParams.package,
-          signType: created.payParams.signType || "RSA",
-          paySign: created.payParams.paySign,
-          success: resolve,
-          fail: reject
-        }));
+        outcome = await requestWechatPayment(created.payParams);
       }
-      wx.redirectTo({ url: `/pages/payment-result/payment-result?orderId=${created.order._id}` });
+      await this.confirmPaymentResult(created.order._id, outcome);
     } catch (error) {
-      if (error && error.code === "ORDER_QUOTE_CHANGED") {
+      if (error && CART_REFRESH_ERRORS.has(error.code)) {
         wx.removeStorageSync(requestKey);
-        clearCart();
-        this.syncCart([]);
-        wx.showModal({
-          title: "商品信息有更新",
-          content: "价格或积分刚刚发生变化，请返回点餐页重新选择。",
-          showCancel: false,
-          confirmText: "知道了"
-        });
+        await this.refreshChangedCart(initialCart);
         return;
       }
-      const cancelled = error && error.errMsg && String(error.errMsg).includes("cancel");
-      if (cancelled) {
-        let couponsReleased = false;
-        if (created && created.order) {
-          try {
-            const closed = await api.cancelPayment(created.order._id);
-            if (closed.status === "WAITING_FULFILLMENT" || closed.status === "COMPLETED") {
-              wx.redirectTo({ url: `/pages/payment-result/payment-result?orderId=${closed._id}` });
-              return;
-            }
-            couponsReleased = closed.status === "CANCELLED";
-          } catch (_closeError) {
-            // Payment reconciliation remains the final safety net when immediate close fails.
-          }
-        }
-        wx.showToast({
-          title: this.data.summary.couponCount > 0
-            ? (couponsReleased ? "商品券已返还" : "支付已取消，商品券稍后返还")
-            : "已取消支付",
-          icon: "none"
-        });
-      } else {
-        this.setData({ error: error.message || "下单失败，请稍后重试" });
-      }
+      this.setData({ error: (error && error.message) || "下单失败，请稍后重试" });
     } finally {
       this.setData({ submitting: false });
     }
