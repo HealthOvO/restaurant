@@ -1,0 +1,163 @@
+README.md
+  s_8f688ecc677e50::t_875f36afceb69d 15-16,32
+apps/admin-web/src/app/MerchantContext.tsx
+  s_a6b56bfd9a953a::t_0a75e49b6d9c72 7,13-22,29,38-39,44-47,55-57,60-84,88,97,104,110,116-117,119,121-136,138-147,149-157,159-169,188,191,200-203,211,214,216,222-231,234,237,239,241
+apps/admin-web/src/app/MerchantShell.tsx
+  s_446850ba22afa5::t_6944da8ce01349 8,12,17,32,77-92,97-98
+apps/admin-web/src/lib/api.ts
+  s_8f688ecc677e50::t_0cb70b73ee4329 3,22,99-102,118-132,135,138
+apps/admin-web/src/lib/new-order-alert.ts
+  s_446850ba22afa5::t_095d7fb4ebbcfd 10-12,14-29,45
+apps/admin-web/src/lib/order-page-cache.ts
+  s_446850ba22afa5::t_0c9c3bf57cd033 1-21
+apps/admin-web/src/mocks/mockApi.ts
+  s_a6b56bfd9a953a::t_ed180524e48ce3 162-165,180-242,261,312,314,316-321,323-328,355-357
+apps/admin-web/src/pages/DashboardPage.tsx
+  s_a6b56bfd9a953a::t_a816a0120406ec 13-17,21-23,32,34,36-38,41,56,86,106-107
+apps/admin-web/src/pages/LoginPage.tsx
+  s_446850ba22afa5::t_949a76cc1c0f35 7,79
+apps/admin-web/src/pages/OrdersPage.tsx
+  s_a6b56bfd9a953a::t_56ac5077ce8c5a 1,10-11,25,39-41,59,61-64,71-83,85,87-92,95-100,104,107-111,113,119,123-131,133,140,144,154,161-162,164-167,169-170,182,204,213,218,222,224-225,228,249-251,269
+apps/admin-web/src/pages/ProductsPage.tsx
+  s_446850ba22afa5::t_a09227e290bd34 10,33,57,79-83,113-120,126,131-140,211-213,271
+apps/admin-web/src/pages/SettingsPage.tsx
+  s_446850ba22afa5::t_b93e31cdeee37c 59
+apps/admin-web/src/styles/global.css
+  s_a6b56bfd9a953a::t_5bad4784df614e 308-326,859-940,1440-1449,1537-1547,2784-2786,2886
+apps/admin-web/src/test/App.test.tsx
+  s_a6b56bfd9a953a::t_447ee0c8077030 6-7,28-29,70,82,84-85,93-178,184-189
+apps/admin-web/src/test/deploy.test.ts
+  s_8f688ecc677e50::t_344b54341df18b 15-17,21-39
+apps/miniprogram/miniprogram/app.js
+  s_8afc90ecac757c::t_719fcc97f96eb1 11-12,22,25-26,28,44-53
+apps/miniprogram/miniprogram/pages/checkout/checkout.js
+  s_8afc90ecac757c::t_5b155360ee76da 2-11,28-76,128-162,165-172,179,200,202-207,209,211,213,215,218
+apps/miniprogram/miniprogram/pages/home/home.js
+  s_8f688ecc677e50::t_ad1bf1026c967f 47-54,183-194,230-235,241,309,317
+apps/miniprogram/miniprogram/pages/home/home.wxml
+  s_8f688ecc677e50::t_0f62fed169fe0e 88,92,97
+apps/miniprogram/miniprogram/pages/home/home.wxss
+  s_8afc90ecac757c::t_76a66ea872ecfb 58,68
+apps/miniprogram/miniprogram/pages/payment-result/payment-result.js
+  s_8f688ecc677e50::t_2762cff9c9d5de 5-10,17-18,23,25-35,39-45,47,51-54,59-76,78,83,87-88,92-93,96,98-126,130-149
+apps/miniprogram/miniprogram/pages/payment-result/payment-result.wxml
+  s_8afc90ecac757c::t_a00368432a4056 5
+apps/miniprogram/miniprogram/pages/profile/profile.js
+  s_8afc90ecac757c::t_bf07a86c144338 8-20,67,70-72
+apps/miniprogram/miniprogram/pages/profile/profile.wxml
+  s_446850ba22afa5::t_d8de2b7b479113 7
+apps/miniprogram/miniprogram/pages/profile/profile.wxss
+  s_446850ba22afa5::t_963ff8249c43f3 3-7
+apps/miniprogram/miniprogram/services/v2.js
+  s_8afc90ecac757c::t_b2bffad9e9c5ca 10-11,37-72,74-86
+apps/miniprogram/miniprogram/utils/v2-cart.js
+  s_8f688ecc677e50::t_8db89db8f3acad 4-5,55-65,107-108,114-120,149,186-190,192,210-215,236-240,249-251,256,271-272,278
+apps/miniprogram/package.json
+  s_8afc90ecac757c::t_87c7b7e9de2020 7-9
+apps/miniprogram/scripts/check-js.mjs
+  s_8afc90ecac757c::t_f9f511bde328ed 1-27
+apps/miniprogram/tests/v2-architecture.test.cjs
+  s_8afc90ecac757c::t_3a50e248a63ed0 28-29,102-103,105-115
+apps/miniprogram/tests/v2-cart-format.test.cjs
+  s_8f688ecc677e50::t_973e14b9088a3d 17-28,45-48,85-114
+apps/miniprogram/tests/v2-page-flows.test.cjs
+  s_8f688ecc677e50::t_92685c89204a07 56-88,217-218,225-226,232,245-246,250,279-280,287-288,300,302,305-306,309,312-314,320-322,376,378-379,381-384,386-404,408-413,415-417,421,423-425,427-429,431-434,437-486,522-523,526,534-580
+cloudfunctions/src/handlers/v2.customer-api.ts
+  s_8f688ecc677e50::t_5f44005356b424 17,41
+cloudfunctions/src/handlers/v2.owner-api.ts
+  s_8f688ecc677e50::t_5d8831d4daf1e9 2,44-50
+cloudfunctions/src/v2/application.ts
+  s_8f688ecc677e50::t_4664846449e6ed 33-38,71-76,129-141,192-196,202-204,209-314,317-323,356,358,367-376,395,413-416,508-513,550,552-560,569,575-580,582-583,656-658,706,711,773-782,818-819,822,827,837-842,848-849,853-881,946,961,965-966,971,1032-1061,1063,1066,1070-1073,1075-1084,1182-1189,1215-1223,1232-1234,1257-1278
+cloudfunctions/src/v2/handler.ts
+  s_8afc90ecac757c::t_0a1078bb3b18c9 33-36
+cloudfunctions/src/v2/owner-auth.ts
+  s_a6b56bfd9a953a::t_a037a902c69833 13,34-39,45,64-66,94-96,99-101
+cloudfunctions/src/v2/payment.ts
+  s_9d37ead6ccac24::t_9522e3215497e3 15,20,24-29,32,73-128,306,322-334,339,347,367-376,383-388,404-415
+cloudfunctions/src/v2/repository.ts
+  s_a6b56bfd9a953a::t_3a249dab2fd981 73-74,90-101,128,131,223-250,252-253,255,259-316,323-324,400-414,417-419,434-435,464,472,474-475,487-501,503,520-531,546,553,599-645,647-656,675-679,682-683,685-691,700-701
+cloudfunctions/src/v2/setup.ts
+  s_8f688ecc677e50::t_40a2fb36ae5d07 6-12,17,22
+cloudfunctions/tests/v2-application.test.ts
+  s_8f688ecc677e50::t_ed3ac5e198a2bc 3,7,162-197,293-360,363-366,387-461,471-475,487-655,700-732,841-872,1098-1134,1205,1212,1215-1216,1218,1232-1237
+cloudfunctions/tests/v2-handler.test.ts
+  s_8f688ecc677e50::t_e3952c83cf2ae1 1-15
+cloudfunctions/tests/v2-owner-security.test.ts
+  s_a6b56bfd9a953a::t_3bdb6236459f8a 1-96
+cloudfunctions/tests/wechat-payment.test.ts
+  s_9d37ead6ccac24::t_0f63d6b7a99d09 3-4,74,95,99-141
+docs/cloudbase-indexes.json
+  s_8f688ecc677e50::t_ad4ca973a31192 5-6,29-30,32-33
+docs/deployment.md
+  s_8f688ecc677e50::t_f5b8344b3261c1 6,31,33,39-40,94,105,124
+package-lock.json
+  s_8f688ecc677e50::t_98740f6f767942 29-31
+package.json
+  s_446850ba22afa5::t_98decf1bc7930f 5-7,24
+packages/shared/src/v2/pricing.ts
+  s_8f688ecc677e50::t_6ee1ae1ad62607 12,82-90,129-134,138-140
+packages/shared/src/v2/schemas.ts
+  s_8f688ecc677e50::t_46c20d2895202f 7-8,44,49,59-61,95-96,101,158-159
+packages/shared/src/v2/state-machines.ts
+  s_9d37ead6ccac24::t_0ab10ea3db6972 9
+packages/shared/src/v2/types.ts
+  s_8f688ecc677e50::t_8479b0d78d35f7 186-190,211-213
+packages/shared/tests/v2-domain.test.ts
+  s_9d37ead6ccac24::t_e97b5eb85d9b39 123-132,148-149,176-178
+scripts/deploy-admin-web.ps1
+  s_446850ba22afa5::t_fc1735de7e21ac 8-11,13-14
+scripts/deploy-cloudfunctions.mjs
+  s_8f688ecc677e50::t_7092b7d16a152f 1-2,16,18-24,26-27,29-30,32-130,132-133,138,141-155,159
+scripts/deploy-cloudfunctions.ps1
+  s_446850ba22afa5::t_2e144a19415a90 8-11,13-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2ef7231d8a5c3aef89a137f3f4b049f54a9ada9b",
+  "prompts": {},
+  "sessions": {
+    "s_446850ba22afa5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff105-b657-74f3-a714-585f2dd2c687",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    },
+    "s_8afc90ecac757c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff105-9742-7523-b90d-59728917d269",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    },
+    "s_8f688ecc677e50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe272-c5ca-7303-80b2-161652f0c965",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    },
+    "s_9d37ead6ccac24": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff105-76e6-7a92-a5b7-714489e9f17c",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    },
+    "s_a6b56bfd9a953a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff117-f305-7862-a5a2-64d5c626707d",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
