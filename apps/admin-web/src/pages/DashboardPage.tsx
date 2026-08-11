@@ -105,7 +105,7 @@ export function DashboardPage() {
           <dl className="summary-list">
             <div><dt>下单获得</dt><dd>{formatSignedPoints(stats.buyerPointsIssued)}</dd></div>
             <div><dt>邀请奖励</dt><dd>{formatSignedPoints(stats.inviterPointsIssued)}</dd></div>
-            <div><dt>换券使用</dt><dd>-{stats.exchangePointsSpent}</dd></div>
+            <div><dt>换券使用</dt><dd>{formatSignedPoints(-stats.exchangePointsSpent)}</dd></div>
           </dl>
           <div className="summary-divider" />
           <dl className="summary-list muted-summary">
