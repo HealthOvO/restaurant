@@ -1,0 +1,21 @@
+apps/admin-web/src/pages/DashboardPage.tsx
+  s_8f688ecc677e50::t_e722f2433ef6c5 108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "91a99013e389607bfa622b5c34ad6ef2c30e2aed",
+  "prompts": {},
+  "sessions": {
+    "s_8f688ecc677e50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe272-c5ca-7303-80b2-161652f0c965",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
