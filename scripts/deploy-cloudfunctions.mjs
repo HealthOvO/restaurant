@@ -113,6 +113,27 @@ function cloudFunctions() {
   return Array.isArray(response) ? response : Array.isArray(response.data) ? response.data : [];
 }
 
+function wait(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function waitForFunctionsCompleted(maxAttempts = 30) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const functions = cloudFunctions();
+    const pending = [];
+    for (const name of expectedFunctions) {
+      const deployed = functions.find((item) => item?.name === name);
+      if (!deployed) fail(`部署后未找到函数 ${name}，请检查 CloudBase 控制台。`);
+      const status = String(deployed.status || "");
+      if (!status.toLowerCase().includes("completed")) pending.push(`${name}（${status || "状态未知"}）`);
+    }
+    if (!pending.length) return;
+    if (attempt === maxAttempts) fail(`等待云函数更新超时：${pending.join("、")}`);
+    console.log(`等待 CloudBase 完成异步更新：${pending.join("、")}`);
+    wait(2000);
+  }
+}
+
 console.log("==> 发布前检查");
 assertCleanWorktree();
 capture(executable, ["--version"], "CloudBase CLI 不可用，请先安装并登录。");
@@ -147,13 +168,6 @@ for (const functionDir of functionDirs) {
   ], { failureMessage: `云函数 ${functionDir.name} 超时配置失败。可通过 TCB_REGION 指定环境地域后重试。` });
 }
 
-const deployedFunctions = cloudFunctions();
-for (const name of expectedFunctions) {
-  const deployed = deployedFunctions.find((item) => item?.name === name);
-  if (!deployed) fail(`部署后未找到函数 ${name}，请检查 CloudBase 控制台。`);
-  if (deployed.status && !String(deployed.status).toLowerCase().includes("completed")) {
-    fail(`函数 ${name} 部署后状态为 ${deployed.status}，请检查 CloudBase 控制台。`);
-  }
-}
+waitForFunctionsCompleted();
 
 console.log("\n云函数部署完成，五个目标函数状态正常。");

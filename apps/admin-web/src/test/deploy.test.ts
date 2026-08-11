@@ -17,6 +17,8 @@ describe("merchant deployment", () => {
     expect(script).toContain('"v2-owner-api", 30');
     expect(script).toContain('"v2-system-api", 60');
     expect(script).toContain('"UpdateFunctionConfiguration"');
+    expect(script).toContain("waitForFunctionsCompleted()");
+    expect(script).toContain("等待 CloudBase 完成异步更新");
   });
 
   it("stops a release before deployment when review, build, worktree, or target checks fail", () => {
