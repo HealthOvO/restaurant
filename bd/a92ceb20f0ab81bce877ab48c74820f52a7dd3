@@ -1,0 +1,51 @@
+apps/miniprogram/miniprogram/app.js
+  s_7b589930bb00e8::t_17ce3b789765bd 12-13,51,55-77
+apps/miniprogram/miniprogram/pages/benefits/benefits.js
+  s_89786964c8c69b::t_e3835ba874b720 8-14,154-155,162,164
+apps/miniprogram/miniprogram/pages/home/home.js
+  s_89786964c8c69b::t_7ab3732975a334 334
+apps/miniprogram/miniprogram/utils/v2-cart.js
+  s_89786964c8c69b::t_7b27e172451213 172
+apps/miniprogram/tests/v2-cart-format.test.cjs
+  s_7b589930bb00e8::t_86161513e3988b 67,74
+apps/miniprogram/tests/v2-page-flows.test.cjs
+  s_7b589930bb00e8::t_fc7143ed47d1d1 318,323,344,352,383,408,416-441,456,464-487,741,764,787,868-909
+cloudfunctions/src/v2/application.ts
+  s_89786964c8c69b::t_0662724669ce94 426-430,787-789,805-807
+cloudfunctions/tests/v2-application.test.ts
+  s_89786964c8c69b::t_819c3fa5b3dfcc 346,399-423,1402-1417
+packages/shared/src/v2/pricing.ts
+  s_89786964c8c69b::t_cfc7c0f2fd0066 53-55
+packages/shared/src/v2/schemas.ts
+  s_89786964c8c69b::t_a5054da4dd1ae9 88,123-124
+packages/shared/src/v2/types.ts
+  s_89786964c8c69b::t_973bf181fead98 99-100
+packages/shared/tests/v2-domain.test.ts
+  s_7b589930bb00e8::t_56571ec0d6c682 74-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bda92ceb20f0ab81bce877ab48c74820f52a7dd3",
+  "prompts": {},
+  "sessions": {
+    "s_7b589930bb00e8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff5df-78c9-7d32-ae83-07a45cfdc4f3",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    },
+    "s_89786964c8c69b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff5d7-f742-7e82-afa5-eaa6b7155759",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
