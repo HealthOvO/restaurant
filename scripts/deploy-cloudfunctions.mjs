@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createCloudbaseCommands, isFunctionDeploymentComplete } from "./deploy-cloudfunctions-utils.mjs";
 
 const envId = process.argv[2]?.trim();
 if (!envId) {
@@ -15,6 +16,7 @@ const functionsRoot = join(root, "cloudfunctions", "release");
 const executable = process.platform === "win32" ? "tcb.cmd" : "tcb";
 const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
 const region = process.env.TCB_REGION?.trim() || "ap-shanghai";
+const cloudbaseCommands = createCloudbaseCommands(envId, region);
 const expectedFunctions = [
   "v2-payment-notify",
   "v2-refund-notify",
@@ -78,7 +80,7 @@ function assertCleanWorktree() {
 }
 
 function assertTargetEnvironment() {
-  const output = capture(executable, ["env", "list", "--json"], "无法读取 CloudBase 环境，请先执行 tcb login。");
+  const output = capture(executable, cloudbaseCommands.envList, "无法读取 CloudBase 环境，请先执行 tcb login。");
   const response = parseCliJson(output, "CloudBase 环境查询");
   const environments = Array.isArray(response) ? response : response.data;
   const target = Array.isArray(environments) ? environments.find((item) => item?.envId === envId) : undefined;
@@ -108,7 +110,7 @@ function collectFunctionDirs() {
 }
 
 function cloudFunctions() {
-  const output = capture(executable, ["fn", "list", "-e", envId, "--limit", "100", "--json"], `无法读取环境 ${envId} 的云函数列表。`);
+  const output = capture(executable, cloudbaseCommands.functionList, `无法读取环境 ${envId} 的云函数列表。`);
   const response = parseCliJson(output, "云函数查询");
   return Array.isArray(response) ? response : Array.isArray(response.data) ? response.data : [];
 }
@@ -124,8 +126,8 @@ function waitForFunctionsCompleted(maxAttempts = 30) {
     for (const name of expectedFunctions) {
       const deployed = functions.find((item) => item?.name === name);
       if (!deployed) fail(`部署后未找到函数 ${name}，请检查 CloudBase 控制台。`);
-      const status = String(deployed.status || "");
-      if (!status.toLowerCase().includes("completed")) pending.push(`${name}（${status || "状态未知"}）`);
+      const status = String(deployed.Status ?? deployed.status ?? "");
+      if (!isFunctionDeploymentComplete(status)) pending.push(`${name}（${status || "状态未知"}）`);
     }
     if (!pending.length) return;
     if (attempt === maxAttempts) fail(`等待云函数更新超时：${pending.join("、")}`);
@@ -151,21 +153,16 @@ console.log(`构建校验通过：${functionDirs.map((item) => `${item.name}@${i
 console.log(`\n准备部署 ${functionDirs.length} 个云函数到环境 ${envId}`);
 for (const functionDir of functionDirs) {
   console.log(`\n==> 部署云函数 ${functionDir.name}@${functionDir.hash}`);
-  run(executable, [
-    "--yes", "fn", "deploy", functionDir.name,
-    "-e", envId,
-    "--force",
-    "--deployMode", "zip"
-  ], { cwd: functionDir.path, failureMessage: `云函数 ${functionDir.name} 部署失败，后续函数未部署。` });
+  run(executable, cloudbaseCommands.deployFunction(functionDir.name), {
+    cwd: functionDir.path,
+    failureMessage: `云函数 ${functionDir.name} 部署失败，后续函数未部署。`
+  });
 
   const timeout = functionTimeouts.get(functionDir.name);
   console.log(`==> 设置 ${functionDir.name} 超时为 ${timeout} 秒`);
-  run(executable, [
-    "-r", region,
-    "api", "scf", "UpdateFunctionConfiguration",
-    "--body", JSON.stringify({ FunctionName: functionDir.name, Namespace: envId, Timeout: timeout }),
-    "--json"
-  ], { failureMessage: `云函数 ${functionDir.name} 超时配置失败。可通过 TCB_REGION 指定环境地域后重试。` });
+  run(executable, cloudbaseCommands.updateFunctionTimeout(functionDir.name, timeout), {
+    failureMessage: `云函数 ${functionDir.name} 超时配置失败。可通过 TCB_REGION 指定环境地域后重试。`
+  });
 }
 
 waitForFunctionsCompleted();

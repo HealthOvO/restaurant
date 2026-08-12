@@ -126,6 +126,7 @@ export async function initializeV2Store(repository: V2Repository, rawInput: unkn
     announcement: input.announcement,
     businessOpen: false,
     dayBoundaryTime: "04:00",
+    version: 1,
     createdAt: timestamp,
     updatedAt: timestamp
   };

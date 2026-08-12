@@ -10,6 +10,7 @@ const eventSchema = z.object({
     "order.queryPayment",
     "order.cancelPayment",
     "order.listMine",
+    "order.listMinePage",
     "points.list",
     "coupon.exchange",
     "coupon.listMine",
@@ -20,6 +21,16 @@ const eventSchema = z.object({
   ]),
   payload: z.record(z.unknown()).default({})
 });
+
+const pageSchema = z.object({
+  cursor: z.string().trim().max(512).regex(/^[A-Za-z0-9_-]+$/).optional(),
+  limit: z.number().int().min(1).max(100).default(20)
+});
+
+export function customerMemberPageQuery(payload: Record<string, unknown>, legacyLimit: number) {
+  if (payload.cursor === undefined && payload.limit === undefined) return { limit: legacyLimit };
+  return pageSchema.parse(payload);
+}
 
 export async function main(event: unknown) {
   return v2Response(async () => {
@@ -33,8 +44,9 @@ export async function main(event: unknown) {
       case "order.mockPay": return application.mockPay(openId, String(payload.orderId ?? ""));
       case "order.queryPayment": return application.queryPayment(openId, String(payload.orderId ?? ""));
       case "order.cancelPayment": return application.cancelPendingPayment(openId, String(payload.orderId ?? ""));
-      case "order.listMine": return application.memberOrders(openId);
-      case "points.list": return application.memberPoints(openId);
+      case "order.listMine": return (await application.memberOrders(openId, { limit: 50 })).rows;
+      case "order.listMinePage": return application.memberOrders(openId, pageSchema.parse(payload));
+      case "points.list": return application.memberPoints(openId, customerMemberPageQuery(payload, 100));
       case "coupon.exchange": return application.exchangeCoupon(openId, payload);
       case "coupon.listMine": return application.memberCoupons(openId);
       case "coupon.use": return application.useCoupon(openId, payload);

@@ -17,17 +17,19 @@ export function Dialog({
   width?: "small" | "medium" | "large";
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     closeRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && onClose();
+    const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && onCloseRef.current();
     document.addEventListener("keydown", onKeyDown);
     document.body.classList.add("dialog-open");
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.body.classList.remove("dialog-open");
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="dialog-layer" role="presentation">

@@ -28,6 +28,7 @@ let config: V2StoreConfig = {
   announcement: "每日现打肉泥，现点现煮",
   businessOpen: true,
   dayBoundaryTime: "04:00",
+  version: 1,
   createdAt: NOW,
   updatedAt: NOW
 };
@@ -162,6 +163,9 @@ let orders: V2Order[] = [
 let mockSessionExpired = false;
 let mockOrderListFailure = false;
 let mockOrderListDelays: Record<string, number> = {};
+let mockStoreConfigDelay = 90;
+let mockMemberSearchDelays: Record<string, number> = {};
+let mockMemberDetailDelays: Record<string, number> = {};
 
 const initialMutableState = {
   config: structuredClone(config),
@@ -180,6 +184,9 @@ export function resetMockMerchantApi() {
   mockSessionExpired = false;
   mockOrderListFailure = false;
   mockOrderListDelays = {};
+  mockStoreConfigDelay = 90;
+  mockMemberSearchDelays = {};
+  mockMemberDetailDelays = {};
 }
 
 export function expireMockMerchantSession(): void {
@@ -192,6 +199,18 @@ export function setMockOrderListFailure(enabled: boolean): void {
 
 export function setMockOrderListDelay(status: V2Order["status"] | "ALL", milliseconds: number): void {
   mockOrderListDelays[status] = milliseconds;
+}
+
+export function setMockStoreConfigDelay(milliseconds: number): void {
+  mockStoreConfigDelay = milliseconds;
+}
+
+export function setMockMemberSearchDelay(query: string, milliseconds: number): void {
+  mockMemberSearchDelays[query.trim().toLowerCase()] = milliseconds;
+}
+
+export function setMockMemberDetailDelay(memberId: string, milliseconds: number): void {
+  mockMemberDetailDelays[memberId] = milliseconds;
 }
 
 export function emptyMockWaitingQueue(): void {
@@ -211,6 +230,29 @@ export function addMockDelayedPaymentOrder(): void {
     settledAt: "2026-08-09T10:30:00.000Z",
     updatedAt: "2026-08-09T10:30:00.000Z"
   }];
+}
+
+export function seedMockWaitingOrders(count: number): void {
+  const template = initialMutableState.orders.find((order) => order._id === "order-103");
+  if (!template) return;
+  const firstCreatedAt = Date.parse("2026-08-09T06:00:00.000Z");
+  orders = [
+    ...orders.filter((order) => order.status !== "WAITING_FULFILLMENT"),
+    ...Array.from({ length: count }, (_, index) => {
+      const sequence = index + 1;
+      const createdAt = new Date(firstCreatedAt + index * 60_000).toISOString();
+      return {
+        ...structuredClone(template),
+        _id: `order-bulk-${sequence}`,
+        orderNo: `V2MOCKBULK${String(sequence).padStart(6, "0")}`,
+        pickupSequence: sequence,
+        pickupNumber: String(sequence).padStart(3, "0"),
+        createdAt,
+        settledAt: createdAt,
+        updatedAt: createdAt
+      };
+    })
+  ];
 }
 
 export function addMockRefundingOrders(): void {
@@ -373,6 +415,7 @@ export const mockMerchantApi: MerchantApi = {
   async saveCategory(token, input: V2CategorySaveInput) {
     auth(token);
     const existing = input.id ? categories.find((item) => item._id === input.id) : undefined;
+    if (existing && input.expectedVersion !== existing.version) throw new MerchantApiError("分类已被其他页面修改，请刷新后重试", "VERSION_CONFLICT");
     const row: V2Category = {
       _id: existing?._id ?? `category-${Date.now()}`,
       storeId: "store-main",
@@ -391,7 +434,10 @@ export const mockMerchantApi: MerchantApi = {
     auth(token);
     const product = products.find((item) => item._id === input.productId);
     if (!product) throw new MerchantApiError("指定商品不存在", "PRODUCT_NOT_FOUND");
+    if (input.enabled && (!product.enabled || product.soldOut)) throw new MerchantApiError("指定商品已下架或售罄，不能开启兑换", "PRODUCT_UNAVAILABLE");
+    if (input.enabled && product.specGroups.some((group) => group.required && !group.choices.some((choice) => choice.enabled && choice.priceDelta === 0))) throw new MerchantApiError("指定商品的必选规格需要保留一个免费选项", "COUPON_PRODUCT_UNAVAILABLE");
     const existing = input.id ? exchangeItems.find((item) => item._id === input.id) : undefined;
+    if (existing && input.expectedVersion !== existing.version) throw new MerchantApiError("兑换项已被其他页面修改，请刷新后重试", "VERSION_CONFLICT");
     const row: V2ExchangeItem = {
       _id: existing?._id ?? `exchange-${Date.now()}`, storeId: "store-main", name: input.name,
       productId: product._id, productName: product.name, pointsCost: input.pointsCost,
@@ -404,13 +450,19 @@ export const mockMerchantApi: MerchantApi = {
   async searchMembers(token, query) {
     auth(token);
     const normalized = query.trim().toLowerCase();
-    return delay(members.filter((item) => !normalized || [item.memberCode, item.inviteCode, item.nickname].some((value) => value?.toLowerCase().includes(normalized))));
+    return delay(
+      members.filter((item) => !normalized || [item.memberCode, item.inviteCode, item.nickname].some((value) => value?.toLowerCase().includes(normalized))),
+      mockMemberSearchDelays[normalized] ?? 90
+    );
   },
-  async getMemberDetail(token, memberId) { auth(token); return delay(memberDetail(memberId)); },
-  async getStoreConfig(token) { auth(token); return delay(config); },
+  async getMemberDetail(token, memberId) { auth(token); return delay(memberDetail(memberId), mockMemberDetailDelays[memberId] ?? 90); },
+  async getStoreConfig(token) { auth(token); return delay(config, mockStoreConfigDelay); },
   async saveStoreConfig(token, input: V2StoreConfigSaveInput) {
     auth(token);
-    config = { ...config, ...input, updatedAt: new Date().toISOString() };
+    const currentVersion = config.version ?? 1;
+    if (input.expectedVersion !== currentVersion) throw new MerchantApiError("营业设置刚刚有更新，请刷新后再保存", "VERSION_CONFLICT");
+    const { expectedVersion: _expectedVersion, ...values } = input;
+    config = { ...config, ...values, version: currentVersion + 1, updatedAt: new Date().toISOString() };
     return delay(config);
   }
 };

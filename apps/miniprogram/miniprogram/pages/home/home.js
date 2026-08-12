@@ -10,7 +10,7 @@ const {
   removeCartLine,
   saveCart
 } = require("../../utils/v2-cart");
-const { isCacheFresh, readCache, writeCache } = require("../../utils/v2-cache");
+const { cacheGeneration, isCacheFresh, readCache, writeCacheIfCurrent } = require("../../utils/v2-cache");
 
 const HOME_CACHE_KEY = "home";
 const HOME_CACHE_MS = 15_000;
@@ -132,14 +132,24 @@ Page({
   },
 
   loadHome() {
-    if (this.homeRequest) return this.homeRequest;
+    const currentGeneration = cacheGeneration(HOME_CACHE_KEY);
+    if (this.homeRequest) {
+      if (this.homeRequestGeneration === currentGeneration) return this.homeRequest;
+      const staleRequest = this.homeRequest;
+      return staleRequest.catch(() => undefined).then(() => this.loadHome());
+    }
     const hasData = Boolean(this.data.home || readCache(HOME_CACHE_KEY));
+    const generation = currentGeneration;
+    this.homeRequestGeneration = generation;
     this.setData({ loading: !hasData, error: "" });
     this.homeRequest = api.getHome().then((home) => {
-      getApp().globalData.home = home;
-      writeCache(HOME_CACHE_KEY, home);
-      this.applyHome(home);
+      writeCacheIfCurrent(HOME_CACHE_KEY, home, generation);
+      if (cacheGeneration(HOME_CACHE_KEY) === generation) {
+        getApp().globalData.home = home;
+        this.applyHome(home);
+      }
     }).catch((error) => {
+      if (cacheGeneration(HOME_CACHE_KEY) !== generation) return;
       if (this.data.home) wx.showToast({ title: "菜单刷新失败", icon: "none" });
       else this.setData({ loading: false, error: error.message || "点餐页加载失败" });
     }).finally(() => {

@@ -32,5 +32,6 @@
       <view wx:if="{{item.paidAmount > 0 && item.buyerPoints > 0 && item.status === 'REFUNDED'}}" class="order-points is-refunded">本单积分已回收</view>
       <view wx:if="{{item.couponCount > 0}}" class="order-points is-coupon">本单使用 {{item.couponCount}} 张商品券</view>
     </view>
+    <button wx:if="{{nextCursor}}" class="secondary-button" loading="{{loadingMore}}" disabled="{{loadingMore}}" bindtap="loadMoreOrders">查看更早订单</button>
   </view>
 </view>

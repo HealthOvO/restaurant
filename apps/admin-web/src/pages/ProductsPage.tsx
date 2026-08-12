@@ -59,6 +59,7 @@ function validateProduct(form: V2ProductSaveInput): string {
     if (!group.name.trim()) return "请填写规格组名称";
     if (!group.choices.length) return `${group.name}至少需要一个选项`;
     if (group.choices.some((choice) => !choice.name.trim())) return `${group.name}有未填写名称的选项`;
+    if (group.choices.some((choice) => !Number.isInteger(choice.priceDelta) || choice.priceDelta < 0)) return `${group.name}的加价应为不小于 0 的金额`;
     if (group.mode === "SINGLE" && group.choices.filter((choice) => choice.isDefault).length > 1) return `${group.name}只能设置一个默认项`;
   }
   return "";
@@ -99,15 +100,14 @@ export function ProductsPage() {
   }, [api, session]);
   useEffect(() => { void load(); }, [load]);
 
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    if (!form || !api || !session) return;
-    const validation = validateProduct(form);
+  async function save(input: V2ProductSaveInput) {
+    if (!api || !session) return;
+    const validation = validateProduct(input);
     if (validation) { setFormError(validation); return; }
     setSaving(true); setFormError("");
     try {
-      await api.saveProduct(session.token, form);
-      notify(form.id ? "商品已保存" : "商品已创建", "success");
+      await api.saveProduct(session.token, input);
+      notify(input.id ? "商品已保存" : "商品已创建", "success");
       setForm(null);
       await load();
     } catch (caught) {
@@ -157,7 +157,7 @@ export function ProductsPage() {
   async function toggleCategory(category: V2Category) {
     if (!api || !session) return;
     try {
-      await api.saveCategory(session.token, { id: category._id, name: category.name, enabled: !category.enabled, sortOrder: category.sortOrder });
+      await api.saveCategory(session.token, { id: category._id, expectedVersion: category.version, name: category.name, enabled: !category.enabled, sortOrder: category.sortOrder });
       await load();
       notify(category.enabled ? "分类已停用" : "分类已启用", "success");
     } catch (caught) { notify(caught instanceof Error ? caught.message : "操作失败", "error"); }
@@ -185,7 +185,7 @@ export function ProductsPage() {
               <span className="category-order">{String(index + 1).padStart(2, "0")}</span>
               <div><strong>{category.name}</strong><small>{products.filter((product) => product.categoryId === category._id).length} 个商品 · 排序 {category.sortOrder}</small></div>
               <span className={`category-state ${category.enabled ? "is-enabled" : ""}`}>{category.enabled ? "显示中" : "已停用"}</span>
-              <Button tone="quiet" onClick={() => { setCategoryForm({ id: category._id, name: category.name, enabled: category.enabled, sortOrder: category.sortOrder }); setCategoryError(""); }}><Pencil size={14} />编辑分类</Button>
+              <Button tone="quiet" onClick={() => { setCategoryForm({ id: category._id, expectedVersion: category.version, name: category.name, enabled: category.enabled, sortOrder: category.sortOrder }); setCategoryError(""); }}><Pencil size={14} />编辑分类</Button>
               <Button tone="quiet" onClick={() => void toggleCategory(category)}>{category.enabled ? "停用" : "启用"}</Button>
             </article>
           ))}
@@ -248,10 +248,15 @@ function ProductForm({
   setForm(value: V2ProductSaveInput): void;
   error: string;
   saving: boolean;
-  onSubmit(event: FormEvent): void;
+  onSubmit(value: V2ProductSaveInput): void;
   onCancel(): void;
 }) {
-  const warning = form.basePrice < 500 && form.buyerPointsPerUnit > 50;
+  const [basePriceDraft, setBasePriceDraft] = useState(() => moneyDraft(form.basePrice));
+  const [choicePriceDrafts, setChoicePriceDrafts] = useState<Record<string, string>>(() => Object.fromEntries(
+    form.specGroups.flatMap((group) => group.choices.map((choice) => [choice.id, moneyDraft(choice.priceDelta)]))
+  ));
+  const draftBasePrice = parseMoneyDraft(basePriceDraft);
+  const warning = Number.isInteger(draftBasePrice) && draftBasePrice < 500 && form.buyerPointsPerUnit > 50;
   const updateGroup = (index: number, next: V2SpecGroup) => setForm({ ...form, specGroups: form.specGroups.map((group, groupIndex) => groupIndex === index ? next : group) });
   const moveGroup = (index: number, offset: number) => {
     const nextIndex = index + offset;
@@ -260,15 +265,29 @@ function ProductForm({
     [groups[index], groups[nextIndex]] = [groups[nextIndex], groups[index]];
     setForm({ ...form, specGroups: groups });
   };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    onSubmit({
+      ...form,
+      basePrice: parseMoneyDraft(basePriceDraft),
+      specGroups: form.specGroups.map((group) => ({
+        ...group,
+        choices: group.choices.map((choice) => ({
+          ...choice,
+          priceDelta: parseMoneyDraft(choicePriceDrafts[choice.id] ?? moneyDraft(choice.priceDelta))
+        }))
+      }))
+    });
+  };
 
   return (
-    <form className="editor-form" onSubmit={onSubmit}>
+    <form className="editor-form" onSubmit={submit}>
       <section className="form-section">
         <div className="form-section-title"><h3>基本信息</h3><p>顾客会在点餐首页看到这些内容。</p></div>
         <div className="form-grid two-columns">
           <label className="field"><span>商品分类</span><select value={form.categoryId ?? ""} onChange={(event) => setForm({ ...form, categoryId: event.target.value })}><option value="" disabled>请选择分类</option>{categories.filter((category) => category.enabled || category._id === form.categoryId).map((category) => <option key={category._id} value={category._id}>{category.name}{category.enabled ? "" : "（已停用）"}</option>)}</select></label>
           <label className="field"><span>商品名称</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="例如：祯好七福鼎肉片" /></label>
-          <label className="field"><span>基础价格（元）</span><input type="number" min="0.01" step="0.01" value={(form.basePrice / 100).toFixed(2)} onChange={(event) => setForm({ ...form, basePrice: Math.round(Number(event.target.value || 0) * 100) })} /></label>
+          <label className="field"><span>基础价格（元）</span><input inputMode="decimal" value={basePriceDraft} onChange={(event) => setBasePriceDraft(event.target.value)} /></label>
           <label className="field field-span"><span>商品说明</span><textarea rows={2} value={form.description ?? ""} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="一句话说明口味或用料" /></label>
           <label className="field field-span"><span>图片地址</span><input value={form.imageUrl ?? ""} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} placeholder="https://..." /></label>
         </div>
@@ -309,7 +328,7 @@ function ProductForm({
                 {group.choices.map((choice, choiceIndex) => (
                   <div className="choice-row" key={choice.id}>
                     <input aria-label={`${group.name}选项 ${choiceIndex + 1} 名称`} value={choice.name} onChange={(event) => updateGroup(index, { ...group, choices: group.choices.map((item, itemIndex) => itemIndex === choiceIndex ? { ...item, name: event.target.value } : item) })} placeholder="选项名称" />
-                    <label className="price-delta"><span>加价 ¥</span><input aria-label={`${choice.name || "选项"}加价`} type="number" min="0" step="0.01" value={(choice.priceDelta / 100).toFixed(2)} onChange={(event) => updateGroup(index, { ...group, choices: group.choices.map((item, itemIndex) => itemIndex === choiceIndex ? { ...item, priceDelta: Math.round(Number(event.target.value || 0) * 100) } : item) })} /></label>
+                    <label className="price-delta"><span>加价 ¥</span><input aria-label={`${choice.name || "选项"}加价`} inputMode="decimal" value={choicePriceDrafts[choice.id] ?? moneyDraft(choice.priceDelta)} onChange={(event) => setChoicePriceDrafts((current) => ({ ...current, [choice.id]: event.target.value }))} /></label>
                     <label className="inline-check"><input type="checkbox" checked={choice.enabled} onChange={(event) => updateGroup(index, { ...group, choices: group.choices.map((item, itemIndex) => itemIndex === choiceIndex ? { ...item, enabled: event.target.checked } : item) })} />可选</label>
                     {group.mode === "SINGLE" && <label className="inline-check"><input type="radio" name={`default-${group.id}`} checked={Boolean(choice.isDefault)} onChange={() => updateGroup(index, { ...group, choices: group.choices.map((item, itemIndex) => ({ ...item, isDefault: itemIndex === choiceIndex })) })} />默认</label>}
                     <button type="button" className="icon-button danger-icon" aria-label={`删除${choice.name || "选项"}`} onClick={() => updateGroup(index, { ...group, choices: group.choices.filter((_, itemIndex) => itemIndex !== choiceIndex) })}><Trash2 size={16} /></button>
@@ -326,4 +345,14 @@ function ProductForm({
       <div className="dialog-actions sticky-dialog-actions"><Button type="button" tone="secondary" onClick={onCancel} disabled={saving}>取消</Button><Button type="submit" loading={saving}>保存商品</Button></div>
     </form>
   );
+}
+
+function moneyDraft(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
+function parseMoneyDraft(value: string): number {
+  const normalized = value.trim();
+  if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(normalized)) return Number.NaN;
+  return Math.round(Number(normalized) * 100);
 }

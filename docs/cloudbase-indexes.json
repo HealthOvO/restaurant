@@ -29,6 +29,7 @@
     {"name":"idx_store_status_created_order","fields":[{"name":"storeId","direction":1},{"name":"status","direction":1},{"name":"createdAt","direction":-1},{"name":"orderNo","direction":-1}]},
     {"name":"idx_store_status_settled_order","fields":[{"name":"storeId","direction":1},{"name":"status","direction":1},{"name":"settledAt","direction":-1},{"name":"orderNo","direction":-1}]},
     {"name":"idx_store_member_created","fields":[{"name":"storeId","direction":1},{"name":"memberId","direction":1},{"name":"createdAt","direction":-1}]},
+    {"name":"idx_store_member_created_id","fields":[{"name":"storeId","direction":1},{"name":"memberId","direction":1},{"name":"createdAt","direction":-1},{"name":"_id","direction":-1}]},
     {"name":"idx_store_business_date","fields":[{"name":"storeId","direction":1},{"name":"businessDate","direction":1}]},
     {"name":"idx_store_status_refunded","fields":[{"name":"storeId","direction":1},{"name":"status","direction":1},{"name":"refundedAt","direction":1}]}
   ]},
@@ -42,6 +43,7 @@
   ]},
   {"collection":"v2_point_ledger","indexes":[
     {"name":"idx_store_member_created","fields":[{"name":"storeId","direction":1},{"name":"memberId","direction":1},{"name":"createdAt","direction":-1}]},
+    {"name":"idx_store_member_created_id","fields":[{"name":"storeId","direction":1},{"name":"memberId","direction":1},{"name":"createdAt","direction":-1},{"name":"_id","direction":-1}]},
     {"name":"idx_store_business_date","fields":[{"name":"storeId","direction":1},{"name":"businessDate","direction":1}]}
   ]},
   {"collection":"v2_owner_accounts","indexes":[

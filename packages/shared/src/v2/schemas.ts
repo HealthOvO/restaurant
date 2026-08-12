@@ -71,6 +71,7 @@ export const v2ProductSaveSchema = z
   });
 
 export const v2StoreConfigSaveSchema = z.object({
+  expectedVersion: z.number().int().min(1).max(1_000_000),
   storeName: z.string().trim().min(1).max(40),
   announcement: z.string().trim().max(200).optional(),
   businessOpen: z.boolean(),
@@ -138,19 +139,29 @@ export const v2SessionSchema = z.object({ sessionToken: z.string().min(20).max(4
 
 export const v2ExchangeItemSaveSchema = z.object({
   id: idSchema.optional(),
+  expectedVersion: z.number().int().min(1).max(1_000_000).optional(),
   name: z.string().trim().min(1).max(40),
   productId: idSchema,
   pointsCost: z.number().int().min(1).max(1_000_000),
   validDays: z.number().int().min(1).max(3650),
   enabled: z.boolean(),
   sortOrder: z.number().int().min(0).max(9999)
+}).superRefine((item, context) => {
+  if (item.id && item.expectedVersion === undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "兑换项版本缺失，请刷新后重试", path: ["expectedVersion"] });
+  }
 });
 
 export const v2CategorySaveSchema = z.object({
   id: idSchema.optional(),
+  expectedVersion: z.number().int().min(1).max(1_000_000).optional(),
   name: z.string().trim().min(1).max(20),
   enabled: z.boolean(),
   sortOrder: z.number().int().min(0).max(9999)
+}).superRefine((category, context) => {
+  if (category.id && category.expectedVersion === undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "分类版本缺失，请刷新后重试", path: ["expectedVersion"] });
+  }
 });
 
 export const v2OwnerOrderListSchema = v2SessionSchema.extend({

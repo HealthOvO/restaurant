@@ -79,7 +79,7 @@ test("member reads wait for the first home bootstrap instead of racing it", asyn
     finishHome();
     await homeRequest;
     await ordersRequest;
-    assert.deepEqual(actions, ["home.get", "order.listMine"]);
+    assert.deepEqual(actions, ["home.get", "order.listMinePage"]);
   } finally {
     delete require.cache[servicePath];
     if (previousWx === undefined) delete global.wx; else global.wx = previousWx;
@@ -164,6 +164,43 @@ test("home refreshes coupons after returning from benefits and closes open sheet
   }
 });
 
+test("home starts a fresh read when an in-flight response was invalidated by another tab", async () => {
+  const wx = wxMock();
+  const cache = require(path.join(root, "utils", "v2-cache"));
+  cache.clearCache();
+  const pending = [];
+  const loaded = loadPage("pages/home/home.js", {
+    "../../services/v2": {
+      getHome: () => new Promise((resolve) => pending.push(resolve))
+    },
+    "../../utils/v2-cart": {
+      addCartLine: () => [], addCouponLine: () => [], changeCartQuantity: () => [], clearCart: () => [], removeCartLine: () => [],
+      cartSummary: () => ({ count: 0, paidCount: 0, couponCount: 0, amount: 0, discount: 0, points: 0 }),
+      loadCart: () => [], reconcileCart: (cart) => ({ cart, changed: false, removedCount: 0 }), saveCart: () => {}
+    }
+  }, wx);
+  const home = (pointsBalance) => ({
+    categories: [], products: [], coupons: [], exchangeItems: [], availableCouponCount: 0,
+    config: { businessOpen: true }, member: { pointsBalance }
+  });
+  try {
+    loaded.page.loadHome();
+    assert.equal(pending.length, 1);
+    cache.invalidateCache("home");
+    const refresh = loaded.page.loadHome();
+    pending[0](home(100));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(pending.length, 2);
+    pending[1](home(40));
+    await refresh;
+    assert.equal(loaded.page.data.home.member.pointsBalance, 40);
+    assert.equal(cache.readCache("home").member.pointsBalance, 40);
+  } finally {
+    cache.clearCache();
+    loaded.restore();
+  }
+});
+
 test("home keeps a sold-out product visible but does not open its selector", () => {
   const wx = wxMock();
   const loaded = loadPage("pages/home/home.js", {
@@ -178,6 +215,57 @@ test("home keeps a sold-out product visible but does not open its selector", () 
     loaded.page.openProduct({ currentTarget: { dataset: { id: "sold-out-product" } } });
     assert.equal(loaded.page.data.products.length, 1);
     assert.equal(loaded.page.data.activeProduct, null);
+  } finally { loaded.restore(); }
+});
+
+test("orders page appends older records from the next cursor", async () => {
+  const wx = wxMock();
+  const cursors = [];
+  const order = (id, createdAt) => ({
+    _id: id, status: "COMPLETED", source: "WECHAT_PAY", paidAmount: 1500, payableAmount: 1500,
+    createdAt, lineItems: [{ productName: "肉片", quantity: 1 }], itemCount: 1
+  });
+  const loaded = loadPage("pages/orders/orders.js", {
+    "../../services/v2": {
+      listOrders: async (cursor) => {
+        cursors.push(cursor);
+        return cursor
+          ? { rows: [order("order-old", "2026-08-08T10:00:00.000Z")] }
+          : { rows: [order("order-new", "2026-08-09T10:00:00.000Z")], nextCursor: "older" };
+      }
+    }
+  }, wx);
+  try {
+    await loaded.page.loadOrders();
+    await loaded.page.loadMoreOrders();
+    assert.deepEqual(cursors, [undefined, "older"]);
+    assert.deepEqual(loaded.page.data.orders.map((item) => item._id), ["order-new", "order-old"]);
+    assert.equal(loaded.page.data.nextCursor, "");
+  } finally { loaded.restore(); }
+});
+
+test("an older order page cannot overwrite a newer first-page refresh", async () => {
+  const wx = wxMock();
+  let resolveOlder;
+  const order = (id, createdAt) => ({
+    _id: id, status: "COMPLETED", source: "WECHAT_PAY", paidAmount: 1500, payableAmount: 1500,
+    createdAt, lineItems: [{ productName: "肉片", quantity: 1 }], itemCount: 1
+  });
+  const loaded = loadPage("pages/orders/orders.js", {
+    "../../services/v2": {
+      listOrders: (cursor) => cursor
+        ? new Promise((resolve) => { resolveOlder = resolve; })
+        : Promise.resolve({ rows: [order("order-latest", "2026-08-10T10:00:00.000Z")], nextCursor: "new-cursor" })
+    }
+  }, wx);
+  try {
+    loaded.page.applyOrders({ rows: [order("order-current", "2026-08-09T10:00:00.000Z")], nextCursor: "old-cursor" });
+    const older = loaded.page.loadMoreOrders();
+    await loaded.page.loadOrders();
+    resolveOlder({ rows: [order("order-skipped", "2026-08-08T10:00:00.000Z")], nextCursor: "stale-cursor" });
+    await older;
+    assert.deepEqual(loaded.page.data.orders.map((item) => item._id), ["order-latest"]);
+    assert.equal(loaded.page.data.nextCursor, "new-cursor");
   } finally { loaded.restore(); }
 });
 
@@ -348,6 +436,67 @@ test("coupon exchange reuses its request id and submits the confirmed version", 
   } finally { loaded.restore(); }
 });
 
+test("coupon exchange ignores an older benefits refresh and starts a fresh read", async () => {
+  const wx = wxMock();
+  const cache = require(path.join(root, "utils", "v2-cache"));
+  cache.clearCache();
+  let homeCalls = 0;
+  let couponCalls = 0;
+  let pointCalls = 0;
+  let resolveOldHome;
+  let resolveOldCoupons;
+  let resolveOldPoints;
+  const loaded = loadPage("pages/benefits/benefits.js", {
+    "../../services/v2": {
+      exchangeCoupon: async () => ({}),
+      getHome: () => {
+        homeCalls += 1;
+        if (homeCalls === 1) return new Promise((resolve) => { resolveOldHome = resolve; });
+        return Promise.resolve({ exchangeItems: [{ _id: "exchange-1", name: "商品券", pointsCost: 100, version: 1 }] });
+      },
+      listCoupons: () => {
+        couponCalls += 1;
+        if (couponCalls === 1) return new Promise((resolve) => { resolveOldCoupons = resolve; });
+        return Promise.resolve([{ _id: "coupon-new", status: "AVAILABLE", expiresAt: "2099-09-01T00:00:00.000Z" }]);
+      },
+      listPoints: () => {
+        pointCalls += 1;
+        if (pointCalls === 1) return new Promise((resolve) => { resolveOldPoints = resolve; });
+        return Promise.resolve({ balance: 0, rows: [] });
+      }
+    },
+    "../../utils/v2-cart": { createRequestId: () => "exchange-request-race" },
+    "../../utils/v2-format": { dateTime: (value) => value, preparePoint: (row) => row }
+  }, wx);
+  try {
+    loaded.page.applyBenefits({
+      home: { exchangeItems: [{ _id: "exchange-1", name: "商品券", pointsCost: 100, version: 1 }] },
+      coupons: [],
+      points: { balance: 100, rows: [] }
+    });
+    const oldRefresh = loaded.page.loadBenefits();
+    const exchange = loaded.page.exchange({ currentTarget: { dataset: { id: "exchange-1" } } });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(homeCalls, 1);
+    assert.equal(couponCalls, 1);
+    assert.equal(pointCalls, 1);
+
+    resolveOldHome({ exchangeItems: [{ _id: "exchange-1", name: "商品券", pointsCost: 100, version: 1 }] });
+    resolveOldCoupons([]);
+    resolveOldPoints({ balance: 100, rows: [] });
+    await oldRefresh;
+    await exchange;
+    assert.equal(homeCalls, 2);
+    assert.equal(couponCalls, 2);
+    assert.equal(pointCalls, 2);
+    assert.equal(loaded.page.data.pointsBalance, 0);
+    assert.equal(loaded.page.data.coupons[0]._id, "coupon-new");
+  } finally {
+    cache.clearCache();
+    loaded.restore();
+  }
+});
+
 test("benefits prepares a clear points gap and keeps usable coupons first", () => {
   const wx = wxMock();
   const loaded = loadPage("pages/benefits/benefits.js", {
@@ -373,6 +522,59 @@ test("benefits prepares a clear points gap and keeps usable coupons first", () =
   } finally { loaded.restore(); }
 });
 
+test("benefits page appends older point entries from the next cursor", async () => {
+  const wx = wxMock();
+  const loaded = loadPage("pages/benefits/benefits.js", {
+    "../../services/v2": {
+      listPoints: async (cursor) => ({
+        balance: 30,
+        rows: [{ _id: `point-${cursor}`, type: "PURCHASE", amount: 10, balanceAfter: 20, createdAt: "2026-08-08T10:00:00.000Z" }]
+      })
+    },
+    "../../utils/v2-cart": { createRequestId: () => "unused" },
+    "../../utils/v2-format": { dateTime: (value) => value, preparePoint: (row) => row }
+  }, wx);
+  try {
+    loaded.page.applyBenefits({
+      home: { exchangeItems: [] }, coupons: [],
+      points: { balance: 30, rows: [{ _id: "point-new", type: "PURCHASE", amount: 10, balanceAfter: 30, createdAt: "2026-08-09T10:00:00.000Z" }], nextCursor: "older" }
+    });
+    await loaded.page.loadMorePoints();
+    assert.deepEqual(loaded.page.data.pointRows.map((item) => item._id), ["point-new", "point-older"]);
+    assert.equal(loaded.page.data.nextPointCursor, "");
+  } finally { loaded.restore(); }
+});
+
+test("an older point page cannot overwrite a newer benefits refresh", async () => {
+  const wx = wxMock();
+  let resolveOlder;
+  let homeCalls = 0;
+  const loaded = loadPage("pages/benefits/benefits.js", {
+    "../../services/v2": {
+      getHome: async () => { homeCalls += 1; return { exchangeItems: [] }; },
+      listCoupons: async () => [],
+      listPoints: (cursor) => cursor
+        ? new Promise((resolve) => { resolveOlder = resolve; })
+        : Promise.resolve({ balance: 40, rows: [{ _id: "point-latest", type: "PURCHASE", amount: 10, balanceAfter: 40, createdAt: "2026-08-10T10:00:00.000Z" }], nextCursor: "new-cursor" })
+    },
+    "../../utils/v2-cart": { createRequestId: () => "unused" },
+    "../../utils/v2-format": { dateTime: (value) => value, preparePoint: (row) => row }
+  }, wx);
+  try {
+    loaded.page.applyBenefits({
+      home: { exchangeItems: [] }, coupons: [],
+      points: { balance: 30, rows: [{ _id: "point-current", type: "PURCHASE", amount: 10, balanceAfter: 30, createdAt: "2026-08-09T10:00:00.000Z" }], nextCursor: "old-cursor" }
+    });
+    const older = loaded.page.loadMorePoints();
+    await loaded.page.loadBenefits(true);
+    resolveOlder({ balance: 30, rows: [{ _id: "point-skipped", type: "PURCHASE", amount: 10, balanceAfter: 20, createdAt: "2026-08-08T10:00:00.000Z" }], nextCursor: "stale-cursor" });
+    await older;
+    assert.equal(homeCalls, 1);
+    assert.deepEqual(loaded.page.data.pointRows.map((item) => item._id), ["point-latest"]);
+    assert.equal(loaded.page.data.nextPointCursor, "new-cursor");
+  } finally { loaded.restore(); }
+});
+
 test("invite binding resolves the inviter and asks for permanent confirmation first", async () => {
   const wx = wxMock();
   const calls = [];
@@ -392,6 +594,56 @@ test("invite binding resolves the inviter and asks for permanent confirmation fi
     assert.match(wx.modals[0].content, /邀请人：小陈/);
     assert.match(wx.modals[0].content, /无法更改/);
   } finally { loaded.restore(); }
+});
+
+test("invite binding ignores an older profile refresh and starts a fresh read", async () => {
+  const wx = wxMock();
+  const cache = require(path.join(root, "utils", "v2-cache"));
+  cache.clearCache();
+  let homeCalls = 0;
+  let overviewCalls = 0;
+  let resolveOldHome;
+  let resolveOldOverview;
+  const loaded = loadPage("pages/profile/profile.js", {
+    "../../services/v2": {
+      getHome: () => {
+        homeCalls += 1;
+        if (homeCalls === 1) return new Promise((resolve) => { resolveOldHome = resolve; });
+        return Promise.resolve({ member: { pointsBalance: 0 } });
+      },
+      getInviteOverview: () => {
+        overviewCalls += 1;
+        if (overviewCalls === 1) return new Promise((resolve) => { resolveOldOverview = resolve; });
+        return Promise.resolve({ inviteCode: "SELF", inviter: { memberCode: "M100", nickname: "小陈" }, invitees: [] });
+      },
+      resolveInvite: async () => ({ memberCode: "M100", nickname: "小陈" }),
+      bindInvite: async () => ({})
+    },
+    "../../utils/v2-format": { dateTime: (value) => value }
+  }, wx);
+  try {
+    loaded.page.applyProfile({
+      home: { member: { pointsBalance: 0 } },
+      overview: { inviteCode: "SELF", inviter: null, invitees: [] }
+    });
+    const oldRefresh = loaded.page.loadProfile();
+    loaded.page.setData({ inviteInput: "ABC123" });
+    const binding = loaded.page.bindInvite();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(homeCalls, 1);
+    assert.equal(overviewCalls, 1);
+
+    resolveOldHome({ member: { pointsBalance: 0 } });
+    resolveOldOverview({ inviteCode: "SELF", inviter: null, invitees: [] });
+    await oldRefresh;
+    await binding;
+    assert.equal(homeCalls, 2);
+    assert.equal(overviewCalls, 2);
+    assert.equal(loaded.page.data.overview.inviter.memberCode, "M100");
+  } finally {
+    cache.clearCache();
+    loaded.restore();
+  }
 });
 
 test("home can configure a legacy coupon from the live product fallback", () => {

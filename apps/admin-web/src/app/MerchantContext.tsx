@@ -9,6 +9,7 @@ import { ToastViewport, type ToastMessage } from "../components/Toast";
 
 export interface NewOrderNotice {
   count: number;
+  orderIds: string[];
   pickupNumbers: string[];
   kind: "CURRENT" | "NEW";
   hasMore?: boolean;
@@ -137,16 +138,44 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
         waitingBaselineReady.current = true;
         const syncedAt = Date.now();
         setOrderMonitor({ phase: "ONLINE", waitingCount: rows.length, hasMore: Boolean(page.nextCursor), lastSyncedAt: syncedAt });
+        setNewOrderNotice((current) => {
+          if (!current) return null;
+          if (current.kind === "CURRENT") {
+            if (!rows.length) return null;
+            return {
+              kind: "CURRENT",
+              count: rows.length,
+              hasMore: Boolean(page.nextCursor),
+              orderIds: rows.map((order) => order._id),
+              pickupNumbers: rows.map((order) => order.pickupNumber).filter((value): value is string => Boolean(value)).slice(0, 6)
+            };
+          }
+          const waitingById = new Map(rows.map((order) => [order._id, order]));
+          const remaining = current.orderIds.map((id) => waitingById.get(id)).filter((order): order is V2Order => Boolean(order));
+          if (!remaining.length) return null;
+          return {
+            ...current,
+            count: remaining.length,
+            orderIds: remaining.map((order) => order._id),
+            pickupNumbers: remaining.map((order) => order.pickupNumber).filter((value): value is string => Boolean(value)).slice(0, 6)
+          };
+        });
         if (!hadBaseline && rows.length) {
           setNewOrderNotice({
             kind: "CURRENT",
             count: rows.length,
             hasMore: Boolean(page.nextCursor),
+            orderIds: rows.map((order) => order._id),
             pickupNumbers: rows.map((order) => order.pickupNumber).filter((value): value is string => Boolean(value)).slice(0, 6)
           });
         }
         if (added.length) {
-          setNewOrderNotice({ kind: "NEW", count: added.length, pickupNumbers: added.map((order) => order.pickupNumber).filter((value): value is string => Boolean(value)).slice(0, 6) });
+          setNewOrderNotice({
+            kind: "NEW",
+            count: added.length,
+            orderIds: added.map((order) => order._id),
+            pickupNumbers: added.map((order) => order.pickupNumber).filter((value): value is string => Boolean(value)).slice(0, 6)
+          });
           if (soundEnabledRef.current) {
             void playNewOrderAlert().then((played) => {
               if (!played && !soundWarningShown.current) {

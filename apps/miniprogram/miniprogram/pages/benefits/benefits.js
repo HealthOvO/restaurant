@@ -1,6 +1,6 @@
 const api = require("../../services/v2");
 const { createRequestId } = require("../../utils/v2-cart");
-const { invalidateCache, isCacheFresh, readCache, writeCache } = require("../../utils/v2-cache");
+const { cacheGeneration, invalidateCache, isCacheFresh, readCache, writeCacheIfCurrent } = require("../../utils/v2-cache");
 const { dateTime, preparePoint } = require("../../utils/v2-format");
 
 const BENEFITS_CACHE_KEY = "benefits";
@@ -35,7 +35,7 @@ function prepareCoupons(coupons) {
 Page({
   data: {
     loading: true, error: "", activeTab: "coupon", pointsBalance: 0,
-    exchangeItems: [], coupons: [], pointRows: [], exchangingId: ""
+    exchangeItems: [], coupons: [], pointRows: [], nextPointCursor: "", loadingMorePoints: false, exchangingId: ""
   },
 
   onLoad() {
@@ -48,28 +48,43 @@ Page({
   },
   onPullDownRefresh() { this.loadBenefits().finally(() => wx.stopPullDownRefresh()); },
 
-  loadBenefits() {
-    if (this.benefitsRequest) return this.benefitsRequest;
+  loadBenefits(force = false) {
+    const currentGeneration = cacheGeneration(BENEFITS_CACHE_KEY);
+    const forceRefresh = force === true || Boolean(this.benefitsRequest && this.benefitsRequestGeneration !== currentGeneration);
+    if (this.benefitsRequest) {
+      if (!forceRefresh) return this.benefitsRequest;
+      this.benefitsRevision = Number(this.benefitsRevision || 0) + 1;
+      const staleRequest = this.benefitsRequest;
+      return staleRequest.catch(() => undefined).then(() => this.loadBenefits(true));
+    }
+    const requestRevision = Number(this.benefitsRevision || 0) + 1;
+    this.benefitsRevision = requestRevision;
+    const requestGeneration = currentGeneration;
+    this.benefitsRequestGeneration = requestGeneration;
     const hasData = this.hasBenefitsData || Boolean(readCache(BENEFITS_CACHE_KEY));
     this.setData({ loading: !hasData, error: "" });
-    this.benefitsRequest = Promise.all([api.getHome(), api.listCoupons(), api.listPoints()]).then((results) => {
+    const request = Promise.all([api.getHome(), api.listCoupons(), api.listPoints()]).then((results) => {
+      if (requestRevision !== this.benefitsRevision || cacheGeneration(BENEFITS_CACHE_KEY) !== requestGeneration) return;
       const home = results[0];
       const coupons = results[1];
       const points = results[2];
       const value = { home, coupons: coupons || [], points };
-      writeCache(BENEFITS_CACHE_KEY, value);
+      writeCacheIfCurrent(BENEFITS_CACHE_KEY, value, requestGeneration);
       this.applyBenefits(value);
     }).catch((error) => {
+      if (requestRevision !== this.benefitsRevision || cacheGeneration(BENEFITS_CACHE_KEY) !== requestGeneration) return;
       if (this.hasBenefitsData) wx.showToast({ title: "权益刷新失败", icon: "none" });
       else this.setData({ loading: false, error: error.message || "权益加载失败" });
     }).finally(() => {
-      this.benefitsRequest = null;
+      if (this.benefitsRequest === request) this.benefitsRequest = null;
     });
-    return this.benefitsRequest;
+    this.benefitsRequest = request;
+    return request;
   },
 
   applyBenefits({ home, coupons, points }) {
       const balance = points.balance || 0;
+      this.benefitsSource = { home, coupons: coupons || [], points: points || { balance, rows: [] } };
       this.hasBenefitsData = true;
       this.setData({
         loading: false,
@@ -81,8 +96,37 @@ Page({
           pointsGap: Math.max(0, item.pointsCost - balance)
         })),
         coupons: prepareCoupons(coupons),
-        pointRows: (points.rows || []).map(preparePoint)
+        pointRows: (points.rows || []).map(preparePoint),
+        nextPointCursor: points.nextCursor || ""
       });
+  },
+
+  async loadMorePoints() {
+    if (!this.data.nextPointCursor || this.data.loadingMorePoints) return;
+    const generation = cacheGeneration(BENEFITS_CACHE_KEY);
+    const requestRevision = Number(this.benefitsRevision || 0);
+    const cursor = this.data.nextPointCursor;
+    this.setData({ loadingMorePoints: true });
+    try {
+      const next = await api.listPoints(cursor);
+      if (Number(this.benefitsRevision || 0) !== requestRevision || this.data.nextPointCursor !== cursor || cacheGeneration(BENEFITS_CACHE_KEY) !== generation) return;
+      const current = this.benefitsSource || { home: {}, coupons: [], points: { balance: this.data.pointsBalance, rows: [] } };
+      const rows = Array.from(new Map([
+        ...(current.points.rows || []),
+        ...(next.rows || [])
+      ].map((row) => [row._id, row])).values());
+      const value = {
+        home: current.home,
+        coupons: current.coupons,
+        points: { balance: next.balance, rows, nextCursor: next.nextCursor }
+      };
+      writeCacheIfCurrent(BENEFITS_CACHE_KEY, value, generation);
+      this.applyBenefits(value);
+    } catch (error) {
+      wx.showToast({ title: error.message || "更早积分明细加载失败", icon: "none" });
+    } finally {
+      this.setData({ loadingMorePoints: false });
+    }
   },
 
   switchTab(event) { this.setData({ activeTab: event.currentTarget.dataset.tab }); },
@@ -105,12 +149,12 @@ Page({
       wx.removeStorageSync(storageKey);
       invalidateCache("home", "profile", BENEFITS_CACHE_KEY);
       wx.showToast({ title: "兑换成功", icon: "success" });
-      await this.loadBenefits();
+      await this.loadBenefits(true);
     } catch (error) {
       if (error && error.code === "EXCHANGE_ITEM_CHANGED") {
         wx.removeStorageSync(storageKey);
         invalidateCache(BENEFITS_CACHE_KEY);
-        await this.loadBenefits();
+        await this.loadBenefits(true);
       }
       wx.showToast({ title: error.message || "兑换失败", icon: "none" });
     } finally {

@@ -18,6 +18,8 @@ npm run build:release
 
 在 CloudBase 创建 `docs/cloudbase-indexes.json` 中列出的 `v2_` 集合和索引。所有集合关闭客户端直接读写，只允许云函数访问。
 
+升级已有环境时，先确认 `v2_orders`、`v2_point_ledger` 的 `idx_store_member_created_id` 已创建且状态正常，再发布新版云函数。部署脚本不会代建数据库索引。
+
 ## 3. 云函数
 
 构建后部署 `cloudfunctions/release` 中的五个函数：
@@ -122,6 +124,8 @@ npm run deploy:admin -- <CloudBase 环境 ID>
 ```
 
 该命令会先运行完整审查，再使用传入的环境 ID 重新构建后台并发布，避免误传未配置 CloudBase 环境的旧文件。
+
+从旧版升级时先发布商家网站，再发布云函数，并提醒已打开后台的老板刷新页面。新版后台会携带设置、分类和兑换项版本号；函数保留旧页面的升级兼容，但刷新后才能获得完整的并发编辑保护。
 
 ## 6. 顾客小程序与摊位二维码
 

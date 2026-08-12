@@ -61,5 +61,6 @@
       <view wx:for="{{pointRows}}" wx:key="_id" class="point-row"><view><text>{{item.titleText}}</text><small>{{item.timeText}} · 余额 {{item.balanceAfter}}</small></view><strong class="{{item.amountClass}}">{{item.amountText}}</strong></view>
     </view>
     <view wx:else class="small-empty">还没有积分记录</view>
+    <button wx:if="{{nextPointCursor}}" class="secondary-button" loading="{{loadingMorePoints}}" disabled="{{loadingMorePoints}}" bindtap="loadMorePoints">查看更早明细</button>
   </block>
 </view>

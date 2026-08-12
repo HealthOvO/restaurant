@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getRounds } from "bcryptjs";
-import { DomainError, type V2ExchangeItem, type V2Member, type V2Order, type V2OwnerAccount, type V2PointLedger, type V2Product, type V2StoreConfig } from "@restaurant/shared";
+import { DomainError, type V2Coupon, type V2ExchangeItem, type V2Member, type V2Order, type V2OwnerAccount, type V2PointLedger, type V2Product, type V2StoreConfig } from "@restaurant/shared";
 import { V2Application, type V2Clock } from "../src/v2/application";
 import { loginV2Owner, hashV2OwnerPassword, requireV2Owner } from "../src/v2/owner-auth";
 import { MockV2PaymentProvider, type V2PaymentProvider } from "../src/v2/payment";
-import { InMemoryV2Repository, isV2DocumentNotFoundError, v2DocumentSetOptions, withoutV2DocumentId } from "../src/v2/repository";
+import { InMemoryV2Repository, isV2DocumentNotFoundError, v2DocumentSetOptions, withoutV2DocumentId, type V2Transaction } from "../src/v2/repository";
 import { initializeV2Store, resetV2Owner } from "../src/v2/setup";
 
 const nowIso = "2026-08-09T10:00:00.000Z";
@@ -17,6 +17,7 @@ const storeConfig: V2StoreConfig = {
   announcement: "现点现煮",
   businessOpen: true,
   dayBoundaryTime: "04:00",
+  version: 1,
   createdAt: nowIso,
   updatedAt: nowIso
 };
@@ -89,10 +90,66 @@ function member(id: string, openId: string, code: string, pointsBalance = 0): V2
   };
 }
 
+function historicalCoupon(memberId: string, id: string, status: V2Coupon["status"], createdAt: string): V2Coupon {
+  return {
+    _id: id,
+    storeId: "store-main",
+    memberId,
+    exchangeItemId: exchangeItem._id,
+    exchangeItemVersion: exchangeItem.version,
+    name: exchangeItem.name,
+    productId: product._id,
+    productName: product.name,
+    productSnapshot: product,
+    pointsCost: exchangeItem.pointsCost,
+    status,
+    expiresAt: status === "EXPIRED" ? "2026-08-08T10:00:00.000Z" : "2026-09-09T10:00:00.000Z",
+    createdAt,
+    updatedAt: createdAt
+  };
+}
+
 function setup(points = 0, payments: V2PaymentProvider = new MockV2PaymentProvider()) {
   const inviter = member("member-inviter", "openid-inviter", "INVITER", 0);
   const buyer = { ...member("member-buyer", "openid-buyer", "BUYER001", points), inviterMemberId: inviter._id };
   const repository = new InMemoryV2Repository("store-main", {
+    storeConfig: [storeConfig],
+    products: [product],
+    exchangeItems: [exchangeItem],
+    members: [inviter, buyer],
+    inviteRelations: [{
+      _id: buyer._id,
+      storeId: "store-main",
+      inviterMemberId: inviter._id,
+      inviteeMemberId: buyer._id,
+      boundAt: nowIso,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    }]
+  });
+  const application = new V2Application(repository, payments, clock);
+  return { repository, payments, application, inviter, buyer };
+}
+
+class BeforeTransactionRepository extends InMemoryV2Repository {
+  private beforeTransaction?: () => void | Promise<void>;
+
+  runBeforeNextTransaction(action: () => void | Promise<void>) {
+    this.beforeTransaction = action;
+  }
+
+  override async runTransaction<T>(callback: (transaction: V2Transaction) => Promise<T>): Promise<T> {
+    const action = this.beforeTransaction;
+    this.beforeTransaction = undefined;
+    if (action) await action();
+    return super.runTransaction(callback);
+  }
+}
+
+function interleavingSetup(points = 0, payments: V2PaymentProvider = new MockV2PaymentProvider()) {
+  const inviter = member("member-inviter", "openid-inviter", "INVITER", 0);
+  const buyer = { ...member("member-buyer", "openid-buyer", "BUYER001", points), inviterMemberId: inviter._id };
+  const repository = new BeforeTransactionRepository("store-main", {
     storeConfig: [storeConfig],
     products: [product],
     exchangeItems: [exchangeItem],
@@ -171,6 +228,14 @@ describe("V2 customer menu", () => {
     expect(repository.snapshot().members.size).toBe(1);
   });
 
+  it("generates sufficiently long member and invitation codes for new users", async () => {
+    const repository = new InMemoryV2Repository("store-main", { storeConfig: [storeConfig] });
+    const application = new V2Application(repository, new MockV2PaymentProvider(), clock);
+    const created = await application.bootstrapMember("openid-long-code");
+    expect(created.memberCode).toMatch(/^M[A-F0-9]{12}$/);
+    expect(created.inviteCode).toMatch(/^[A-F0-9]{12}$/);
+  });
+
   it("rejects one of two concurrent edits based on the same product version", async () => {
     const { application, repository } = setup();
     const input = {
@@ -195,6 +260,126 @@ describe("V2 customer menu", () => {
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
     expect((await repository.getProduct(product._id))?.version).toBe(product.version + 1);
   });
+
+  it("rejects stale category and exchange-item edits instead of overwriting newer changes", async () => {
+    const { application } = setup();
+    const category = await application.saveCategory({ name: "小吃", enabled: true, sortOrder: 20 });
+    await application.saveCategory({ id: category._id, expectedVersion: category.version, name: "小食", enabled: true, sortOrder: 20 });
+    await expect(application.saveCategory({ id: category._id, expectedVersion: category.version, name: "旧名称", enabled: true, sortOrder: 20 }))
+      .rejects.toThrow("分类已被更新");
+
+    const savedExchange = await application.saveExchangeItem({
+      id: exchangeItem._id,
+      expectedVersion: exchangeItem.version,
+      name: "新版兑换券",
+      productId: product._id,
+      pointsCost: 60,
+      validDays: 30,
+      enabled: true,
+      sortOrder: 1
+    });
+    await expect(application.saveExchangeItem({
+      id: exchangeItem._id,
+      expectedVersion: exchangeItem.version,
+      name: "旧版兑换券",
+      productId: product._id,
+      pointsCost: 50,
+      validDays: 30,
+      enabled: true,
+      sortOrder: 1
+    })).rejects.toThrow("兑换项已被更新");
+    expect(savedExchange.version).toBe(exchangeItem.version + 1);
+  });
+
+  it("serializes category disable operations so at least one enabled category remains", async () => {
+    const { application, repository } = setup();
+    const first = await application.saveCategory({ name: "肉片", enabled: true, sortOrder: 10 });
+    const second = await application.saveCategory({ name: "饮品", enabled: true, sortOrder: 20 });
+
+    const results = await Promise.allSettled([
+      application.saveCategory({ id: first._id, expectedVersion: first.version, name: first.name, enabled: false, sortOrder: first.sortOrder }),
+      application.saveCategory({ id: second._id, expectedVersion: second.version, name: second.name, enabled: false, sortOrder: second.sortOrder })
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect((await repository.listCategories(true)).filter((category) => category.enabled)).toHaveLength(1);
+  });
+
+  it("allows paid-only required choices but rejects enabling a coupon for that product", async () => {
+    const { application } = setup();
+    const paidOnly = await application.saveProduct({
+      name: "加量肉片",
+      description: "",
+      basePrice: 1500,
+      enabled: true,
+      soldOut: false,
+      sortOrder: 20,
+      pointsEnabled: false,
+      buyerPointsPerUnit: 0,
+      inviterPointsPerUnit: 0,
+      specGroups: [{
+        id: "size",
+        name: "份量",
+        mode: "SINGLE",
+        required: true,
+        choices: [{ id: "large", name: "大份", priceDelta: 300, enabled: true }]
+      }]
+    });
+
+    expect(paidOnly.specGroups[0].choices[0].priceDelta).toBe(300);
+    await expect(application.saveExchangeItem({
+      name: "加量肉片券",
+      productId: paidOnly._id,
+      pointsCost: 100,
+      validDays: 30,
+      enabled: true,
+      sortOrder: 2
+    })).rejects.toThrow("没有可用于商品券的免费选项");
+  });
+
+  it("uses the current product name in the customer exchange list", async () => {
+    const { application, repository, buyer } = setup();
+    await repository.saveProduct({ ...product, name: "新名称肉片", version: product.version + 1 });
+    const home = await application.home(buyer.openId);
+    expect(home.exchangeItems[0].productName).toBe("新名称肉片");
+  });
+
+  it("rejects a stale business setting save so an older tab cannot reopen paid ordering", async () => {
+    const { application } = setup();
+    const closed = await application.saveStoreConfig({
+      expectedVersion: storeConfig.version,
+      storeName: storeConfig.storeName,
+      announcement: storeConfig.announcement,
+      businessOpen: false,
+      dayBoundaryTime: storeConfig.dayBoundaryTime
+    });
+    expect(closed).toMatchObject({ businessOpen: false, version: storeConfig.version + 1 });
+    await expect(application.saveStoreConfig({
+      expectedVersion: storeConfig.version,
+      storeName: storeConfig.storeName,
+      announcement: "旧标签页改公告",
+      businessOpen: true,
+      dayBoundaryTime: storeConfig.dayBoundaryTime
+    })).rejects.toThrow("营业设置刚刚有更新");
+  });
+
+  it("upgrades a legacy business setting document without a version", async () => {
+    const legacyConfig = { ...storeConfig } as Partial<V2StoreConfig>;
+    delete legacyConfig.version;
+    const repository = new InMemoryV2Repository("store-main", { storeConfig: [legacyConfig as V2StoreConfig] });
+    const application = new V2Application(repository, new MockV2PaymentProvider(), clock);
+
+    const saved = await application.saveStoreConfig({
+      expectedVersion: 1,
+      storeName: storeConfig.storeName,
+      announcement: "版本迁移",
+      businessOpen: false,
+      dayBoundaryTime: storeConfig.dayBoundaryTime
+    });
+
+    expect(saved).toMatchObject({ version: 2, businessOpen: false, announcement: "版本迁移" });
+  });
 });
 
 describe("V2 payment settlement", () => {
@@ -208,6 +393,63 @@ describe("V2 payment settlement", () => {
       lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
     })).rejects.toThrow("商品价格或积分已更新");
     expect(repository.snapshot().orders.size).toBe(0);
+  });
+
+  it("rechecks product version inside the checkout transaction", async () => {
+    const { application, repository, buyer } = interleavingSetup();
+    repository.runBeforeNextTransaction(() => repository.saveProduct({
+      ...product,
+      description: "事务开始前已更新",
+      version: 2,
+      updatedAt: "2026-08-09T10:00:01.000Z"
+    }));
+
+    await expect(application.createPaymentOrder(buyer.openId, {
+      requestId: "order-product-version-race",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    })).rejects.toThrow("商品价格或积分已更新");
+    expect(repository.snapshot().orders.size).toBe(0);
+    expect(repository.snapshot().payments.size).toBe(0);
+  });
+
+  it("rechecks sold-out state inside the checkout transaction", async () => {
+    const { application, repository, buyer } = interleavingSetup();
+    repository.runBeforeNextTransaction(() => repository.saveProduct({
+      ...product,
+      soldOut: true,
+      version: 2,
+      updatedAt: "2026-08-09T10:00:01.000Z"
+    }));
+
+    await expect(application.createPaymentOrder(buyer.openId, {
+      requestId: "order-product-sold-out-race",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    })).rejects.toThrow("当前不可购买");
+    expect(repository.snapshot().orders.size).toBe(0);
+    expect(repository.snapshot().payments.size).toBe(0);
+  });
+
+  it("rechecks the business switch inside the checkout transaction", async () => {
+    const { application, repository, buyer } = interleavingSetup();
+    repository.runBeforeNextTransaction(() => repository.saveStoreConfig({
+      ...storeConfig,
+      businessOpen: false,
+      version: storeConfig.version + 1,
+      updatedAt: "2026-08-09T10:00:01.000Z"
+    }));
+
+    await expect(application.createPaymentOrder(buyer.openId, {
+      requestId: "order-store-closed-race",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    })).rejects.toThrow("暂停接单");
+    expect(repository.snapshot().orders.size).toBe(0);
+    expect(repository.snapshot().payments.size).toBe(0);
   });
 
   it("allows only the owning member to complete a mock payment", async () => {
@@ -250,8 +492,8 @@ describe("V2 payment settlement", () => {
     expect(second.pickupNumber).toBe("001");
     expect((await repository.getMemberById(buyer._id))?.pointsBalance).toBe(30);
     expect((await repository.getMemberById(inviter._id))?.pointsBalance).toBe(3);
-    expect((await repository.listPointLedgerByMember(buyer._id))).toHaveLength(1);
-    expect((await repository.listPointLedgerByMember(inviter._id))).toHaveLength(1);
+    expect((await repository.listPointLedgerByMember(buyer._id)).rows).toHaveLength(1);
+    expect((await repository.listPointLedgerByMember(inviter._id)).rows).toHaveLength(1);
   });
 
   it("keeps order numbers and pickup numbers unique under concurrent settlement", async () => {
@@ -413,6 +655,65 @@ describe("V2 payment settlement", () => {
     expect(payments.expiries).toEqual(["2026-08-09T10:15:00.000Z", "2026-08-09T10:15:00.000Z"]);
   });
 
+  it("keeps an unexpired local order payable when cancellation races with in-flight prepay", async () => {
+    class BarrierPrepayProvider extends MockV2PaymentProvider {
+      private prepareCalls = 0;
+      private startedResolve!: () => void;
+      private releaseResolve!: () => void;
+      private released = false;
+      readonly started = new Promise<void>((resolve) => { this.startedResolve = resolve; });
+      private readonly releaseBarrier = new Promise<void>((resolve) => { this.releaseResolve = resolve; });
+
+      override async prepare(order: V2Order) {
+        this.prepareCalls += 1;
+        if (this.prepareCalls === 1) throw new Error("prepay result unknown");
+        this.startedResolve();
+        await this.releaseBarrier;
+        return super.prepare(order);
+      }
+
+      override async query(outTradeNo: string) {
+        if (!this.released) return { status: "NOT_FOUND" as const };
+        return super.query(outTradeNo);
+      }
+
+      releasePrepare() {
+        this.released = true;
+        this.releaseResolve();
+      }
+    }
+
+    const payments = new BarrierPrepayProvider();
+    const { application, repository, buyer } = setup(0, payments);
+    const payload = {
+      requestId: "prepay-cancel-barrier",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
+    };
+    await expect(application.createPaymentOrder(buyer.openId, payload)).rejects.toThrow("prepay result unknown");
+    const creating = application.createPaymentOrder(buyer.openId, payload);
+    await payments.started;
+    const order = Array.from(repository.snapshot().orders.values())[0];
+    if (!order) throw new Error("missing durable order");
+
+    let cancellationResult: V2Order;
+    let paymentStatus: string | undefined;
+    try {
+      cancellationResult = await application.cancelPendingPayment(buyer.openId, order._id);
+      paymentStatus = (await repository.getPayment(order._id))?.status;
+    } finally {
+      payments.releasePrepare();
+    }
+    const created = await creating;
+
+    expect(cancellationResult!.status).toBe("PENDING_PAYMENT");
+    expect(paymentStatus).toBe("NOTPAY");
+    payments.markPaid(created.order.orderNo, "wx-prepay-cancel-race");
+    const settled = await application.queryPayment(buyer.openId, created.order._id);
+    expect(settled).toMatchObject({ status: "WAITING_FULFILLMENT", paymentStatus: "SUCCESS" });
+  });
+
   it("uses the winning transaction's payment expiry for concurrent duplicate checkout", async () => {
     let releaseInitialReads!: () => void;
     const initialReadsReady = new Promise<void>((resolve) => { releaseInitialReads = resolve; });
@@ -482,7 +783,7 @@ describe("V2 payment settlement", () => {
     expect(second.status).toBe("REFUNDED");
     expect((await repository.getMemberById(buyer._id))?.pointsBalance).toBe(-25);
     expect((await repository.getMemberById(inviter._id))?.pointsBalance).toBe(0);
-    expect((await repository.listPointLedgerByMember(buyer._id))).toHaveLength(2);
+    expect((await repository.listPointLedgerByMember(buyer._id)).rows).toHaveLength(2);
     expect((await repository.getPayment(created.order._id))?.status).toBe("REFUND");
     expect((await application.ownerDashboard()).refundCount).toBe(1);
     expect((await application.inviteOverview(inviter.openId)).invitees[0]?.contributedPoints).toBe(0);
@@ -554,7 +855,7 @@ describe("V2 payment settlement", () => {
 
     expect((await repository.getOrder(created.order._id))?.status).toBe("REFUNDED");
     expect(new Set(payments.refundNumbers).size).toBe(1);
-    expect((await repository.listPointLedgerByMember(buyer._id)).filter((row) => row.type === "PURCHASE_REFUND")).toHaveLength(1);
+    expect((await repository.listPointLedgerByMember(buyer._id)).rows.filter((row) => row.type === "PURCHASE_REFUND")).toHaveLength(1);
   });
 
   it("keeps a real WeChat ABNORMAL refund for query and manual handling without ordinary resubmission", async () => {
@@ -798,7 +1099,7 @@ describe("V2 payment settlement", () => {
     expect(refunded.status).toBe("REFUNDED");
     expect(payments.refundNumbers).toHaveLength(2);
     expect(payments.refundNumbers[0]).not.toBe(payments.refundNumbers[1]);
-    expect((await repository.listPointLedgerByMember(buyer._id))).toHaveLength(2);
+    expect((await repository.listPointLedgerByMember(buyer._id)).rows).toHaveLength(2);
   });
 
   it("does not let an old CLOSED refund overwrite the active retry status", async () => {
@@ -868,6 +1169,66 @@ describe("V2 coupons", () => {
       couponItems: [{ couponId: coupon._id, selections: [{ groupId: "spice", choiceIds: ["none"] }, { groupId: "extras", choiceIds: [] }] }]
     });
     expect(used.order).toMatchObject({ status: "WAITING_FULFILLMENT", source: "COUPON" });
+  });
+
+  it("keeps old active coupons visible behind more than fifty terminal coupons", async () => {
+    const { application, repository, buyer } = setup();
+    const oldAvailable = historicalCoupon(buyer._id, "coupon-old-available", "AVAILABLE", "2026-08-01T10:00:00.000Z");
+    const oldReserved = {
+      ...historicalCoupon(buyer._id, "coupon-old-reserved", "RESERVED", "2026-08-01T11:00:00.000Z"),
+      reservedOrderId: "order-still-pending",
+      reservedAt: "2026-08-01T11:00:00.000Z"
+    };
+    const terminalStatuses: V2Coupon["status"][] = ["USED", "EXPIRED", "VOID"];
+    const recentTerminal = Array.from({ length: 55 }, (_, index) => historicalCoupon(
+      buyer._id,
+      `coupon-terminal-${index}`,
+      terminalStatuses[index % terminalStatuses.length],
+      new Date(Date.parse("2026-08-02T10:00:00.000Z") + index * 1000).toISOString()
+    ));
+    await repository.runTransaction(async (tx) => {
+      for (const coupon of [oldAvailable, oldReserved, ...recentTerminal]) await tx.saveCoupon(coupon);
+    });
+
+    const home = await application.home(buyer.openId);
+    const memberCoupons = await application.memberCoupons(buyer.openId);
+    expect(home.coupons.map((coupon) => coupon._id)).toContain(oldAvailable._id);
+    expect(home.availableCouponCount).toBe(1);
+    expect(memberCoupons.map((coupon) => coupon._id)).toEqual(expect.arrayContaining([oldAvailable._id, oldReserved._id]));
+    expect(memberCoupons).toHaveLength(52);
+  });
+
+  it("shows an old coupon again after a paid-order refund restores it", async () => {
+    const { application, repository, buyer } = setup(100);
+    const coupon = await application.exchangeCoupon(buyer.openId, {
+      requestId: "old-refund-restored-coupon",
+      exchangeItemId: exchangeItem._id,
+      expectedVersion: exchangeItem.version,
+      expectedPointsCost: exchangeItem.pointsCost
+    });
+    const created = await application.createPaymentOrder(buyer.openId, {
+      requestId: "old-refund-restored-order",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }],
+      couponItems: [{ couponId: coupon._id, selections: [{ groupId: "spice", choiceIds: ["mild"] }, { groupId: "extras", choiceIds: [] }] }]
+    });
+    await application.confirmPaidOrder(created.order._id, "MOCK", "wx-old-refund-restored");
+    await repository.runTransaction(async (tx) => {
+      for (let index = 0; index < 55; index += 1) {
+        await tx.saveCoupon(historicalCoupon(
+          buyer._id,
+          `coupon-newer-terminal-${index}`,
+          index % 2 === 0 ? "USED" : "VOID",
+          new Date(Date.parse(nowIso) + (index + 1) * 1000).toISOString()
+        ));
+      }
+    });
+
+    await application.refundOrder(created.order._id);
+    expect((await repository.getCoupon(coupon._id))?.status).toBe("AVAILABLE");
+    expect((await application.memberCoupons(buyer.openId)).map((item) => item._id)).toContain(coupon._id);
+    expect((await application.home(buyer.openId)).coupons.map((item) => item._id)).toContain(coupon._id);
   });
 
   it("combines a coupon with paid items, reserves it once, and restores it after refund", async () => {
@@ -970,6 +1331,46 @@ describe("V2 coupons", () => {
       expectedPointsCost: 50
     })).rejects.toThrow("兑换所需积分已更新");
     expect((await repository.getMemberById(buyer._id))?.pointsBalance).toBe(100);
+  });
+
+  it("rechecks exchange version and cost inside the points transaction", async () => {
+    const { application, repository, buyer } = interleavingSetup(100);
+    repository.runBeforeNextTransaction(() => repository.saveExchangeItem({
+      ...exchangeItem,
+      pointsCost: 80,
+      version: 2,
+      updatedAt: "2026-08-09T10:00:01.000Z"
+    }));
+
+    await expect(application.exchangeCoupon(buyer.openId, {
+      requestId: "coupon-price-race",
+      exchangeItemId: exchangeItem._id,
+      expectedVersion: 1,
+      expectedPointsCost: 50
+    })).rejects.toThrow("兑换所需积分已更新");
+    expect((await repository.getMemberById(buyer._id))?.pointsBalance).toBe(100);
+    expect(repository.snapshot().coupons.size).toBe(0);
+    expect(repository.snapshot().pointLedger.size).toBe(0);
+  });
+
+  it("rechecks exchange product availability inside the points transaction", async () => {
+    const { application, repository, buyer } = interleavingSetup(100);
+    repository.runBeforeNextTransaction(() => repository.saveProduct({
+      ...product,
+      soldOut: true,
+      version: 2,
+      updatedAt: "2026-08-09T10:00:01.000Z"
+    }));
+
+    await expect(application.exchangeCoupon(buyer.openId, {
+      requestId: "coupon-product-race",
+      exchangeItemId: exchangeItem._id,
+      expectedVersion: 1,
+      expectedPointsCost: 50
+    })).rejects.toThrow("指定商品暂时不可兑换");
+    expect((await repository.getMemberById(buyer._id))?.pointsBalance).toBe(100);
+    expect(repository.snapshot().coupons.size).toBe(0);
+    expect(repository.snapshot().pointLedger.size).toBe(0);
   });
 
   it("does not exchange points for an unavailable product", async () => {
@@ -1112,7 +1513,11 @@ describe("V2 invite graph", () => {
       updatedAt: nowIso
     }));
     const repository = new InMemoryV2Repository("store-main", { members: [inviter, invitee], pointLedger });
-    expect(await repository.listPointLedgerByMember(inviter._id)).toHaveLength(100);
+    const firstPage = await repository.listPointLedgerByMember(inviter._id, { limit: 100 });
+    const secondPage = await repository.listPointLedgerByMember(inviter._id, { limit: 100, cursor: firstPage.nextCursor });
+    expect(firstPage.rows).toHaveLength(100);
+    expect(secondPage.rows).toHaveLength(1);
+    expect(new Set([...firstPage.rows, ...secondPage.rows].map((row) => row._id)).size).toBe(101);
     expect((await repository.inviteContributionTotals(inviter._id))[invitee._id]).toBe(101);
   });
 

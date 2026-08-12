@@ -39,6 +39,7 @@ export interface V2OwnerLoginAttempt {
   _id: string;
   storeId: string;
   usernameKey: string;
+  reservationGeneration?: number;
   attemptCount: number;
   windowStartedAt: string;
   lastAttemptAt: string;
@@ -66,12 +67,18 @@ interface V2LockRecord {
 }
 
 export interface V2Transaction {
+  getStoreConfig(): Promise<V2StoreConfig | null>;
+  saveStoreConfig(config: V2StoreConfig): Promise<void>;
+  getCategory(id: string): Promise<V2Category | null>;
+  saveCategory(category: V2Category): Promise<void>;
   getMember(id: string): Promise<V2Member | null>;
   saveMember(member: V2Member): Promise<void>;
   getInviteRelation(inviteeMemberId: string): Promise<V2InviteRelation | null>;
   saveInviteRelation(relation: V2InviteRelation): Promise<void>;
   getProduct(id: string): Promise<V2Product | null>;
   saveProduct(product: V2Product): Promise<void>;
+  getExchangeItem(id: string): Promise<V2ExchangeItem | null>;
+  saveExchangeItem(item: V2ExchangeItem): Promise<void>;
   getOrder(id: string): Promise<V2Order | null>;
   saveOrder(order: V2Order): Promise<void>;
   getPayment(id: string): Promise<V2Payment | null>;
@@ -82,6 +89,8 @@ export interface V2Transaction {
   saveCoupon(coupon: V2Coupon): Promise<void>;
   getPointLedger(id: string): Promise<V2PointLedger | null>;
   savePointLedger(ledger: V2PointLedger): Promise<void>;
+  getOwner(id: string): Promise<V2OwnerAccount | null>;
+  saveOwner(owner: V2OwnerAccount): Promise<void>;
   getOwnerLoginAttempt(id: string): Promise<V2OwnerLoginAttempt | null>;
   saveOwnerLoginAttempt(attempt: V2OwnerLoginAttempt): Promise<void>;
   nextPickupNumber(businessDate: string, now: string): Promise<number>;
@@ -96,6 +105,21 @@ export interface V2OwnerOrderPageQuery {
 
 export interface V2OwnerOrderPage {
   rows: V2Order[];
+  nextCursor?: string;
+}
+
+export interface V2CouponListQuery {
+  statuses?: V2Coupon["status"][];
+  limit?: number;
+}
+
+export interface V2MemberRecordPageQuery {
+  cursor?: string;
+  limit?: number;
+}
+
+export interface V2MemberRecordPage<T> {
+  rows: T[];
   nextCursor?: string;
 }
 
@@ -124,10 +148,10 @@ export interface V2Repository {
   getRefund(id: string): Promise<V2Refund | null>;
   getRefundByOutRefundNo(outRefundNo: string): Promise<V2Refund | null>;
   getCoupon(id: string): Promise<V2Coupon | null>;
-  listOrdersByMember(memberId: string): Promise<V2Order[]>;
+  listOrdersByMember(memberId: string, query?: V2MemberRecordPageQuery): Promise<V2MemberRecordPage<V2Order>>;
   listOwnerOrders(query?: V2OwnerOrderPageQuery): Promise<V2OwnerOrderPage>;
-  listCouponsByMember(memberId: string): Promise<V2Coupon[]>;
-  listPointLedgerByMember(memberId: string): Promise<V2PointLedger[]>;
+  listCouponsByMember(memberId: string, query?: V2CouponListQuery): Promise<V2Coupon[]>;
+  listPointLedgerByMember(memberId: string, query?: V2MemberRecordPageQuery): Promise<V2MemberRecordPage<V2PointLedger>>;
   inviteContributionTotals(memberId: string): Promise<Record<string, number>>;
   searchMembers(query: string): Promise<V2Member[]>;
   getOwnerByUsername(username: string): Promise<V2OwnerAccount | null>;
@@ -140,6 +164,7 @@ export interface V2Repository {
   listRefundsDue(nowIso: string, limit: number): Promise<V2Refund[]>;
   runTransaction<T>(callback: (transaction: V2Transaction) => Promise<T>): Promise<T>;
   withInviteLock<T>(token: string, callback: () => Promise<T>): Promise<T>;
+  withCategoryLock<T>(token: string, callback: () => Promise<T>): Promise<T>;
 }
 
 type RecordMap<T extends { _id: string }> = Map<string, T>;
@@ -314,14 +339,52 @@ function ownerOrderPage(rows: V2Order[], query: V2OwnerOrderPageQuery = {}): V2O
   };
 }
 
+interface V2MemberRecordCursor {
+  createdAt: string;
+  id: string;
+}
+
+function encodeMemberRecordCursor(row: { _id: string; createdAt: string }): string {
+  return Buffer.from(JSON.stringify({ createdAt: row.createdAt, id: row._id }), "utf8").toString("base64url");
+}
+
+function decodeMemberRecordCursor(cursor?: string): V2MemberRecordCursor | undefined {
+  if (!cursor) return undefined;
+  try {
+    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<V2MemberRecordCursor>;
+    if (typeof value.createdAt !== "string" || !value.createdAt || typeof value.id !== "string" || !value.id) throw new Error("invalid cursor");
+    return { createdAt: value.createdAt, id: value.id };
+  } catch {
+    throw new DomainError("INVALID_CURSOR", "分页位置无效，请刷新后重试");
+  }
+}
+
+function memberRecordPage<T extends { _id: string; createdAt: string }>(rows: T[], query: V2MemberRecordPageQuery = {}): V2MemberRecordPage<T> {
+  const limit = Math.min(100, Math.max(1, query.limit ?? 20));
+  const cursor = decodeMemberRecordCursor(query.cursor);
+  const sorted = rows.sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right._id.localeCompare(left._id));
+  const remaining = cursor ? sorted.filter((row) => row.createdAt < cursor.createdAt || (row.createdAt === cursor.createdAt && row._id < cursor.id)) : sorted;
+  const pageRows = remaining.slice(0, limit);
+  return {
+    rows: pageRows,
+    nextCursor: pageRows.length < remaining.length ? encodeMemberRecordCursor(pageRows[pageRows.length - 1]) : undefined
+  };
+}
+
 function createMemoryTransaction(data: InMemoryData, storeId: string): V2Transaction {
   return {
+    getStoreConfig: async () => values(data.storeConfig).find((item) => item.storeId === storeId) ?? null,
+    saveStoreConfig: async (config) => mapSet(data.storeConfig, config),
+    getCategory: async (id) => mapGet(data.categories, id),
+    saveCategory: async (category) => mapSet(data.categories, category),
     getMember: async (id) => mapGet(data.members, id),
     saveMember: async (member) => mapSet(data.members, member),
     getInviteRelation: async (id) => mapGet(data.inviteRelations, id),
     saveInviteRelation: async (relation) => mapSet(data.inviteRelations, relation),
     getProduct: async (id) => mapGet(data.products, id),
     saveProduct: async (product) => mapSet(data.products, product),
+    getExchangeItem: async (id) => mapGet(data.exchangeItems, id),
+    saveExchangeItem: async (item) => mapSet(data.exchangeItems, item),
     getOrder: async (id) => mapGet(data.orders, id),
     saveOrder: async (order) => mapSet(data.orders, order),
     getPayment: async (id) => mapGet(data.payments, id),
@@ -332,6 +395,8 @@ function createMemoryTransaction(data: InMemoryData, storeId: string): V2Transac
     saveCoupon: async (coupon) => mapSet(data.coupons, coupon),
     getPointLedger: async (id) => mapGet(data.pointLedger, id),
     savePointLedger: async (ledger) => mapSet(data.pointLedger, ledger),
+    getOwner: async (id) => mapGet(data.ownerAccounts, id),
+    saveOwner: async (owner) => mapSet(data.ownerAccounts, owner),
     getOwnerLoginAttempt: async (id) => mapGet(data.ownerLoginAttempts, id),
     saveOwnerLoginAttempt: async (attempt) => mapSet(data.ownerLoginAttempts, attempt),
     nextPickupNumber: async (businessDate, now) => {
@@ -355,6 +420,7 @@ export class InMemoryV2Repository implements V2Repository {
   private data: InMemoryData;
   private transactionTail: Promise<void> = Promise.resolve();
   private inviteTail: Promise<void> = Promise.resolve();
+  private categoryTail: Promise<void> = Promise.resolve();
 
   constructor(readonly storeId: string, seed?: Partial<{ [K in keyof InMemoryData]: Array<InMemoryData[K] extends Map<string, infer V> ? V : never> }>) {
     this.data = emptyInMemoryData();
@@ -397,13 +463,21 @@ export class InMemoryV2Repository implements V2Repository {
   async getRefund(id: string) { return mapGet(this.data.refunds, id); }
   async getRefundByOutRefundNo(outRefundNo: string) { return values(this.data.refunds).find((item) => item.outRefundNo === outRefundNo) ?? null; }
   async getCoupon(id: string) { return mapGet(this.data.coupons, id); }
-  async listOrdersByMember(memberId: string) { return values(this.data.orders).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50); }
+  async listOrdersByMember(memberId: string, query: V2MemberRecordPageQuery = {}) { return memberRecordPage(values(this.data.orders).filter((item) => item.memberId === memberId), query); }
   async listOwnerOrders(query: V2OwnerOrderPageQuery = {}) {
     const visibleStatuses: V2Order["status"][] = ["WAITING_FULFILLMENT", "COMPLETED", "CANCELLED", "REFUNDING", "REFUNDED"];
     return ownerOrderPage(values(this.data.orders).filter((item) => query.status ? item.status === query.status : visibleStatuses.includes(item.status)), query);
   }
-  async listCouponsByMember(memberId: string) { return values(this.data.coupons).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50); }
-  async listPointLedgerByMember(memberId: string) { return values(this.data.pointLedger).filter((item) => item.memberId === memberId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 100); }
+  async listCouponsByMember(memberId: string, query: V2CouponListQuery = {}) {
+    const statuses = query.statuses ? new Set(query.statuses) : null;
+    if (statuses?.size === 0) return [];
+    const rows = values(this.data.coupons)
+      .filter((item) => item.memberId === memberId && (!statuses || statuses.has(item.status)))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const limit = query.limit ?? (statuses ? undefined : 50);
+    return limit === undefined ? rows : rows.slice(0, Math.max(0, limit));
+  }
+  async listPointLedgerByMember(memberId: string, query: V2MemberRecordPageQuery = {}) { return memberRecordPage(values(this.data.pointLedger).filter((item) => item.memberId === memberId), query); }
   async inviteContributionTotals(memberId: string) {
     return values(this.data.pointLedger)
       .filter((item) => item.memberId === memberId && item.relatedMemberId && (item.type === "INVITE_REWARD" || item.type === "INVITE_REWARD_REFUND"))
@@ -454,6 +528,14 @@ export class InMemoryV2Repository implements V2Repository {
     let release!: () => void;
     const previous = this.inviteTail;
     this.inviteTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try { return await callback(); } finally { release(); }
+  }
+
+  async withCategoryLock<T>(_token: string, callback: () => Promise<T>): Promise<T> {
+    let release!: () => void;
+    const previous = this.categoryTail;
+    this.categoryTail = new Promise<void>((resolve) => { release = resolve; });
     await previous;
     try { return await callback(); } finally { release(); }
   }
@@ -529,6 +611,36 @@ async function cloudOrderedList<T>(
   return (result.data ?? []) as T[];
 }
 
+async function cloudMemberRecordPage<T extends { _id: string; createdAt: string }>(
+  name: string,
+  storeId: string,
+  memberId: string,
+  query: V2MemberRecordPageQuery = {}
+): Promise<V2MemberRecordPage<T>> {
+  const limit = Math.min(100, Math.max(1, query.limit ?? 20));
+  const cursor = decodeMemberRecordCursor(query.cursor);
+  const _ = command();
+  const baseWhere = { storeId, memberId };
+  const where = cursor
+    ? _.or([
+        { ...baseWhere, createdAt: _.lt(cursor.createdAt) },
+        { ...baseWhere, createdAt: _.eq(cursor.createdAt), _id: _.lt(cursor.id) }
+      ])
+    : baseWhere;
+  const result = await collection(name)
+    .where(where)
+    .orderBy("createdAt", "desc")
+    .orderBy("_id", "desc")
+    .limit(limit + 1)
+    .get();
+  const rows = (result.data ?? []) as T[];
+  const pageRows = rows.slice(0, limit);
+  return {
+    rows: pageRows,
+    nextCursor: rows.length > limit ? encodeMemberRecordCursor(pageRows[pageRows.length - 1]) : undefined
+  };
+}
+
 export function withoutV2DocumentId<T extends { _id: string }>(row: T): Omit<T, "_id"> {
   const { _id: _documentId, ...data } = row;
   return data;
@@ -596,7 +708,7 @@ export class CloudV2Repository implements V2Repository {
   async getRefund(id: string) { return cloudGet<V2Refund>(V2_COLLECTIONS.refunds, id, this.storeId); }
   async getRefundByOutRefundNo(outRefundNo: string) { return (await cloudList<V2Refund>(V2_COLLECTIONS.refunds, { storeId: this.storeId, outRefundNo }))[0] ?? null; }
   async getCoupon(id: string) { return cloudGet<V2Coupon>(V2_COLLECTIONS.coupons, id, this.storeId); }
-  async listOrdersByMember(memberId: string) { return cloudOrderedList<V2Order>(V2_COLLECTIONS.orders, { storeId: this.storeId, memberId }, "createdAt", "desc", 50); }
+  async listOrdersByMember(memberId: string, query: V2MemberRecordPageQuery = {}) { return cloudMemberRecordPage<V2Order>(V2_COLLECTIONS.orders, this.storeId, memberId, query); }
   async listOwnerOrders(query: V2OwnerOrderPageQuery = {}) {
     const limit = Math.min(100, Math.max(1, query.limit ?? 50));
     const sort = ownerOrderSort(query);
@@ -628,8 +740,26 @@ export class CloudV2Repository implements V2Repository {
       nextCursor: rows.length > limit ? encodeOwnerOrderCursor(pageRows[pageRows.length - 1], sort) : undefined
     };
   }
-  async listCouponsByMember(memberId: string) { return cloudOrderedList<V2Coupon>(V2_COLLECTIONS.coupons, { storeId: this.storeId, memberId }, "createdAt", "desc", 50); }
-  async listPointLedgerByMember(memberId: string) { return cloudOrderedList<V2PointLedger>(V2_COLLECTIONS.pointLedger, { storeId: this.storeId, memberId }, "createdAt", "desc", 100); }
+  async listCouponsByMember(memberId: string, query: V2CouponListQuery = {}) {
+    if (query.statuses) {
+      const statuses = Array.from(new Set(query.statuses));
+      if (statuses.length === 0) return [];
+      const batches = await Promise.all(statuses.map((status) => cloudList<V2Coupon>(
+        V2_COLLECTIONS.coupons,
+        { storeId: this.storeId, memberId, status }
+      )));
+      const rows = batches.flat().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      return query.limit === undefined ? rows : rows.slice(0, Math.max(0, query.limit));
+    }
+    return cloudOrderedList<V2Coupon>(
+      V2_COLLECTIONS.coupons,
+      { storeId: this.storeId, memberId },
+      "createdAt",
+      "desc",
+      Math.max(0, query.limit ?? 50)
+    );
+  }
+  async listPointLedgerByMember(memberId: string, query: V2MemberRecordPageQuery = {}) { return cloudMemberRecordPage<V2PointLedger>(V2_COLLECTIONS.pointLedger, this.storeId, memberId, query); }
   async inviteContributionTotals(memberId: string) {
     const _ = command();
     const $ = _.aggregate;
@@ -693,12 +823,18 @@ export class CloudV2Repository implements V2Repository {
 
   async runTransaction<T>(callback: (transaction: V2Transaction) => Promise<T>): Promise<T> {
     return cloud.database().runTransaction(async (tx: CloudTransaction) => callback({
+      getStoreConfig: () => txGet<V2StoreConfig>(tx, V2_COLLECTIONS.storeConfig, `${this.storeId}:config`, this.storeId),
+      saveStoreConfig: (row) => txSave(tx, V2_COLLECTIONS.storeConfig, row, this.storeId),
+      getCategory: (id) => txGet<V2Category>(tx, V2_COLLECTIONS.categories, id, this.storeId),
+      saveCategory: (row) => txSave(tx, V2_COLLECTIONS.categories, row, this.storeId),
       getMember: (id) => txGet<V2Member>(tx, V2_COLLECTIONS.members, id, this.storeId),
       saveMember: (row) => txSave(tx, V2_COLLECTIONS.members, row, this.storeId),
       getInviteRelation: (id) => txGet<V2InviteRelation>(tx, V2_COLLECTIONS.inviteRelations, id, this.storeId),
       saveInviteRelation: (row) => txSave(tx, V2_COLLECTIONS.inviteRelations, row, this.storeId),
       getProduct: (id) => txGet<V2Product>(tx, V2_COLLECTIONS.products, id, this.storeId),
       saveProduct: (row) => txSave(tx, V2_COLLECTIONS.products, row, this.storeId),
+      getExchangeItem: (id) => txGet<V2ExchangeItem>(tx, V2_COLLECTIONS.exchangeItems, id, this.storeId),
+      saveExchangeItem: (row) => txSave(tx, V2_COLLECTIONS.exchangeItems, row, this.storeId),
       getOrder: (id) => txGet<V2Order>(tx, V2_COLLECTIONS.orders, id, this.storeId),
       saveOrder: (row) => txSave(tx, V2_COLLECTIONS.orders, row, this.storeId),
       getPayment: (id) => txGet<V2Payment>(tx, V2_COLLECTIONS.payments, id, this.storeId),
@@ -709,6 +845,8 @@ export class CloudV2Repository implements V2Repository {
       saveCoupon: (row) => txSave(tx, V2_COLLECTIONS.coupons, row, this.storeId),
       getPointLedger: (id) => txGet<V2PointLedger>(tx, V2_COLLECTIONS.pointLedger, id, this.storeId),
       savePointLedger: (row) => txSave(tx, V2_COLLECTIONS.pointLedger, row, this.storeId),
+      getOwner: (id) => txGet<V2OwnerAccount>(tx, V2_COLLECTIONS.ownerAccounts, id, this.storeId),
+      saveOwner: (row) => txSave(tx, V2_COLLECTIONS.ownerAccounts, row, this.storeId),
       getOwnerLoginAttempt: (id) => txGet<V2OwnerLoginAttempt>(tx, V2_COLLECTIONS.ownerLoginAttempts, id, this.storeId),
       saveOwnerLoginAttempt: (row) => txSave(tx, V2_COLLECTIONS.ownerLoginAttempts, row, this.storeId),
       nextPickupNumber: async (businessDate, now) => {
@@ -732,6 +870,32 @@ export class CloudV2Repository implements V2Repository {
       const current = await txGet<V2LockRecord>(tx, V2_COLLECTIONS.locks, lockId, this.storeId);
       if (current && current.expiresAt > now.toISOString()) {
         throw new DomainError("INVITE_BINDING_BUSY", "绑定请求较多，请稍后重试");
+      }
+      await txSave(tx, V2_COLLECTIONS.locks, {
+        _id: lockId, storeId: this.storeId, token, expiresAt,
+        createdAt: current?.createdAt ?? now.toISOString(), updatedAt: now.toISOString()
+      }, this.storeId);
+    });
+    try {
+      return await callback();
+    } finally {
+      await cloud.database().runTransaction(async (tx: CloudTransaction) => {
+        const current = await txGet<V2LockRecord>(tx, V2_COLLECTIONS.locks, lockId, this.storeId);
+        if (current?.token === token) {
+          await txSave(tx, V2_COLLECTIONS.locks, { ...current, expiresAt: new Date(0).toISOString(), updatedAt: new Date().toISOString() }, this.storeId);
+        }
+      }).catch(() => undefined);
+    }
+  }
+
+  async withCategoryLock<T>(token: string, callback: () => Promise<T>): Promise<T> {
+    const lockId = `${this.storeId}:category-management`;
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 15_000).toISOString();
+    await cloud.database().runTransaction(async (tx: CloudTransaction) => {
+      const current = await txGet<V2LockRecord>(tx, V2_COLLECTIONS.locks, lockId, this.storeId);
+      if (current && current.expiresAt > now.toISOString()) {
+        throw new DomainError("CATEGORY_SAVE_BUSY", "分类正在保存，请稍后重试");
       }
       await txSave(tx, V2_COLLECTIONS.locks, {
         _id: lockId, storeId: this.storeId, token, expiresAt,

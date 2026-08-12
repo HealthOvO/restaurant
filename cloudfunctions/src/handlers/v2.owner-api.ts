@@ -26,6 +26,11 @@ const eventSchema = z.object({
   payload: z.record(z.unknown()).default({})
 });
 
+export function withLegacyExpectedVersion(payload: Record<string, unknown>, currentVersion: number | undefined) {
+  if (payload.expectedVersion !== undefined || typeof currentVersion !== "number" || !Number.isInteger(currentVersion) || currentVersion < 1) return payload;
+  return { ...payload, expectedVersion: currentVersion };
+}
+
 export async function main(event: unknown) {
   return v2Response(async () => {
     const { action, payload } = eventSchema.parse(event);
@@ -55,13 +60,26 @@ export async function main(event: unknown) {
       case "products.list": return application.ownerProducts();
       case "products.save": return application.saveProduct(body);
       case "categories.list": return application.ownerCategories();
-      case "categories.save": return application.saveCategory(body);
+      case "categories.save": {
+        const current = body.expectedVersion === undefined && typeof body.id === "string"
+          ? (await application.ownerCategories()).find((category) => category._id === body.id)
+          : undefined;
+        return application.saveCategory(withLegacyExpectedVersion(body, current?.version));
+      }
       case "exchange.list": return application.ownerExchangeItems();
-      case "exchange.save": return application.saveExchangeItem(body);
+      case "exchange.save": {
+        const current = body.expectedVersion === undefined && typeof body.id === "string"
+          ? (await application.ownerExchangeItems()).find((item) => item._id === body.id)
+          : undefined;
+        return application.saveExchangeItem(withLegacyExpectedVersion(body, current?.version));
+      }
       case "members.search": return application.searchMembers(String(body.query ?? ""));
       case "members.detail": return application.ownerMemberDetail(String(body.memberId ?? ""));
       case "config.get": return application.ownerStoreConfig();
-      case "config.save": return application.saveStoreConfig(body);
+      case "config.save": {
+        const current = body.expectedVersion === undefined ? await application.ownerStoreConfig() : undefined;
+        return application.saveStoreConfig(withLegacyExpectedVersion(body, current?.version ?? 1));
+      }
       default: throw new DomainError("UNKNOWN_ACTION", "不支持的操作");
     }
   });

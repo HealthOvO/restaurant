@@ -70,6 +70,7 @@ export interface V2StoreConfig extends V2BaseRecord {
   announcement?: string;
   businessOpen: boolean;
   dayBoundaryTime: string;
+  version: number;
 }
 
 export interface V2Member extends V2BaseRecord {

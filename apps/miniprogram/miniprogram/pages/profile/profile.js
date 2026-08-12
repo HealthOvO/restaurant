@@ -1,5 +1,5 @@
 const api = require("../../services/v2");
-const { invalidateCache, isCacheFresh, readCache, writeCache } = require("../../utils/v2-cache");
+const { cacheGeneration, invalidateCache, isCacheFresh, readCache, writeCacheIfCurrent } = require("../../utils/v2-cache");
 const { dateTime } = require("../../utils/v2-format");
 
 const PROFILE_CACHE_KEY = "profile";
@@ -31,23 +31,37 @@ Page({
   },
   onPullDownRefresh() { this.loadProfile().finally(() => wx.stopPullDownRefresh()); },
 
-  loadProfile() {
-    if (this.profileRequest) return this.profileRequest;
+  loadProfile(force = false) {
+    const currentGeneration = cacheGeneration(PROFILE_CACHE_KEY);
+    const forceRefresh = force === true || Boolean(this.profileRequest && this.profileRequestGeneration !== currentGeneration);
+    if (this.profileRequest) {
+      if (!forceRefresh) return this.profileRequest;
+      this.profileRevision = Number(this.profileRevision || 0) + 1;
+      const staleRequest = this.profileRequest;
+      return staleRequest.catch(() => undefined).then(() => this.loadProfile(true));
+    }
+    const requestRevision = Number(this.profileRevision || 0) + 1;
+    this.profileRevision = requestRevision;
+    const requestGeneration = currentGeneration;
+    this.profileRequestGeneration = requestGeneration;
     const hasData = this.hasProfileData || Boolean(readCache(PROFILE_CACHE_KEY));
     this.setData({ loading: !hasData, error: "" });
-    this.profileRequest = Promise.all([api.getHome(), api.getInviteOverview()]).then((results) => {
+    const request = Promise.all([api.getHome(), api.getInviteOverview()]).then((results) => {
+      if (requestRevision !== this.profileRevision || cacheGeneration(PROFILE_CACHE_KEY) !== requestGeneration) return;
       const home = results[0];
       const overview = results[1];
       const value = { home, overview };
-      writeCache(PROFILE_CACHE_KEY, value);
+      writeCacheIfCurrent(PROFILE_CACHE_KEY, value, requestGeneration);
       this.applyProfile(value);
     }).catch((error) => {
+      if (requestRevision !== this.profileRevision || cacheGeneration(PROFILE_CACHE_KEY) !== requestGeneration) return;
       if (this.hasProfileData) wx.showToast({ title: "个人信息刷新失败", icon: "none" });
       else this.setData({ loading: false, error: error.message || "个人信息加载失败" });
     }).finally(() => {
-      this.profileRequest = null;
+      if (this.profileRequest === request) this.profileRequest = null;
     });
-    return this.profileRequest;
+    this.profileRequest = request;
+    return request;
   },
 
   applyProfile({ home, overview }) {
@@ -73,7 +87,7 @@ Page({
       this.setData({ inviteInput: "" });
       invalidateCache(PROFILE_CACHE_KEY);
       wx.showToast({ title: "绑定成功", icon: "success" });
-      await this.loadProfile();
+      await this.loadProfile(true);
     } catch (error) {
       wx.showToast({ title: error.message || "绑定失败", icon: "none" });
     } finally {

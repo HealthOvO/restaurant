@@ -35,7 +35,7 @@ import {
   type V2PaymentProvider,
   type V2RefundSubmissionFailure
 } from "./payment";
-import type { V2OwnerOrderPageQuery, V2Repository, V2Transaction } from "./repository";
+import type { V2MemberRecordPageQuery, V2OwnerOrderPageQuery, V2Repository, V2Transaction } from "./repository";
 
 export interface V2Clock { now(): Date; }
 const SYSTEM_CLOCK: V2Clock = { now: () => new Date() };
@@ -53,11 +53,11 @@ function orderNumber(orderId: string): string {
 }
 
 function memberCode(openId: string): string {
-  return `M${stableHash("member-code", openId).slice(0, 8).toUpperCase()}`;
+  return `M${stableHash("member-code", openId).slice(0, 12).toUpperCase()}`;
 }
 
 function inviteCode(openId: string): string {
-  return stableHash("invite", openId).slice(0, 8).toUpperCase();
+  return stableHash("invite", openId).slice(0, 12).toUpperCase();
 }
 
 function addDays(date: Date, days: number): string {
@@ -85,6 +85,18 @@ function couponProductSnapshot(product: V2Product): V2Product {
   });
   quoteV2CouponProduct(snapshot, selections);
   return snapshot;
+}
+
+function isCouponCompatibleProduct(product: V2Product): boolean {
+  return product.specGroups.every((group) => !group.required || group.choices.some((choice) => choice.enabled && choice.priceDelta === 0));
+}
+
+function assertCouponCompatibleProduct(product: V2Product): void {
+  if (!isCouponCompatibleProduct(product)) {
+    const group = product.specGroups.find((item) => item.required && !item.choices.some((choice) => choice.enabled && choice.priceDelta === 0));
+    throw new DomainError("COUPON_PRODUCT_UNAVAILABLE", `${group?.name ?? "必选规格"}没有可用于商品券的免费选项`);
+  }
+  couponProductSnapshot(product);
 }
 
 function orderCouponApplications(order: V2Order): V2CouponApplication[] {
@@ -137,6 +149,15 @@ export class V2Application {
         ? { ...coupon, product: { ...product, enabled: true, soldOut: false } }
         : { ...coupon, unavailableReason: "关联商品已下架，请联系商家" };
     });
+  }
+
+  private async listMemberCouponsForView(memberId: string): Promise<V2Coupon[]> {
+    const [active, recent] = await Promise.all([
+      this.repository.listCouponsByMember(memberId, { statuses: ["AVAILABLE", "RESERVED"] }),
+      this.repository.listCouponsByMember(memberId, { limit: 50 })
+    ]);
+    return Array.from(new Map([...recent, ...active].map((coupon) => [coupon._id, coupon])).values())
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
   private async ensureCategories(): Promise<V2Category[]> {
@@ -384,13 +405,15 @@ export class V2Application {
       this.repository.listExchangeItems(false),
       this.ensureCategories()
     ]);
-    const coupons = await this.repository.listCouponsByMember(member._id);
+    const coupons = await this.repository.listCouponsByMember(member._id, { statuses: ["AVAILABLE"] });
     const categories = allCategories.filter((category) => category.enabled).sort((a, b) => a.sortOrder - b.sortOrder);
     const fallbackCategoryId = categories[0]?._id;
     const categorizedProducts = products
       .map((product) => ({ ...product, categoryId: product.categoryId ?? fallbackCategoryId }))
       .filter((product) => Boolean(product.categoryId && categories.some((category) => category._id === product.categoryId)));
-    const sellableProductIds = new Set(categorizedProducts.filter((product) => !product.soldOut).map((product) => product._id));
+    const sellableCouponProducts = new Map(categorizedProducts
+      .filter((product) => !product.soldOut && isCouponCompatibleProduct(product))
+      .map((product) => [product._id, product]));
     const now = this.clock.now().toISOString();
     const availableCoupons = await this.enrichLegacyCoupons(coupons.filter((coupon) => coupon.status === "AVAILABLE" && coupon.expiresAt > now));
     return {
@@ -398,7 +421,9 @@ export class V2Application {
       config,
       categories,
       products: categorizedProducts,
-      exchangeItems: exchangeItems.filter((item) => sellableProductIds.has(item.productId)),
+      exchangeItems: exchangeItems
+        .filter((item) => sellableCouponProducts.has(item.productId))
+        .map((item) => ({ ...item, productName: sellableCouponProducts.get(item.productId)!.name })),
       coupons: availableCoupons,
       availableCouponCount: availableCoupons.length
     };
@@ -485,11 +510,6 @@ export class V2Application {
       createdAt: now,
       updatedAt: now
     };
-    if (paidQuote.payableAmount === 0) {
-      const config = await this.requireStoreConfig();
-      order.businessDate = businessDateAt(nowDate, config.dayBoundaryTime);
-      order.settledAt = now;
-    }
     const payment: V2Payment = {
       _id: orderId,
       storeId: this.repository.storeId,
@@ -510,6 +530,33 @@ export class V2Application {
           order: duplicate,
           payment: duplicate.status === "PENDING_PAYMENT" ? await tx.getPayment(duplicate._id) : null
         };
+      }
+      const currentConfig = await tx.getStoreConfig();
+      if (!currentConfig) throw new DomainError("STORE_NOT_CONFIGURED", "门店尚未初始化");
+      if (paidQuote.payableAmount > 0 && !currentConfig.businessOpen) throw new DomainError("STORE_CLOSED", "当前暂停接单");
+      if (paidQuote.payableAmount === 0) {
+        order.businessDate = businessDateAt(nowDate, currentConfig.dayBoundaryTime);
+        order.settledAt = now;
+      }
+      if (input.lineItems.length > 0) {
+        const currentProducts = await Promise.all(
+          Array.from(new Set(input.lineItems.map((line) => line.productId))).map((productId) => tx.getProduct(productId))
+        );
+        const currentPaidQuote = quoteV2Order(
+          currentProducts.filter((product): product is V2Product => Boolean(product)),
+          input.lineItems
+        );
+        const productVersionsChanged = currentPaidQuote.lineItems.some(
+          (line, index) => line.productVersion !== paidQuote.lineItems[index]?.productVersion
+        );
+        if (
+          productVersionsChanged
+          || currentPaidQuote.payableAmount !== paidQuote.payableAmount
+          || currentPaidQuote.buyerPoints !== paidQuote.buyerPoints
+          || currentPaidQuote.inviterPoints !== paidQuote.inviterPoints
+        ) {
+          throw new DomainError("ORDER_QUOTE_CHANGED", "商品价格或积分已更新，请重新确认");
+        }
       }
       const lockedCoupons: V2Coupon[] = [];
       for (const coupon of couponRows) {
@@ -703,7 +750,13 @@ export class V2Application {
     if (!payment) throw new DomainError("PAYMENT_NOT_FOUND", "支付记录不存在");
     const beforeClose = await this.payments.query(payment.outTradeNo);
     if (beforeClose.status === "SUCCESS") return this.confirmPaidOrder(orderId, "CUSTOMER_QUERY", beforeClose.transactionId);
-    if (beforeClose.status === "NOT_FOUND") return (await this.closeUnpaidOrder(orderId)) ?? order;
+    if (beforeClose.status === "NOT_FOUND") {
+      if (payment.expiresAt <= this.clock.now().toISOString()) {
+        return (await this.closeUnpaidOrder(orderId)) ?? order;
+      }
+      await this.recordPendingPaymentQuery(payment._id, this.clock.now());
+      return order;
+    }
     if (beforeClose.status !== "CLOSED") await this.payments.close(payment.outTradeNo);
     const result = await this.payments.query(payment.outTradeNo);
     if (result.status === "SUCCESS") return this.confirmPaidOrder(orderId, "CUSTOMER_QUERY", result.transactionId);
@@ -727,29 +780,38 @@ export class V2Application {
     }
     const product = await this.repository.getProduct(item.productId);
     if (!product || !product.enabled || product.soldOut) throw new DomainError("PRODUCT_UNAVAILABLE", "指定商品暂时不可兑换");
-    const productSnapshot = couponProductSnapshot(product);
     const nowDate = this.clock.now();
     const now = nowDate.toISOString();
     const businessDate = businessDateAt(nowDate, config.dayBoundaryTime);
     return this.repository.runTransaction(async (tx) => {
       const duplicate = await tx.getCoupon(couponId);
       if (duplicate) return duplicate;
+      const currentItem = await tx.getExchangeItem(input.exchangeItemId);
+      if (!currentItem || !currentItem.enabled) throw new DomainError("EXCHANGE_UNAVAILABLE", "该兑换项当前不可用");
+      if (currentItem.version !== input.expectedVersion || currentItem.pointsCost !== input.expectedPointsCost) {
+        throw new DomainError("EXCHANGE_ITEM_CHANGED", "兑换所需积分已更新，请重新确认");
+      }
+      const currentProduct = await tx.getProduct(currentItem.productId);
+      if (!currentProduct || !currentProduct.enabled || currentProduct.soldOut) {
+        throw new DomainError("PRODUCT_UNAVAILABLE", "指定商品暂时不可兑换");
+      }
       const currentMember = await tx.getMember(member._id);
       if (!currentMember) throw new DomainError("MEMBER_NOT_FOUND", "会员信息不存在");
-      if (currentMember.pointsBalance < item.pointsCost) throw new DomainError("INSUFFICIENT_POINTS", "积分不足");
-      currentMember.pointsBalance -= item.pointsCost;
+      if (currentMember.pointsBalance < currentItem.pointsCost) throw new DomainError("INSUFFICIENT_POINTS", "积分不足");
+      currentMember.pointsBalance -= currentItem.pointsCost;
       currentMember.updatedAt = now;
+      const productSnapshot = couponProductSnapshot(currentProduct);
       const coupon: V2Coupon = {
         _id: couponId, storeId: this.repository.storeId, memberId: member._id,
-        exchangeItemId: item._id, exchangeItemVersion: item.version, name: item.name,
-        productId: product._id, productName: product.name, productSnapshot, pointsCost: item.pointsCost,
-        status: "AVAILABLE", expiresAt: addDays(nowDate, item.validDays), createdAt: now, updatedAt: now
+        exchangeItemId: currentItem._id, exchangeItemVersion: currentItem.version, name: currentItem.name,
+        productId: currentProduct._id, productName: currentProduct.name, productSnapshot, pointsCost: currentItem.pointsCost,
+        status: "AVAILABLE", expiresAt: addDays(nowDate, currentItem.validDays), createdAt: now, updatedAt: now
       };
       const ledger: V2PointLedger = {
         _id: stableId("points", couponId, "exchange"), storeId: this.repository.storeId,
-        memberId: member._id, type: "COUPON_EXCHANGE", amount: -item.pointsCost,
+        memberId: member._id, type: "COUPON_EXCHANGE", amount: -currentItem.pointsCost,
         balanceAfter: currentMember.pointsBalance, couponId, businessDate,
-        note: `兑换${item.name}`, createdAt: now, updatedAt: now
+        note: `兑换${currentItem.name}`, createdAt: now, updatedAt: now
       };
       await tx.saveMember(currentMember);
       await tx.saveCoupon(coupon);
@@ -834,12 +896,16 @@ export class V2Application {
     };
   }
 
-  async memberOrders(openId: string) { const member = await this.bootstrapMember(openId); return this.repository.listOrdersByMember(member._id); }
+  async memberOrders(openId: string, query: V2MemberRecordPageQuery = {}) { const member = await this.bootstrapMember(openId); return this.repository.listOrdersByMember(member._id, query); }
   async memberCoupons(openId: string) {
     const member = await this.bootstrapMember(openId);
-    return this.enrichLegacyCoupons(await this.repository.listCouponsByMember(member._id));
+    return this.enrichLegacyCoupons(await this.listMemberCouponsForView(member._id));
   }
-  async memberPoints(openId: string) { const member = await this.bootstrapMember(openId); return { balance: member.pointsBalance, rows: await this.repository.listPointLedgerByMember(member._id) }; }
+  async memberPoints(openId: string, query: V2MemberRecordPageQuery = {}) {
+    const member = await this.bootstrapMember(openId);
+    const page = await this.repository.listPointLedgerByMember(member._id, query);
+    return { balance: member.pointsBalance, ...page };
+  }
 
   async saveProduct(rawInput: unknown): Promise<V2Product> {
     const input = v2ProductSaveSchema.parse(rawInput);
@@ -883,63 +949,81 @@ export class V2Application {
 
   async saveCategory(rawInput: unknown): Promise<V2Category> {
     const input = v2CategorySaveSchema.parse(rawInput);
-    const existing = input.id ? await this.repository.getCategory(input.id) : null;
-    const categories = await this.ensureCategories();
-    if (existing?.enabled && !input.enabled && categories.filter((category) => category.enabled).length <= 1) {
-      throw new DomainError("CATEGORY_REQUIRED", "至少保留一个启用中的分类");
-    }
     const now = this.clock.now().toISOString();
-    const category: V2Category = {
-      _id: existing?._id ?? stableId("category", this.repository.storeId, randomUUID()),
-      storeId: this.repository.storeId,
-      name: input.name,
-      enabled: input.enabled,
-      sortOrder: input.sortOrder,
-      version: (existing?.version ?? 0) + 1,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now
-    };
-    await this.repository.saveCategory(category);
-    return category;
+    return this.repository.withCategoryLock(randomUUID(), () => this.repository.runTransaction(async (tx) => {
+      const existing = input.id ? await tx.getCategory(input.id) : null;
+      if (input.id && !existing) throw new DomainError("CATEGORY_NOT_FOUND", "分类不存在，请刷新后重试");
+      if (existing && input.expectedVersion !== existing.version) throw new DomainError("CATEGORY_VERSION_CONFLICT", "分类已被更新，请刷新后再编辑");
+      if (existing?.enabled && !input.enabled) {
+        const categories = await this.repository.listCategories();
+        if (!categories.some((category) => category._id !== existing._id && category.enabled)) throw new DomainError("CATEGORY_REQUIRED", "至少保留一个启用中的分类");
+      }
+      const category: V2Category = {
+        _id: existing?._id ?? stableId("category", this.repository.storeId, randomUUID()),
+        storeId: this.repository.storeId,
+        name: input.name,
+        enabled: input.enabled,
+        sortOrder: input.sortOrder,
+        version: (existing?.version ?? 0) + 1,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now
+      };
+      await tx.saveCategory(category);
+      return category;
+    }));
   }
 
   async saveExchangeItem(rawInput: unknown): Promise<V2ExchangeItem> {
     const input = v2ExchangeItemSaveSchema.parse(rawInput);
-    const product = await this.repository.getProduct(input.productId);
-    if (!product) throw new DomainError("PRODUCT_NOT_FOUND", "指定商品不存在");
     const now = this.clock.now().toISOString();
-    const existing = input.id ? await this.repository.getExchangeItem(input.id) : null;
-    const item: V2ExchangeItem = {
-      _id: existing?._id ?? stableId("exchange", this.repository.storeId, randomUUID()),
-      storeId: this.repository.storeId,
-      name: input.name,
-      productId: product._id,
-      productName: product.name,
-      pointsCost: input.pointsCost,
-      validDays: input.validDays,
-      enabled: input.enabled,
-      sortOrder: input.sortOrder,
-      version: (existing?.version ?? 0) + 1,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now
-    };
-    await this.repository.saveExchangeItem(item);
-    return item;
+    return this.repository.runTransaction(async (tx) => {
+      const [product, existing] = await Promise.all([
+        tx.getProduct(input.productId),
+        input.id ? tx.getExchangeItem(input.id) : Promise.resolve(null)
+      ]);
+      if (!product) throw new DomainError("PRODUCT_NOT_FOUND", "指定商品不存在");
+      if (input.enabled && (!product.enabled || product.soldOut)) throw new DomainError("PRODUCT_UNAVAILABLE", "指定商品已下架或售罄，不能开启兑换");
+      if (input.enabled) assertCouponCompatibleProduct(product);
+      if (input.id && !existing) throw new DomainError("EXCHANGE_NOT_FOUND", "兑换项不存在，请刷新后重试");
+      if (existing && input.expectedVersion !== existing.version) throw new DomainError("EXCHANGE_VERSION_CONFLICT", "兑换项已被更新，请刷新后再编辑");
+      const item: V2ExchangeItem = {
+        _id: existing?._id ?? stableId("exchange", this.repository.storeId, randomUUID()),
+        storeId: this.repository.storeId,
+        name: input.name,
+        productId: product._id,
+        productName: product.name,
+        pointsCost: input.pointsCost,
+        validDays: input.validDays,
+        enabled: input.enabled,
+        sortOrder: input.sortOrder,
+        version: (existing?.version ?? 0) + 1,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now
+      };
+      await tx.saveExchangeItem(item);
+      return item;
+    });
   }
 
   async saveStoreConfig(rawInput: unknown): Promise<V2StoreConfig> {
     const input = v2StoreConfigSaveSchema.parse(rawInput);
-    const existing = await this.repository.getStoreConfig();
     const now = this.clock.now().toISOString();
-    const config: V2StoreConfig = {
-      _id: existing?._id ?? `${this.repository.storeId}:config`,
-      storeId: this.repository.storeId,
-      ...input,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now
-    };
-    await this.repository.saveStoreConfig(config);
-    return config;
+    return this.repository.runTransaction(async (tx) => {
+      const existing = await tx.getStoreConfig();
+      const existingVersion = existing?.version ?? 1;
+      if (existing && input.expectedVersion !== existingVersion) throw new DomainError("STORE_CONFIG_VERSION_CONFLICT", "营业设置刚刚有更新，请刷新后再保存");
+      const { expectedVersion: _expectedVersion, ...values } = input;
+      const config: V2StoreConfig = {
+        _id: existing?._id ?? `${this.repository.storeId}:config`,
+        storeId: this.repository.storeId,
+        ...values,
+        version: (existing ? existingVersion : 0) + 1,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now
+      };
+      await tx.saveStoreConfig(config);
+      return config;
+    });
   }
 
   async ownerDashboard() { const config = await this.requireStoreConfig(); return this.repository.dashboard(this.clock.now(), config.dayBoundaryTime); }
@@ -960,9 +1044,9 @@ export class V2Application {
     const inviteRelations = await this.repository.listInviteRelationsByInviter(member._id);
     const [inviter, coupons, pointLedger, recentOrders, contributionTotals] = await Promise.all([
       relation ? this.repository.getMemberById(relation.inviterMemberId) : null,
-      this.repository.listCouponsByMember(member._id),
-      this.repository.listPointLedgerByMember(member._id),
-      this.repository.listOrdersByMember(member._id),
+      this.listMemberCouponsForView(member._id),
+      this.repository.listPointLedgerByMember(member._id, { limit: 100 }),
+      this.repository.listOrdersByMember(member._id, { limit: 20 }),
       this.repository.inviteContributionTotals(member._id)
     ]);
     const invitees = await Promise.all(inviteRelations.map(async (row) => {
@@ -976,8 +1060,8 @@ export class V2Application {
       inviter: inviter ? { _id: inviter._id, memberCode: inviter.memberCode, nickname: inviter.nickname } : undefined,
       invitees: invitees.filter((row): row is NonNullable<typeof row> => Boolean(row)),
       coupons,
-      pointLedger,
-      recentOrders: recentOrders.slice(0, 20)
+      pointLedger: pointLedger.rows,
+      recentOrders: recentOrders.rows
     };
   }
 

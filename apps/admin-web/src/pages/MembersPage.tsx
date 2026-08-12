@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ChevronRight, Coins, Search, TicketPercent, UserRoundSearch, Users } from "lucide-react";
 import type { V2Member, V2MemberDetail } from "@restaurant/shared";
 import { useMerchant } from "../app/MerchantContext";
@@ -18,27 +18,43 @@ export function MembersPage() {
   const [loading, setLoading] = useState(() => readResourceCache(MEMBERS_CACHE_KEY) === undefined);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
+  const searchSequence = useRef(0);
+  const detailSequence = useRef(0);
 
   const search = useCallback(async (value = "") => {
     if (!api || !session) return;
+    const requestId = ++searchSequence.current;
     setLoading(value ? true : readResourceCache(MEMBERS_CACHE_KEY) === undefined); setError("");
     try {
       const next = await api.searchMembers(session.token, value);
+      if (requestId !== searchSequence.current) return;
       if (!value) writeResourceCache(MEMBERS_CACHE_KEY, next);
       setMembers(next);
     }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "用户查询失败"); }
-    finally { setLoading(false); }
+    catch (caught) {
+      if (requestId === searchSequence.current) setError(caught instanceof Error ? caught.message : "用户查询失败");
+    }
+    finally {
+      if (requestId === searchSequence.current) setLoading(false);
+    }
   }, [api, session]);
   useEffect(() => { void search(); }, [search]);
 
   async function submit(event: FormEvent) { event.preventDefault(); await search(query); }
   async function openDetail(memberId: string) {
     if (!api || !session) return;
+    const requestId = ++detailSequence.current;
     setDetailLoading(true);
-    try { setDetail(await api.getMemberDetail(session.token, memberId)); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "用户详情加载失败"); }
-    finally { setDetailLoading(false); }
+    try {
+      const next = await api.getMemberDetail(session.token, memberId);
+      if (requestId === detailSequence.current) setDetail(next);
+    }
+    catch (caught) {
+      if (requestId === detailSequence.current) setError(caught instanceof Error ? caught.message : "用户详情加载失败");
+    }
+    finally {
+      if (requestId === detailSequence.current) setDetailLoading(false);
+    }
   }
 
   if (loading && !members.length) return <PageLoading label="正在加载用户" />;
@@ -48,13 +64,13 @@ export function MembersPage() {
       <header className="page-header"><div><p className="eyebrow">会员与邀请</p><h1>用户</h1><p>查看用户积分、邀请关系、商品券和最近订单。</p></div></header>
       <form className="search-bar" onSubmit={submit} role="search">
         <Search size={18} aria-hidden="true" />
-        <input aria-label="搜索用户" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入用户编号、邀请码或昵称" />
+        <input aria-label="搜索用户" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入用户编号或邀请码，近期用户也可搜昵称" />
         <Button type="submit" loading={loading}>搜索</Button>
       </form>
       {error && <div className="inline-alert" role="alert">{error}</div>}
       <section className="member-list panel">
         <div className="member-list-summary">
-          <div><strong>{query.trim() ? "搜索结果" : "全部用户"}</strong><span>{members.length} 位</span></div>
+          <div><strong>{query.trim() ? "搜索结果" : "最近用户"}</strong><span>{members.length} 位</span></div>
           <span>点击详情查看积分与邀请关系</span>
         </div>
         <header className="table-header"><span>用户</span><span>邀请码</span><span>当前积分</span><span>加入时间</span><span /></header>

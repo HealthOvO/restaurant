@@ -1,7 +1,7 @@
 const { CLOUD_ENV_ID } = require("./config");
 const api = require("./services/v2");
 const { loadCart } = require("./utils/v2-cart");
-const { writeCache } = require("./utils/v2-cache");
+const { cacheGeneration, writeCacheIfCurrent } = require("./utils/v2-cache");
 
 App({
   globalData: {
@@ -19,10 +19,13 @@ App({
     wx.cloud.init({ env: CLOUD_ENV_ID, traceUser: true });
     this.globalData.cart = loadCart();
     this.captureSource(options);
+    const homeGeneration = cacheGeneration("home");
     const bootstrapPromise = api.getHome().then((home) => {
-      this.globalData.home = home;
-      writeCache("home", home);
-      this.preloadTabs(home);
+      if (cacheGeneration("home") === homeGeneration) {
+        this.globalData.home = home;
+        writeCacheIfCurrent("home", home, homeGeneration);
+        this.preloadTabs(home);
+      }
       return home;
     }).catch(() => undefined);
     this.globalData.bootstrapPromise = bootstrapPromise;
@@ -44,12 +47,15 @@ App({
   },
 
   preloadTabs(home) {
-    api.listOrders().then((orders) => writeCache("orders", orders || [])).catch(() => undefined);
+    const ordersGeneration = cacheGeneration("orders");
+    const benefitsGeneration = cacheGeneration("benefits");
+    const profileGeneration = cacheGeneration("profile");
+    api.listOrders().then((page) => writeCacheIfCurrent("orders", Array.isArray(page) ? { rows: page } : (page || { rows: [] }), ordersGeneration)).catch(() => undefined);
     Promise.all([api.listCoupons(), api.listPoints()]).then((results) => {
-      writeCache("benefits", { home, coupons: results[0] || [], points: results[1] });
+      writeCacheIfCurrent("benefits", { home, coupons: results[0] || [], points: results[1] }, benefitsGeneration);
     }).catch(() => undefined);
     api.getInviteOverview().then((overview) => {
-      writeCache("profile", { home, overview });
+      writeCacheIfCurrent("profile", { home, overview }, profileGeneration);
     }).catch(() => undefined);
   }
 });

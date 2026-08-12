@@ -70,6 +70,7 @@ export function OrdersPage() {
   const [acting, setActing] = useState(false);
   const requestSequence = useRef(0);
   const monitorRefreshInFlight = useRef(false);
+  const loadingMoreRef = useRef(false);
   const ordersRef = useRef(orders);
   const nextCursorRef = useRef(nextCursor);
 
@@ -82,22 +83,25 @@ export function OrdersPage() {
     writeOrderPageCache(requestedFilter, { rows: sorted, nextCursor: cursor });
   }, []);
 
-  const load = useCallback(async (background = false, append = false) => {
+  const load = useCallback(async (background = false, append = false, preserveLoadedWaitingPages = false) => {
     if (!api || !session) return;
     const requestedFilter = filter;
     const cursor = append ? nextCursorRef.current : undefined;
     if (append && !cursor) return;
     const requestId = ++requestSequence.current;
-    if (append) setLoadingMore(true);
+    if (append) { loadingMoreRef.current = true; setLoadingMore(true); }
     else if (background || readOrderPageCache(requestedFilter) !== undefined) setSyncing(true);
     else setLoading(true);
     try {
       const page = await api.listOrders(session.token, requestedFilter === "ALL" ? undefined : requestedFilter, cursor, PAGE_SIZE);
       if (requestId !== requestSequence.current) return;
+      const preserveTail = preserveLoadedWaitingPages && requestedFilter === "WAITING_FULFILLMENT" && ordersRef.current.length > PAGE_SIZE;
       const merged = append
         ? [...ordersRef.current, ...page.rows.filter((row) => !ordersRef.current.some((current) => current._id === row._id))]
-        : page.rows;
-      commitPage(merged, page.nextCursor, requestedFilter);
+        : preserveTail
+          ? [...page.rows, ...ordersRef.current.slice(PAGE_SIZE).filter((row) => !page.rows.some((current) => current._id === row._id))]
+          : page.rows;
+      commitPage(merged, preserveTail ? nextCursorRef.current : page.nextCursor, requestedFilter);
       setLastSync(new Date());
       setError("");
     } catch (caught) {
@@ -106,6 +110,7 @@ export function OrdersPage() {
     } finally {
       if (requestId === requestSequence.current) {
         setLoading(false);
+        loadingMoreRef.current = false;
         setLoadingMore(false);
         setSyncing(false);
       }
@@ -121,9 +126,9 @@ export function OrdersPage() {
       setOnline(true);
       if (filter === "WAITING_FULFILLMENT") {
         if (detail.hasMore) {
-          if (!monitorRefreshInFlight.current) {
+          if (!monitorRefreshInFlight.current && !loadingMoreRef.current) {
             monitorRefreshInFlight.current = true;
-            void load(true).finally(() => { monitorRefreshInFlight.current = false; });
+            void load(true, false, true).finally(() => { monitorRefreshInFlight.current = false; });
           }
           return;
         }

@@ -34,6 +34,7 @@ function loginAttemptId(repository: V2Repository, username: string): string {
 interface LoginAttemptReservation {
   locked: boolean;
   allowed: boolean;
+  generation?: number;
 }
 
 async function reserveLoginAttempt(repository: V2Repository, username: string, now: Date): Promise<LoginAttemptReservation> {
@@ -47,6 +48,7 @@ async function reserveLoginAttempt(repository: V2Repository, username: string, n
     const windowActive = Boolean(existing && now.getTime() - new Date(existing.windowStartedAt).getTime() < LOGIN_WINDOW_MS);
     const attemptCount = windowActive ? existing!.attemptCount + 1 : 1;
     const windowStartedAt = windowActive ? existing!.windowStartedAt : nowIso;
+    const generation = (existing?.reservationGeneration ?? 0) + 1;
     const lockedUntil = attemptCount >= MAX_LOGIN_ATTEMPTS
       ? new Date(now.getTime() + LOGIN_LOCK_MS).toISOString()
       : undefined;
@@ -54,6 +56,7 @@ async function reserveLoginAttempt(repository: V2Repository, username: string, n
       _id: id,
       storeId: repository.storeId,
       usernameKey: id.slice(id.lastIndexOf(":") + 1),
+      reservationGeneration: generation,
       attemptCount,
       windowStartedAt,
       lastAttemptAt: nowIso,
@@ -63,16 +66,22 @@ async function reserveLoginAttempt(repository: V2Repository, username: string, n
     });
     // The attempt that fills the bucket is allowed to verify its password. Reserving
     // the lock now makes every concurrent attempt after it stop before bcrypt.
-    return { locked: Boolean(lockedUntil), allowed: true };
+    return { locked: Boolean(lockedUntil), allowed: true, generation };
   });
 }
 
-export async function clearV2OwnerLoginAttempts(repository: V2Repository, username: string, now = new Date()): Promise<void> {
+export async function clearV2OwnerLoginAttempts(
+  repository: V2Repository,
+  username: string,
+  now = new Date(),
+  expectedGeneration?: number
+): Promise<void> {
   const id = loginAttemptId(repository, username);
   const nowIso = now.toISOString();
   await repository.runTransaction(async (tx) => {
     const existing = await tx.getOwnerLoginAttempt(id);
     if (!existing) return;
+    if (expectedGeneration !== undefined && existing.reservationGeneration !== expectedGeneration) return;
     await tx.saveOwnerLoginAttempt({
       ...existing,
       attemptCount: 0,
@@ -101,18 +110,48 @@ export async function loginV2Owner(repository: V2Repository, rawInput: unknown, 
     if (reservation.locked) throw new DomainError("LOGIN_RATE_LIMITED", "登录尝试较多，请稍后再试");
     throw new DomainError("INVALID_CREDENTIALS", "账号或密码错误");
   }
-  await clearV2OwnerLoginAttempts(repository, input.username, now);
-  const expiresAt = new Date(now.getTime() + SESSION_SECONDS * 1000).toISOString();
-  const token = jwt.sign(
-    { ownerId: owner._id, storeId: repository.storeId, sessionVersion: owner.sessionVersion } satisfies OwnerClaims,
-    sessionSecret(),
-    { algorithm: "HS256", expiresIn: SESSION_SECONDS }
-  );
   const passwordHash = getRounds(owner.passwordHash) === PASSWORD_HASH_ROUNDS
     ? owner.passwordHash
     : await hashV2OwnerPassword(input.password);
-  await repository.saveOwner({ ...owner, passwordHash, lastLoginAt: now.toISOString(), updatedAt: now.toISOString() });
-  return { token, owner: { _id: owner._id, username: owner.username, displayName: owner.displayName }, expiresAt };
+  const attemptId = loginAttemptId(repository, input.username);
+  const nowIso = now.toISOString();
+  const authenticatedOwner = await repository.runTransaction(async (tx) => {
+    const currentOwner = await tx.getOwner(owner._id);
+    if (
+      !currentOwner
+      || !currentOwner.enabled
+      || currentOwner.username !== owner.username
+      || currentOwner.passwordHash !== owner.passwordHash
+      || currentOwner.sessionVersion !== owner.sessionVersion
+    ) {
+      throw new DomainError("LOGIN_STATE_CHANGED", "账号信息刚刚更新，请重新登录");
+    }
+    const attempt = await tx.getOwnerLoginAttempt(attemptId);
+    if (attempt && (reservation.generation === undefined || attempt.reservationGeneration === reservation.generation)) {
+      await tx.saveOwnerLoginAttempt({
+        ...attempt,
+        attemptCount: 0,
+        windowStartedAt: nowIso,
+        lastAttemptAt: nowIso,
+        lockedUntil: undefined,
+        updatedAt: nowIso
+      });
+    }
+    const updatedOwner = { ...currentOwner, passwordHash, lastLoginAt: nowIso, updatedAt: nowIso };
+    await tx.saveOwner(updatedOwner);
+    return updatedOwner;
+  });
+  const expiresAt = new Date(now.getTime() + SESSION_SECONDS * 1000).toISOString();
+  const token = jwt.sign(
+    { ownerId: authenticatedOwner._id, storeId: repository.storeId, sessionVersion: authenticatedOwner.sessionVersion } satisfies OwnerClaims,
+    sessionSecret(),
+    { algorithm: "HS256", expiresIn: SESSION_SECONDS }
+  );
+  return {
+    token,
+    owner: { _id: authenticatedOwner._id, username: authenticatedOwner.username, displayName: authenticatedOwner.displayName },
+    expiresAt
+  };
 }
 
 export async function requireV2Owner(repository: V2Repository, token: string) {
