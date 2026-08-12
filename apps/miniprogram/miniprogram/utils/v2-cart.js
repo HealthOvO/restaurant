@@ -169,6 +169,7 @@ function reconcileCart(cart, products, coupons) {
       kind: "PAID",
       key: selectionKey(product._id, normalizedSelections.selections),
       productId: product._id,
+      productVersion: product.version,
       productName: product.name,
       imageUrl: product.imageUrl,
       basePrice: product.basePrice,

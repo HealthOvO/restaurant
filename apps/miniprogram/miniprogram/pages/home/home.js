@@ -331,6 +331,7 @@ Page({
       } else {
         nextCart = addCartLine(this.data.cart, {
           productId: product._id,
+          productVersion: product.version,
           productName: product.name,
           imageUrl: product.imageUrl,
           basePrice: product.basePrice,

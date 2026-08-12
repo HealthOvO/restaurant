@@ -343,6 +343,7 @@ describe("V2 customer menu", () => {
     await repository.saveProduct({ ...product, name: "新名称肉片", version: product.version + 1 });
     const home = await application.home(buyer.openId);
     expect(home.exchangeItems[0].productName).toBe("新名称肉片");
+    expect(home.exchangeItems[0].productVersion).toBe(product.version + 1);
   });
 
   it("rejects a stale business setting save so an older tab cannot reopen paid ordering", async () => {
@@ -392,6 +393,31 @@ describe("V2 payment settlement", () => {
       expectedBuyerPoints: 10,
       lineItems: [{ productId: product._id, quantity: 1, selections: [{ groupId: "spice", choiceIds: ["none"] }] }]
     })).rejects.toThrow("商品价格或积分已更新");
+    expect(repository.snapshot().orders.size).toBe(0);
+  });
+
+  it("rejects checkout when the displayed product version changed at the same price", async () => {
+    const { application, repository, buyer } = setup();
+    await repository.saveProduct({
+      ...product,
+      name: "同价新名称肉片",
+      specGroups: product.specGroups.map((group) => group.id === "spice"
+        ? { ...group, choices: group.choices.map((choice) => choice.id === "mild" ? { ...choice, name: "同价新辣度" } : choice) }
+        : group),
+      version: 2
+    });
+
+    await expect(application.createPaymentOrder(buyer.openId, {
+      requestId: "order-request-stale-version",
+      expectedPayableAmount: 1500,
+      expectedBuyerPoints: 10,
+      lineItems: [{
+        productId: product._id,
+        expectedProductVersion: 1,
+        quantity: 1,
+        selections: [{ groupId: "spice", choiceIds: ["mild"] }]
+      }]
+    })).rejects.toThrow("信息已更新");
     expect(repository.snapshot().orders.size).toBe(0);
   });
 
@@ -1371,6 +1397,22 @@ describe("V2 coupons", () => {
     expect((await repository.getMemberById(buyer._id))?.pointsBalance).toBe(100);
     expect(repository.snapshot().coupons.size).toBe(0);
     expect(repository.snapshot().pointLedger.size).toBe(0);
+  });
+
+  it("does not exchange points after the displayed product changes at the same cost", async () => {
+    const { application, repository, buyer } = setup(100);
+    const home = await application.home(buyer.openId);
+    await repository.saveProduct({ ...product, name: "同价新兑换商品", version: 2 });
+
+    await expect(application.exchangeCoupon(buyer.openId, {
+      requestId: "coupon-stale-product-version",
+      exchangeItemId: exchangeItem._id,
+      expectedVersion: exchangeItem.version,
+      expectedPointsCost: exchangeItem.pointsCost,
+      expectedProductVersion: home.exchangeItems[0].productVersion
+    })).rejects.toThrow("兑换商品已更新");
+    expect((await repository.getMemberById(buyer._id))?.pointsBalance).toBe(100);
+    expect(repository.snapshot().coupons.size).toBe(0);
   });
 
   it("does not exchange points for an unavailable product", async () => {

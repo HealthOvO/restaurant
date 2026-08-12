@@ -85,6 +85,7 @@ export const v2CartSelectionSchema = z.object({
 
 export const v2CartLineInputSchema = z.object({
   productId: idSchema,
+  expectedProductVersion: z.number().int().min(1).max(1_000_000).optional(),
   quantity: z.number().int().min(1).max(99),
   selections: z.array(v2CartSelectionSchema).max(12),
   note: z.string().trim().max(80).optional()
@@ -119,7 +120,8 @@ export const v2CouponExchangeSchema = z.object({
   requestId: requestIdSchema,
   exchangeItemId: idSchema,
   expectedVersion: z.number().int().min(1).max(1_000_000),
-  expectedPointsCost: z.number().int().min(1).max(1_000_000)
+  expectedPointsCost: z.number().int().min(1).max(1_000_000),
+  expectedProductVersion: z.number().int().min(1).max(1_000_000).optional()
 });
 
 export const v2CouponUseSchema = z.object({

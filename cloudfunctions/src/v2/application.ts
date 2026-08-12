@@ -423,7 +423,11 @@ export class V2Application {
       products: categorizedProducts,
       exchangeItems: exchangeItems
         .filter((item) => sellableCouponProducts.has(item.productId))
-        .map((item) => ({ ...item, productName: sellableCouponProducts.get(item.productId)!.name })),
+        .map((item) => ({
+          ...item,
+          productName: sellableCouponProducts.get(item.productId)!.name,
+          productVersion: sellableCouponProducts.get(item.productId)!.version
+        })),
       coupons: availableCoupons,
       availableCouponCount: availableCoupons.length
     };
@@ -780,6 +784,9 @@ export class V2Application {
     }
     const product = await this.repository.getProduct(item.productId);
     if (!product || !product.enabled || product.soldOut) throw new DomainError("PRODUCT_UNAVAILABLE", "指定商品暂时不可兑换");
+    if (input.expectedProductVersion !== undefined && input.expectedProductVersion !== product.version) {
+      throw new DomainError("EXCHANGE_ITEM_CHANGED", "兑换商品已更新，请重新确认");
+    }
     const nowDate = this.clock.now();
     const now = nowDate.toISOString();
     const businessDate = businessDateAt(nowDate, config.dayBoundaryTime);
@@ -794,6 +801,9 @@ export class V2Application {
       const currentProduct = await tx.getProduct(currentItem.productId);
       if (!currentProduct || !currentProduct.enabled || currentProduct.soldOut) {
         throw new DomainError("PRODUCT_UNAVAILABLE", "指定商品暂时不可兑换");
+      }
+      if (input.expectedProductVersion !== undefined && input.expectedProductVersion !== currentProduct.version) {
+        throw new DomainError("EXCHANGE_ITEM_CHANGED", "兑换商品已更新，请重新确认");
       }
       const currentMember = await tx.getMember(member._id);
       if (!currentMember) throw new DomainError("MEMBER_NOT_FOUND", "会员信息不存在");

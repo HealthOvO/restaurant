@@ -64,12 +64,14 @@ test("cart merges identical selections and calculates integer points", () => {
       soldOut: false,
       imageUrl: "",
       basePrice: 1500,
+      version: 4,
       pointsEnabled: true,
       buyerPointsPerUnit: 10,
       specGroups: [{ id: "spice", name: "辣度", mode: "SINGLE", required: true, choices: [{ id: "mild", name: "微辣", enabled: true, priceDelta: 0 }] }]
     }]);
     assert.equal(reconciled.changed, true);
     assert.equal(reconciled.cart[0].productName, "祯好七福鼎肉片");
+    assert.equal(reconciled.cart[0].productVersion, 4);
     assert.equal(reconciled.cart[0].unitPrice, 1500);
     assert.equal(reconciled.cart[0].buyerPointsPerUnit, 10);
     assert.equal(reconciled.cart[0].selectedChoices[0].choiceName, "微辣");

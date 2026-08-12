@@ -96,6 +96,8 @@ export interface V2CartSelection {
 
 export interface V2CartLineInput {
   productId: string;
+  /** Product version shown to the customer when the line was added to cart. */
+  expectedProductVersion?: number;
   quantity: number;
   selections: V2CartSelection[];
   note?: string;

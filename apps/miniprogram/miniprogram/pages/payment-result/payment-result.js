@@ -27,7 +27,7 @@ Page({
 
   onShow() {
     this.visible = true;
-    if (this.hasShown && !this.terminal && !this.polling) this.startPolling(false);
+    if (this.hasShown && !this.terminal && !this.polling) this.resumePolling();
     this.hasShown = true;
   },
 
@@ -49,6 +49,24 @@ Page({
 
   query() {
     return this.startPolling(true);
+  },
+
+  resumePolling() {
+    const pending = this.queryRequest;
+    if (!pending) return this.startPolling(false);
+    if (this.resumeRequestSource === pending) return this.resumeRequest;
+    this.setData({ loading: true, error: "", progressText: "正在继续确认支付结果。" });
+    const resumeRequest = pending.catch(() => undefined).then(() => {
+      if (this.resumeRequestSource === pending) {
+        this.resumeRequestSource = null;
+        this.resumeRequest = null;
+      }
+      if (this.visible === false || this.terminal || this.polling || this.queryRequest) return undefined;
+      return this.startPolling(false);
+    });
+    this.resumeRequestSource = pending;
+    this.resumeRequest = resumeRequest;
+    return resumeRequest;
   },
 
   startPolling(resetAttempts) {
@@ -130,7 +148,26 @@ Page({
   finalizeSubmittedCart() {
     clearCart();
     wx.removeStorageSync("v2-checkout-request");
-    invalidateCache("home", "orders", "benefits", "profile");
+    this.refreshTabCaches();
+  },
+
+  refreshTabCaches() {
+    if (!this.tabCachesInvalidated) {
+      invalidateCache("home", "orders", "benefits", "profile");
+      if (typeof api.invalidateCurrentReads === "function") api.invalidateCurrentReads();
+      this.tabCachesInvalidated = true;
+    }
+    if (this.tabPreloadRequest) return this.tabPreloadRequest;
+    const app = typeof getApp === "function" ? getApp() : null;
+    if (!app || typeof app.preloadTabs !== "function") return Promise.resolve();
+    let request;
+    try {
+      request = Promise.resolve(app.preloadTabs()).catch(() => undefined);
+    } catch (_error) {
+      request = Promise.resolve();
+    }
+    this.tabPreloadRequest = request;
+    return request;
   },
 
   finishSuccess(order) {
@@ -141,7 +178,7 @@ Page({
   },
 
   finishTerminal(order, message) {
-    invalidateCache("home", "orders", "benefits", "profile");
+    this.refreshTabCaches();
     this.terminal = true;
     this.polling = false;
     this.setData({ loading: false, order, error: message });

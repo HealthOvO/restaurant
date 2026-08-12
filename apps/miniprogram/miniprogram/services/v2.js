@@ -10,6 +10,10 @@ const readRequests = new Map();
 let memberReady = false;
 let memberBootstrapRequest = null;
 
+function readRequestKey(action, payload = {}) {
+  return `${action}:${JSON.stringify(payload)}`;
+}
+
 function callCustomer(action, payload = {}) {
   return wx.cloud.callFunction({
     name: "v2-customer-api",
@@ -26,12 +30,22 @@ function callCustomer(action, payload = {}) {
 }
 
 function callCustomerRead(action, payload = {}) {
-  const key = `${action}:${JSON.stringify(payload)}`;
+  const key = readRequestKey(action, payload);
   const existing = readRequests.get(key);
   if (existing) return existing;
-  const request = callCustomer(action, payload).finally(() => readRequests.delete(key));
+  const request = callCustomer(action, payload).finally(() => {
+    if (readRequests.get(key) === request) readRequests.delete(key);
+  });
   readRequests.set(key, request);
   return request;
+}
+
+function invalidateRead(action, payload = {}) {
+  readRequests.delete(readRequestKey(action, payload));
+}
+
+function invalidateCurrentReads() {
+  readRequests.clear();
 }
 
 function rememberMember(request) {
@@ -72,6 +86,8 @@ function callForMember(action, payload = {}, readOnly = false, retried = false) 
 
 module.exports = {
   bootstrap: ensureMember,
+  invalidateRead,
+  invalidateCurrentReads,
   getHome,
   createOrder: (payload) => callForMember("order.create", payload),
   cancelPayment: (orderId) => callForMember("order.cancelPayment", { orderId }),

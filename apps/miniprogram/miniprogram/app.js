@@ -9,7 +9,8 @@ App({
     source: "direct",
     home: null,
     cart: [],
-    bootstrapPromise: null
+    bootstrapPromise: null,
+    tabPreloadPromise: null
   },
 
   onLaunch(options) {
@@ -47,15 +48,32 @@ App({
   },
 
   preloadTabs(home) {
+    const homeGeneration = cacheGeneration("home");
     const ordersGeneration = cacheGeneration("orders");
     const benefitsGeneration = cacheGeneration("benefits");
     const profileGeneration = cacheGeneration("profile");
-    api.listOrders().then((page) => writeCacheIfCurrent("orders", Array.isArray(page) ? { rows: page } : (page || { rows: [] }), ordersGeneration)).catch(() => undefined);
-    Promise.all([api.listCoupons(), api.listPoints()]).then((results) => {
-      writeCacheIfCurrent("benefits", { home, coupons: results[0] || [], points: results[1] }, benefitsGeneration);
-    }).catch(() => undefined);
-    api.getInviteOverview().then((overview) => {
-      writeCacheIfCurrent("profile", { home, overview }, profileGeneration);
-    }).catch(() => undefined);
+    const homeRequest = home === undefined ? api.getHome() : Promise.resolve(home);
+    const cacheHomeRequest = homeRequest.then((latestHome) => {
+      if (cacheGeneration("home") === homeGeneration) this.globalData.home = latestHome;
+      writeCacheIfCurrent("home", latestHome, homeGeneration);
+      return latestHome;
+    });
+    const ordersRequest = api.listOrders().then((page) => {
+      writeCacheIfCurrent("orders", Array.isArray(page) ? { rows: page } : (page || { rows: [] }), ordersGeneration);
+    });
+    const benefitsRequest = Promise.all([homeRequest, api.listCoupons(), api.listPoints()]).then((results) => {
+      writeCacheIfCurrent("benefits", { home: results[0], coupons: results[1] || [], points: results[2] }, benefitsGeneration);
+    });
+    const profileRequest = Promise.all([homeRequest, api.getInviteOverview()]).then((results) => {
+      writeCacheIfCurrent("profile", { home: results[0], overview: results[1] }, profileGeneration);
+    });
+    const preloadPromise = Promise.all([
+      cacheHomeRequest.catch(() => undefined),
+      ordersRequest.catch(() => undefined),
+      benefitsRequest.catch(() => undefined),
+      profileRequest.catch(() => undefined)
+    ]).then(() => undefined);
+    this.globalData.tabPreloadPromise = preloadPromise;
+    return preloadPromise;
   }
 });

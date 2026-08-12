@@ -5,6 +5,13 @@ const { dateTime, preparePoint } = require("../../utils/v2-format");
 
 const BENEFITS_CACHE_KEY = "benefits";
 const BENEFITS_CACHE_MS = 15_000;
+const EXCHANGE_REFRESH_ERRORS = new Set([
+  "EXCHANGE_ITEM_CHANGED",
+  "EXCHANGE_UNAVAILABLE",
+  "PRODUCT_UNAVAILABLE",
+  "COUPON_PRODUCT_UNAVAILABLE",
+  "INSUFFICIENT_POINTS"
+]);
 
 function confirmExchange(item) {
   return new Promise((resolve) => wx.showModal({
@@ -144,16 +151,17 @@ Page({
         requestId,
         exchangeItemId: item._id,
         expectedVersion: item.version,
-        expectedPointsCost: item.pointsCost
+        expectedPointsCost: item.pointsCost,
+        expectedProductVersion: item.productVersion
       });
       wx.removeStorageSync(storageKey);
       invalidateCache("home", "profile", BENEFITS_CACHE_KEY);
       wx.showToast({ title: "兑换成功", icon: "success" });
       await this.loadBenefits(true);
     } catch (error) {
-      if (error && error.code === "EXCHANGE_ITEM_CHANGED") {
+      if (error && EXCHANGE_REFRESH_ERRORS.has(error.code)) {
         wx.removeStorageSync(storageKey);
-        invalidateCache(BENEFITS_CACHE_KEY);
+        invalidateCache("home", "profile", BENEFITS_CACHE_KEY);
         await this.loadBenefits(true);
       }
       wx.showToast({ title: error.message || "兑换失败", icon: "none" });

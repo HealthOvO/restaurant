@@ -50,6 +50,9 @@ function selectedChoicesForGroup(group: V2SpecGroup, choiceIds: string[], coupon
 }
 
 function priceLine(product: V2Product, input: V2CartLineInput, lineIndex: number, couponMode: boolean): V2OrderLineSnapshot {
+  if (input.expectedProductVersion !== undefined && input.expectedProductVersion !== product.version) {
+    throw new DomainError("ORDER_QUOTE_CHANGED", `${product.name}信息已更新，请重新确认`);
+  }
   if (!product.enabled || product.soldOut) {
     throw new DomainError("PRODUCT_UNAVAILABLE", `${product.name}当前不可购买`);
   }

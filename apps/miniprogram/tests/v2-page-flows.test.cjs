@@ -315,11 +315,12 @@ test("checkout completes mock payment before opening the result page", async () 
     }
   }, wx);
   try {
-    loaded.page.setData({ cart: [{ productId: "p1", quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2, amountText: "¥15.00" } });
+    loaded.page.setData({ cart: [{ productId: "p1", productVersion: 3, quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2, amountText: "¥15.00" } });
     await loaded.page.submitOrder();
     assert.deepEqual(calls, ["pay:order-1", "query:order-1"]);
     assert.equal(orderPayload.expectedPayableAmount, 1500);
     assert.equal(orderPayload.expectedBuyerPoints, 2);
+    assert.equal(orderPayload.lineItems[0].expectedProductVersion, 3);
     assert.equal(wx.redirects[0].url, "/pages/payment-result/payment-result?orderId=order-1");
   } finally { loaded.restore(); }
 });
@@ -340,7 +341,7 @@ test("checkout sends paid lines and coupon lines in one order", async () => {
   }, wx);
   try {
     loaded.page.rawCart = [
-      { kind: "PAID", productId: "p1", quantity: 1, selections: [] },
+      { kind: "PAID", productId: "p1", productVersion: 3, quantity: 1, selections: [] },
       { kind: "COUPON", couponId: "coupon-1", productId: "p1", quantity: 1, selections: [] }
     ];
     loaded.page.setData({ cart: loaded.page.rawCart, summary: { count: 2, amount: 1500, points: 10 } });
@@ -348,6 +349,7 @@ test("checkout sends paid lines and coupon lines in one order", async () => {
     assert.equal(payload.lineItems.length, 1);
     assert.equal(payload.couponItems.length, 1);
     assert.equal(payload.couponItems[0].couponId, "coupon-1");
+    assert.equal(payload.lineItems[0].expectedProductVersion, 3);
     assert.equal(payload.expectedPayableAmount, 1500);
   } finally { loaded.restore(); }
 });
@@ -378,7 +380,7 @@ test("checkout replaces a closed idempotency key before creating a new payment",
   }, wx);
   try {
     wx.setStorageSync("v2-checkout-request", "old-order-request");
-    loaded.page.setData({ cart: [{ productId: "p1", quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
+    loaded.page.setData({ cart: [{ productId: "p1", productVersion: 1, quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
     await loaded.page.submitOrder();
     assert.deepEqual(requestIds, ["old-order-request", "order-request-1"]);
     assert.equal(wx.redirects[0].url, "/pages/payment-result/payment-result?orderId=new-order");
@@ -403,10 +405,36 @@ test("checkout refreshes a stale cart without discarding valid lines", async () 
     }
   }, wx);
   try {
-    loaded.page.setData({ cart: [{ productId: "p1", quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
+    loaded.page.setData({ cart: [{ productId: "p1", productVersion: 1, quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
     await loaded.page.submitOrder();
     assert.equal(savedCart.length, 1);
     assert.equal(loaded.page.data.cart.length, 1);
+    assert.equal(wx.modals[0].title, "购物车已更新");
+  } finally { loaded.restore(); }
+});
+
+test("checkout reconciles a cart after a specification limit changes", async () => {
+  const wx = wxMock();
+  let savedCart = null;
+  const loaded = loadPage("pages/checkout/checkout.js", {
+    "../../services/v2": {
+      createOrder: async () => { const error = new Error("小料最多选择 1 项"); error.code = "SPEC_LIMIT"; throw error; },
+      getHome: async () => ({ products: [{ _id: "p1", version: 2 }], coupons: [] })
+    },
+    "../../utils/v2-cart": {
+      cartSummary: (cart) => ({ count: cart.length, amount: 1500, points: 2 }),
+      createRequestId: () => "order-spec-limit-stale",
+      loadCart: () => [],
+      reconcileCart: () => ({ cart: [], changed: true, removedCount: 1 }),
+      saveCart: (cart) => { savedCart = cart; },
+      validateCartLimits: () => ""
+    }
+  }, wx);
+  try {
+    loaded.page.setData({ cart: [{ productId: "p1", productVersion: 1, quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
+    await loaded.page.submitOrder();
+    assert.deepEqual(savedCart, []);
+    assert.equal(loaded.page.data.cart.length, 0);
     assert.equal(wx.modals[0].title, "购物车已更新");
   } finally { loaded.restore(); }
 });
@@ -425,7 +453,7 @@ test("coupon exchange reuses its request id and submits the confirmed version", 
     "../../utils/v2-format": { dateTime: () => "", preparePoint: (row) => row }
   }, wx);
   try {
-    const item = { _id: "exchange-1", name: "祯好七福鼎肉片商品券", pointsCost: 50, version: 3, canExchange: true };
+    const item = { _id: "exchange-1", name: "祯好七福鼎肉片商品券", pointsCost: 50, version: 3, productVersion: 7, canExchange: true };
     loaded.page.setData({ exchangeItems: [item] });
     await loaded.page.exchange({ currentTarget: { dataset: { id: item._id } } });
     await loaded.page.exchange({ currentTarget: { dataset: { id: item._id } } });
@@ -433,6 +461,30 @@ test("coupon exchange reuses its request id and submits the confirmed version", 
     assert.equal(payloads[1].requestId, "exchange-request-stable");
     assert.equal(payloads[1].expectedVersion, 3);
     assert.equal(payloads[1].expectedPointsCost, 50);
+    assert.equal(payloads[1].expectedProductVersion, 7);
+  } finally { loaded.restore(); }
+});
+
+test("coupon exchange refreshes stale benefits after a concurrent merchant change", async () => {
+  const wx = wxMock();
+  const loaded = loadPage("pages/benefits/benefits.js", {
+    "../../services/v2": {
+      exchangeCoupon: async () => { const error = new Error("指定商品暂时不可兑换"); error.code = "PRODUCT_UNAVAILABLE"; throw error; },
+      getHome: async () => ({ exchangeItems: [] }),
+      listCoupons: async () => [],
+      listPoints: async () => ({ balance: 50, rows: [] })
+    },
+    "../../utils/v2-cart": { createRequestId: () => "exchange-concurrent-change" },
+    "../../utils/v2-format": { dateTime: (value) => value, preparePoint: (row) => row }
+  }, wx);
+  try {
+    const item = { _id: "exchange-1", name: "商品券", pointsCost: 50, version: 1, productVersion: 1, canExchange: true };
+    loaded.page.setData({ exchangeItems: [item], pointsBalance: 50 });
+    await loaded.page.exchange({ currentTarget: { dataset: { id: item._id } } });
+    assert.deepEqual(loaded.page.data.exchangeItems, []);
+    assert.equal(loaded.page.data.pointsBalance, 50);
+    assert.equal(wx.getStorageSync(`coupon-exchange-request-${item._id}`), undefined);
+    assert.equal(wx.toasts.at(-1).title, "指定商品暂时不可兑换");
   } finally { loaded.restore(); }
 });
 
@@ -686,7 +738,7 @@ test("requestPayment failure still queries the authoritative order result", asyn
     }
   }, wx);
   try {
-    loaded.page.setData({ cart: [{ productId: "p1", quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
+    loaded.page.setData({ cart: [{ productId: "p1", productVersion: 1, quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
     await loaded.page.submitOrder();
     assert.deepEqual(calls, ["query"]);
     assert.equal(wx.redirects[0].url, "/pages/payment-result/payment-result?orderId=payment-failed");
@@ -709,7 +761,7 @@ test("an explicit payment cancellation closes only after server confirmation", a
     }
   }, wx);
   try {
-    loaded.page.setData({ cart: [{ productId: "p1", quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
+    loaded.page.setData({ cart: [{ productId: "p1", productVersion: 1, quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
     await loaded.page.submitOrder();
     assert.deepEqual(calls, ["query", "cancel"]);
     assert.equal(wx.redirects[0].url, "/pages/payment-result/payment-result?orderId=payment-cancelled");
@@ -732,7 +784,7 @@ test("a cancel callback never closes an order already confirmed as paid", async 
     }
   }, wx);
   try {
-    loaded.page.setData({ cart: [{ productId: "p1", quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
+    loaded.page.setData({ cart: [{ productId: "p1", productVersion: 1, quantity: 1, selections: [] }], summary: { count: 1, amount: 1500, points: 2 } });
     await loaded.page.submitOrder();
     assert.equal(cancelCalls, 0);
     assert.equal(wx.redirects[0].url, "/pages/payment-result/payment-result?orderId=cancel-but-paid");
@@ -810,6 +862,48 @@ test("payment result keeps only one query in flight", async () => {
     finishQuery({ _id: "order-one-query", status: "WAITING_FULFILLMENT", pickupNumber: "021" });
     await first;
     assert.equal(loaded.page.data.order.pickupNumber, "021");
+  } finally { loaded.restore(); }
+});
+
+test("payment result waits for a hidden in-flight query before resuming", async () => {
+  const wx = wxMock();
+  const pendingQueries = [];
+  const invalidations = [];
+  let calls = 0;
+  const loaded = loadPage("pages/payment-result/payment-result.js", {
+    "../../services/v2": {
+      queryPayment: () => {
+        calls += 1;
+        return new Promise((resolve) => pendingQueries.push(resolve));
+      }
+    },
+    "../../utils/v2-cache": { invalidateCache: (...keys) => invalidations.push(keys) },
+    "../../utils/v2-cart": { clearCart: () => {} }
+  }, wx);
+  try {
+    loaded.page.onLoad({ orderId: "order-lifecycle" });
+    loaded.page.onShow();
+    const firstRequest = loaded.page.queryRequest;
+    assert.equal(calls, 1);
+
+    loaded.page.onHide();
+    loaded.page.onShow();
+    const resumeRequest = loaded.page.resumeRequest;
+    loaded.page.onHide();
+    loaded.page.onShow();
+    assert.equal(loaded.page.resumeRequest, resumeRequest);
+    assert.equal(calls, 1);
+
+    pendingQueries[0]({ _id: "order-lifecycle", status: "PENDING_PAYMENT" });
+    await firstRequest;
+    await Promise.resolve();
+    assert.equal(calls, 2);
+
+    pendingQueries[1]({ _id: "order-lifecycle", status: "WAITING_FULFILLMENT", pickupNumber: "023" });
+    await resumeRequest;
+    assert.equal(loaded.page.data.order.pickupNumber, "023");
+    assert.equal(loaded.page.terminal, true);
+    assert.deepEqual(invalidations, [["home", "orders", "benefits", "profile"]]);
   } finally { loaded.restore(); }
 });
 

@@ -71,6 +71,15 @@ describe("V2 pricing", () => {
     expect(result.lineItems[0].unitPrice).toBe(1800);
   });
 
+  it("rejects a product version that changed without changing the price", () => {
+    expect(() => quoteV2Order([{ ...product, name: "同价新名称", version: 2 }], [{
+      productId: product._id,
+      expectedProductVersion: 1,
+      quantity: 1,
+      selections: [{ groupId: "spice", choiceIds: ["mild"] }]
+    }])).toThrow("信息已更新");
+  });
+
   it("rejects paid options for coupon orders", () => {
     expect(() =>
       quoteV2CouponProduct(product, [

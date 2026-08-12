@@ -1,4 +1,5 @@
 const api = require("../../services/v2");
+const { invalidateCache } = require("../../utils/v2-cache");
 const {
   cartSummary,
   changeCartQuantity,
@@ -70,6 +71,9 @@ const CART_REFRESH_ERRORS = new Set([
   "COUPON_UNAVAILABLE",
   "PRODUCT_NOT_FOUND",
   "PRODUCT_UNAVAILABLE",
+  "SPEC_LIMIT",
+  "DUPLICATE_SPEC_GROUP",
+  "PAID_SPEC_NOT_ALLOWED",
   "SPEC_REQUIRED",
   "SPEC_UNAVAILABLE"
 ]);
@@ -127,6 +131,8 @@ Page({
 
   async refreshChangedCart(rawCart) {
     try {
+      invalidateCache("home");
+      if (typeof api.invalidateRead === "function") api.invalidateRead("home.get");
       const home = await api.getHome();
       const reconciled = reconcileCart(rawCart, home.products || [], home.coupons || []);
       saveCart(reconciled.cart);
@@ -170,6 +176,10 @@ Page({
       wx.showToast({ title: limitError, icon: "none" });
       return;
     }
+    if (initialCart.some((item) => item.kind !== "COUPON" && !Number.isInteger(item.productVersion))) {
+      await this.refreshChangedCart(initialCart);
+      return;
+    }
     this.setData({ submitting: true, error: "" });
     const requestKey = "v2-checkout-request";
     let requestId = wx.getStorageSync(requestKey) || createRequestId("order");
@@ -183,7 +193,12 @@ Page({
         requestId,
         expectedPayableAmount: this.data.summary.amount,
         expectedBuyerPoints: this.data.summary.points,
-        lineItems: paidLines.map((item) => ({ productId: item.productId, quantity: item.quantity, selections: item.selections })),
+        lineItems: paidLines.map((item) => ({
+          productId: item.productId,
+          expectedProductVersion: item.productVersion,
+          quantity: item.quantity,
+          selections: item.selections
+        })),
         couponItems: couponLines.map((item) => ({ couponId: item.couponId, selections: item.selections }))
       };
       created = await api.createOrder(payload);
