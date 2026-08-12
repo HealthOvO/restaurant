@@ -1,0 +1,115 @@
+apps/admin-web/src/app/MerchantContext.tsx
+  s_245c88e6d5498b::t_a5717c78b0b0a5 12,141-162,168,173-178
+apps/admin-web/src/components/Dialog.tsx
+  s_245c88e6d5498b::t_0967c18255a075 20-21,25,32
+apps/admin-web/src/mocks/mockApi.ts
+  s_68d480d24e5bec::t_e8fa2b92d62933 31,166-168,187-189,204-215,235-257,418,437-438,440,453-456,458-459,462-465
+apps/admin-web/src/pages/ExchangePage.tsx
+  s_68d480d24e5bec::t_8f252ae8c384b1 13,24-25,44-45,61-65,68,72-73,79
+apps/admin-web/src/pages/MembersPage.tsx
+  s_8f688ecc677e50::t_becc3450381495 1,21-22,26,30,34-39,46,48-57,67,73
+apps/admin-web/src/pages/OrdersPage.tsx
+  s_245c88e6d5498b::t_2577c3690d5857 73,86,92,98,101-104,113,129,131
+apps/admin-web/src/pages/ProductsPage.tsx
+  s_8f688ecc677e50::t_37bc2ae3b9a171 62,103-105,109-110,160,188,251,254-259,268-281,284,290,331,349-358
+apps/admin-web/src/pages/SettingsPage.tsx
+  s_68d480d24e5bec::t_739f53a0c2667d 1,17-22,26,30,32,44,47-52,67-68,73,80
+apps/admin-web/src/test/App.test.tsx
+  s_245c88e6d5498b::t_f6ad0a5ce99d46 6,43-46,54-59,67-88,102-116,140-153,215-253
+apps/admin-web/src/test/deploy.test.ts
+  s_7f7dad13ce76b3::t_dbc10b2556f67c 3,13-44,46-48,52,60,63
+apps/miniprogram/miniprogram/app.js
+  s_245c88e6d5498b::t_72d9fddd6cbe0d 4,22,24-28,50-53,55,58
+apps/miniprogram/miniprogram/pages/benefits/benefits.js
+  s_245c88e6d5498b::t_61aa30b89550d3 3,38,51-63,66-67,72,75,79,81-82,87,99-100,104-131,152,157
+apps/miniprogram/miniprogram/pages/benefits/benefits.wxml
+  s_8f688ecc677e50::t_d2250d08e8152f 64
+apps/miniprogram/miniprogram/pages/home/home.js
+  s_68d480d24e5bec::t_30a99dcc8615c9 13,135-140,142-143,146-150,152
+apps/miniprogram/miniprogram/pages/orders/orders.js
+  s_245c88e6d5498b::t_221b266946a0d4 3,9,13,25-30,32-35,37-41,43,52,54-78
+apps/miniprogram/miniprogram/pages/orders/orders.wxml
+  s_245c88e6d5498b::t_f1b290307d56aa 35
+apps/miniprogram/miniprogram/pages/profile/profile.js
+  s_68d480d24e5bec::t_afc3582a8cdca3 2,34-46,49-50,54,57,61,63-64,90
+apps/miniprogram/miniprogram/services/v2.js
+  s_8f688ecc677e50::t_60907ee99f7092 80-81
+apps/miniprogram/miniprogram/utils/v2-cache.js
+  s_8f688ecc677e50::t_4f273a13965d06 2,14-22,30,38,41
+apps/miniprogram/tests/v2-cache-generation.test.cjs
+  s_8f688ecc677e50::t_3f2fff1697e0d2 1-21
+apps/miniprogram/tests/v2-page-flows.test.cjs
+  s_8f688ecc677e50::t_5d226346ccb482 82,167-203,221-271,439-499,525-577,599-648
+cloudfunctions/src/v2/application.ts
+  s_245c88e6d5498b::t_66d0ffff88f33d 38,56,60,90-101,154-162,408,414-416,424-426,534-560,753-759,789-797,800-801,803,806-808,812,814,899,902-907,953-973,979-1005,1011-1026,1047-1049,1063-1064
+cloudfunctions/src/v2/owner-auth.ts
+  s_7f7dad13ce76b3::t_468051b1eacfb5 37,51,59,69,73-78,84,113-143,146,150-154
+cloudfunctions/src/v2/repository.ts
+  s_68d480d24e5bec::t_857d9ee763c822 42,70-73,80-81,92-93,111-125,151,153-154,167,342-373,376-379,386-387,398-399,423,466,471-480,535-542,614-643,711,743-762,826-829,836-837,848-849,890-915
+cloudfunctions/src/v2/setup.ts
+  s_8f688ecc677e50::t_be0ccee172c64f 129
+cloudfunctions/tests/v2-application.test.ts
+  s_8a4bb54e88d940::t_da0bc83400d7c7 3,7,20,93-111,134-170,231-238,263-382,398-454,495-496,658-716,786,858,1102,1174-1233,1336-1375,1516-1520
+cloudfunctions/tests/v2-owner-security.test.ts
+  s_7f7dad13ce76b3::t_5e20f4a93f4542 4,23-86,130-197
+docs/cloudbase-indexes.json
+  s_8f688ecc677e50::t_1927831e94f566 32,46
+packages/shared/src/v2/schemas.ts
+  s_8f688ecc677e50::t_bb99b468c29821 74,142,149-152,157,161-164
+packages/shared/src/v2/types.ts
+  s_8f688ecc677e50::t_6ce296aaf0c4e7 73
+scripts/deploy-cloudfunctions-utils.mjs
+  s_245c88e6d5498b::t_7909c49e266ac7 1-23
+scripts/deploy-cloudfunctions.mjs
+  s_245c88e6d5498b::t_c7f74655efb875 6,19,83,113,129-130,156-159,163-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "10d3e3bcba33a0c22fb50791b41d446df7cff99b",
+  "prompts": {},
+  "sessions": {
+    "s_245c88e6d5498b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff127-ba1d-7451-b7c2-e8238ddc55ac",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    },
+    "s_68d480d24e5bec": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff4c8-c886-7311-95b8-56e1c529954c",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    },
+    "s_7f7dad13ce76b3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff117-dc04-7861-953b-050e36c1d248",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    },
+    "s_8a4bb54e88d940": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff4da-f8a3-7b80-98e9-10d50bcfedd3",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    },
+    "s_8f688ecc677e50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe272-c5ca-7303-80b2-161652f0c965",
+        "model": "unknown"
+      },
+      "human_author": "Health <3340997358@qq.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
